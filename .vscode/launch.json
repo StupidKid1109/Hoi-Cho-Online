@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Chạy máy chủ (có gỡ lỗi)",
+      "type": "node",
+      "request": "launch",
+      "cwd": "${workspaceFolder}/server",
+      "program": "${workspaceFolder}/server/src/index.js",
+      "runtimeArgs": ["--disable-warning=ExperimentalWarning"],
+      "console": "integratedTerminal"
+    }
+  ]
+}

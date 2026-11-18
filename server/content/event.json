@@ -1,0 +1,22 @@
+{
+ "_ghi_chu": "Đợt treo thưởng mặc định. Cán bộ sửa trong trang quản trị /admin. Thời gian dạng ISO, giờ Việt Nam +07:00.",
+ "id": "dot-mau-1",
+ "name": "Hội chợ Xuân",
+ "start": "2026-11-15T00:00:00+07:00",
+ "end": "2027-01-31T23:59:59+07:00",
+ "prizes": [
+  [
+   "🥇 Hạng 1",
+   "Phần quà A (mẫu)"
+  ],
+  [
+   "🥈 Hạng 2–3",
+   "Phần quà B (mẫu)"
+  ],
+  [
+   "🎁 Hạng 4–10",
+   "Phần quà C (mẫu)"
+  ]
+ ],
+ "rules": "Điểm tổng = tổng điểm cao nhất của mỗi người ở 3 gian. Bằng điểm thì ai đạt trước xếp trên. Ban tổ chức có quyền loại kết quả gian lận."
+}

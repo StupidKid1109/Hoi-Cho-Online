@@ -1,0 +1,117 @@
+{
+ "_ghi_chu": "Gian 1. Mỗi thẻ: icon, from (người gửi), text, scam (true = lừa đảo), why (giải thích). Cần bộ phận chuyên môn duyệt.",
+ "cards": [
+  {
+   "icon": "💼",
+   "from": "Tin tuyển dụng",
+   "text": "Việc nhẹ lương cao, làm tại nhà 500k/ngày. Chuyển 300k phí giữ chỗ trước nhé!",
+   "scam": true,
+   "why": "Việc làm thật không bắt người lao động nộp tiền giữ chỗ."
+  },
+  {
+   "icon": "🏦",
+   "from": "Số lạ",
+   "text": "[NGAN HANG] Tai khoan cua ban bi khoa. Dang nhap tai nganhang-xacminh.vip de mo lai.",
+   "scam": true,
+   "why": "Ngân hàng không gửi link lạ yêu cầu đăng nhập."
+  },
+  {
+   "icon": "👮",
+   "from": "Cuộc gọi lạ",
+   "text": "Tôi là công an. Bạn liên quan đến vụ án, chuyển tiền vào tài khoản an toàn để xác minh.",
+   "scam": true,
+   "why": "Công an không làm việc qua điện thoại và không yêu cầu chuyển tiền."
+  },
+  {
+   "icon": "🎁",
+   "from": "Số lạ",
+   "text": "Chúc mừng bạn trúng iPhone! Nộp phí vận chuyển 199k để nhận quà.",
+   "scam": true,
+   "why": "Trúng thưởng mà phải nộp phí trước là chiêu lừa quen thuộc."
+  },
+  {
+   "icon": "🔑",
+   "from": "Người lạ",
+   "text": "Mình gửi nhầm mã OTP vào máy bạn, đọc lại giúp mình với!",
+   "scam": true,
+   "why": "OTP là của bạn, đọc cho người khác là mất tài khoản."
+  },
+  {
+   "icon": "👍",
+   "from": "Nhóm Telegram",
+   "text": "Làm nhiệm vụ like video nhận hoa hồng 30%. Nạp 1 triệu để lên cấp VIP.",
+   "scam": true,
+   "why": "Nhận hoa hồng nhưng phải nạp tiền trước là lừa đảo."
+  },
+  {
+   "icon": "📈",
+   "from": "Người quen trên mạng",
+   "text": "Sàn đầu tư lãi 5% mỗi ngày, đảm bảo không lỗ. Vào nhóm anh hướng dẫn.",
+   "scam": true,
+   "why": "Cam kết lãi cao, không rủi ro là dấu hiệu lừa đảo đầu tư."
+  },
+  {
+   "icon": "📦",
+   "from": "Shipper lạ",
+   "text": "Có đơn hàng giao cho bạn, chuyển khoản trước 350k rồi mình giao.",
+   "scam": true,
+   "why": "Đừng trả tiền cho đơn hàng bạn không đặt."
+  },
+  {
+   "icon": "😢",
+   "from": "Bạn thân (tài khoản Zalo)",
+   "text": "Cho mình vay gấp 5 triệu, đang kẹt lắm, đừng gọi nhé, chuyển giúp mình.",
+   "scam": true,
+   "why": "Tài khoản có thể bị chiếm, hãy gọi điện xác nhận trước."
+  },
+  {
+   "icon": "🔗",
+   "from": "Tin nhắn Facebook",
+   "text": "Bạn được tặng 100GB data 4G, đăng nhập Facebook qua link này để nhận.",
+   "scam": true,
+   "why": "Link lạ đòi đăng nhập thường để đánh cắp tài khoản."
+  },
+  {
+   "icon": "🏛️",
+   "from": "Zalo OA UBND phường ✔",
+   "text": "Chủ nhật này phường tổ chức ngày hội tái chế tại nhà văn hóa khu phố. Không cần đăng ký.",
+   "scam": false,
+   "why": "Tin từ tài khoản chính thức có dấu xác thực, không đòi tiền hay thông tin."
+  },
+  {
+   "icon": "☎️",
+   "from": "Bạn tự gọi tổng đài",
+   "text": "Thấy giao dịch lạ, bạn gọi số tổng đài in sau thẻ ngân hàng để hỏi.",
+   "scam": false,
+   "why": "Tự liên hệ kênh chính thức là cách kiểm tra an toàn."
+  },
+  {
+   "icon": "🧾",
+   "from": "Quầy thu ngân",
+   "text": "Quán in mã QR cố định, tên người nhận trùng với tên chủ quán.",
+   "scam": false,
+   "why": "Tên người nhận khớp với chủ quán. Vẫn nên kiểm tra lại số tiền."
+  },
+  {
+   "icon": "🏫",
+   "from": "Cổng thông tin nhà trường",
+   "text": "Lịch nghỉ lễ được đăng trên cổng thông tin chính thức của trường.",
+   "scam": false,
+   "why": "Thông tin trên kênh chính thức của trường là đáng tin."
+  },
+  {
+   "icon": "🔒",
+   "from": "Cài đặt tài khoản",
+   "text": "Bạn bật xác thực hai lớp cho tài khoản Zalo và ngân hàng.",
+   "scam": false,
+   "why": "Xác thực hai lớp giúp tài khoản an toàn hơn."
+  },
+  {
+   "icon": "📲",
+   "from": "Ứng dụng ngân hàng",
+   "text": "Ứng dụng chính thức tải từ App Store hoặc CH Play báo biến động số dư.",
+   "scam": false,
+   "why": "Thông báo trong ứng dụng chính thức là an toàn."
+  }
+ ]
+}

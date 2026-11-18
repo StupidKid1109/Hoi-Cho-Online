@@ -1,0 +1,14 @@
+{
+  "app": {
+    "title": "Hội chợ online",
+    "headerTitle": "Hội chợ online",
+    "headerColor": "#8f0b20",
+    "textColor": "white",
+    "statusBar": "normal",
+    "leftButton": "back"
+  },
+  "debug": false,
+  "listCSS": [],
+  "listSyncJS": [],
+  "listAsyncJS": []
+}

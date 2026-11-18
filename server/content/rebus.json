@@ -1,0 +1,83 @@
+{
+ "_ghi_chu": "Gian 2. Câu mẫu toàn quốc, bản chính thức thay bằng địa danh của phường. pics: các hình ghép (có thể thay bằng đường dẫn ảnh), name: đáp án, info: giới thiệu.",
+ "perRound": 5,
+ "seconds": 40,
+ "puzzles": [
+  {
+   "pics": [
+    "🌊",
+    "🗡️"
+   ],
+   "name": "Hồ Gươm",
+   "info": "Còn gọi là hồ Hoàn Kiếm, gắn với truyền thuyết trả gươm thần, ở Hà Nội."
+  },
+  {
+   "pics": [
+    "🛕",
+    "1️⃣",
+    "🏛️"
+   ],
+   "name": "Chùa Một Cột",
+   "info": "Ngôi chùa có kiến trúc độc đáo dựng trên một cột giữa hồ, ở Hà Nội."
+  },
+  {
+   "pics": [
+    "🏝️",
+    "⬇️",
+    "🐉"
+   ],
+   "name": "Vịnh Hạ Long",
+   "info": "Di sản thiên nhiên thế giới ở Quảng Ninh."
+  },
+  {
+   "pics": [
+    "🌉",
+    "🐉"
+   ],
+   "name": "Cầu Rồng",
+   "info": "Cây cầu hình rồng bắc qua sông Hàn, Đà Nẵng, cuối tuần có màn phun lửa, phun nước."
+  },
+  {
+   "pics": [
+    "⛰️",
+    "👵",
+    "⚫"
+   ],
+   "name": "Núi Bà Đen",
+   "info": "Ngọn núi cao nhất Nam Bộ, ở Tây Ninh."
+  },
+  {
+   "pics": [
+    "⚓",
+    "🏠",
+    "🐉"
+   ],
+   "name": "Bến Nhà Rồng",
+   "info": "Nơi Bác Hồ ra đi tìm đường cứu nước năm 1911, ở TP. Hồ Chí Minh."
+  },
+  {
+   "pics": [
+    "👑",
+    "🏰"
+   ],
+   "name": "Hoàng Thành",
+   "info": "Hoàng thành Thăng Long ở Hà Nội là di sản văn hóa thế giới."
+  },
+  {
+   "pics": [
+    "🏛️",
+    "🚩"
+   ],
+   "name": "Cột Cờ",
+   "info": "Cột cờ Hà Nội nằm trong khu di tích Hoàng thành Thăng Long."
+  },
+  {
+   "pics": [
+    "🏘️",
+    "🏺"
+   ],
+   "name": "Phố Cổ",
+   "info": "Phố cổ Hội An (Đà Nẵng) nổi tiếng, được công nhận di sản văn hóa thế giới."
+  }
+ ]
+}

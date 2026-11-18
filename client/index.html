@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#8f0b20">
+<title>Hội chợ online</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22%3E%3Ctext y=%22.9em%22 font-size=%2290%22%3E%F0%9F%8F%AE%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="./src/styles.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- Màn hình tải -->
+  <section id="load" class="screen on">
+    <div class="q" id="lq"></div>
+    <div class="lbar"><i id="lbar"></i></div>
+    <div class="st" id="lst">Đang dựng gian hàng…</div>
+    <div class="lerr" id="lerr" hidden></div>
+  </section>
+  <!-- Màn hình chào -->
+  <section id="land" class="screen">
+    <div class="art">🏮🎪🏮</div>
+    <h1>HỘI CHỢ ONLINE</h1>
+    <div class="tag" id="landTag">Dạo hội, chơi game, rinh quà · Phường … (tên mẫu)</div>
+    <div class="lcard">
+      <label>Biệt danh của bạn</label>
+      <div class="nick"><b id="nick"></b><button id="reroll">🎲 Đổi</button></div>
+      <label for="khu">Chọn khu hội chợ</label>
+      <select id="khu"></select>
+      <div class="ctrls"><div><i>👆</i>Chạm đất để đi</div><div><i>↔️</i>Kéo để xoay</div><div><i>⌨️</i>W A S D trên máy tính</div></div>
+    </div>
+    <button class="btn enter" id="enterFair">Nhấn để vào hội chợ</button>
+    <div class="fine">Miễn phí, không cần cài đặt hay tạo tài khoản. Chat trong khu có bộ lọc tự động, bạn có thể tắt chat bất cứ lúc nào.</div>
+    <div class="fine" id="evInfo"></div>
+  </section>
+
+  <!-- Hội chợ -->
+  <section id="fair" class="screen">
+    <div class="fhud">
+      <div class="ev" id="evBar"></div>
+      <div class="frow">
+        <div class="tot">Tổng điểm hội chợ<b id="tot">0</b></div>
+        <button class="gbtn" id="lbBtn">🏆 Bảng vàng</button>
+      </div>
+    </div>
+    <div id="viewport"><div class="sky" id="sky"></div><div id="cam"></div><div class="ov"><div class="who" id="who"></div><div class="feed" id="feed"></div></div><div class="hint3" id="hint3">Chạm mặt đất để đi · Kéo để xoay góc nhìn</div>
+      <div class="chat" id="chat">
+        <div class="chead"><span><b>💬 Chat khu <em id="cKhu" style="font-style:normal">1</em></b> · lịch sự, không chia sẻ thông tin cá nhân</span><button id="cOff">Tắt chat</button><button id="cClose" aria-label="Thu gọn chat">✕</button></div>
+        <div class="clog" id="clog" aria-live="polite"></div>
+        <div class="cquick" id="cquick"></div>
+        <div class="cbar"><button class="cbtn" id="cToggle" aria-label="Mở chat">💬<span class="dot" id="cDot"></span></button>
+          <form id="cform"><input id="cin" maxlength="80" placeholder="Nhắn cho mọi người trong khu…" autocomplete="off" enterkeyhint="send"><button id="csend" type="submit">Gửi</button></form></div>
+        <div class="cnote">Tin nhắn chứa số điện thoại, số tài khoản, đường link hoặc từ ngữ thô tục sẽ bị chặn. Chạm vào tin của người khác để báo cáo hoặc ẩn.</div>
+      </div></div>
+    <div class="fdock">
+      <div class="jumps" id="jumps"></div>
+      <div class="emo" id="emo"></div>
+    </div>
+  </section>
+
+  <!-- Gian 1 -->
+  <section id="g1" class="screen" style="--gc:#c8102e">
+    <div class="ghud"><button class="x" data-back aria-label="Rời gian hàng">✕</button><div class="gt"><small>Gian 1</small>Thật hay giả?</div><div class="gs" id="g1sc">0</div></div>
+    <div class="tbar" id="g1tb"><i id="g1t"></i></div>
+    <div class="subhud"><span class="chip" id="g1sec">60s</span><span class="chip" id="g1st">Chuỗi 0</span></div>
+    <div id="g1field"><div class="gmsg" id="g1msg"></div></div>
+    <div class="swh">Vuốt thẻ sang trái hoặc phải, hoặc bấm nút</div>
+    <div class="g1btns"><button class="sb no" id="g1no">⬅ Lừa đảo</button><button class="sb yes" id="g1yes">An toàn ➡</button></div>
+    <div class="pre" id="g1pre"></div>
+  </section>
+
+  <!-- Gian 2 -->
+  <section id="g2" class="screen" style="--gc:#0f8a5f">
+    <div class="ghud"><button class="x" data-back aria-label="Rời gian hàng">✕</button><div class="gt"><small>Gian 2</small>Đuổi hình bắt chữ</div><div class="gs" id="g2sc">0</div></div>
+    <div class="tbar" id="g2tb"><i id="g2t"></i></div>
+    <div class="subhud"><span class="chip" id="g2n">Câu 1/5</span><span class="chip" id="g2sec">40s</span></div>
+    <div class="g2body">
+      <div class="frame" id="g2pic"></div>
+      <div class="slots" id="g2slots"></div>
+      <div class="tiles" id="g2tiles"></div>
+      <div class="g2acts"><button id="g2hint">💡 Gợi ý 1 chữ (−50)</button><button id="g2skip">Bỏ qua ➜</button></div>
+      <div class="reveal" id="g2rev"></div>
+    </div>
+    <div class="pre" id="g2pre"></div>
+  </section>
+
+  <!-- Gian 3 -->
+  <section id="g3" class="screen" style="--gc:#2563eb">
+    <div class="ghud"><button class="x" data-back aria-label="Rời gian hàng">✕</button><div class="gt"><small>Gian 3</small>Đường về an toàn</div><div class="gs" id="g3sc">0</div></div>
+    <div class="subhud" style="padding-bottom:8px"><span class="chip" id="g3hp">❤️❤️❤️</span><span class="chip" id="g3m">0 m</span></div>
+    <div id="road"><div class="hills"></div><div class="rplane" id="rplane"><div class="rlines" id="g3ln"></div></div><div class="fog"></div><div class="gmsg" id="g3msg"></div></div>
+    <div class="rhint">Vuốt hoặc chạm bên trái, bên phải để đổi làn</div>
+    <div class="pre" id="g3pre"></div>
+  </section>
+
+  <div class="veil" id="veil"><div class="sheet" id="sheet"></div></div>
+  <div class="toast" id="toast" role="status"></div>
+</div>
+
+<noscript>Cần bật JavaScript để vào Hội chợ online.</noscript>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

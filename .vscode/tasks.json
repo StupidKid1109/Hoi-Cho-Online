@@ -1,0 +1,21 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Chạy máy chủ Hội chợ online",
+      "type": "shell",
+      "command": "npm start",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "isBackground": true,
+      "problemMatcher": { "pattern": { "regexp": "^x$" }, "background": { "activeBegins": true, "beginsPattern": ".", "endsPattern": "đang chạy tại" } },
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Kiểm thử máy chủ",
+      "type": "shell",
+      "command": "npm test",
+      "options": { "cwd": "${workspaceFolder}/server" },
+      "group": "test"
+    }
+  ]
+}

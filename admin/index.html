@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quản trị Hội chợ online</title>
+<style>
+  body{font-family:system-ui,-apple-system,"Segoe UI",sans-serif;margin:0;background:#f6f3ee;color:#2b1a12}
+  header{background:#8f0b20;color:#fff;padding:14px 20px;display:flex;align-items:center;gap:12px}
+  header h1{font-size:18px;margin:0;flex:1}
+  main{max-width:960px;margin:0 auto;padding:20px;display:grid;gap:16px}
+  section{background:#fff;border:1px solid #eadfce;border-radius:12px;padding:16px}
+  h2{font-size:16px;margin:0 0 12px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+  .kpi{background:#fbf6ee;border-radius:10px;padding:10px}.kpi b{display:block;font-size:22px}
+  label{display:block;font-size:13px;font-weight:600;margin:8px 0 4px}
+  input,textarea{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid #d9cbb6;border-radius:8px;font:inherit}
+  textarea{min-height:70px}
+  button{background:#c8102e;color:#fff;border:0;border-radius:8px;padding:8px 14px;font-weight:700;cursor:pointer}
+  button.ghost{background:#fff;color:#c8102e;border:1px solid #e6c9cf}
+  table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid #f0e6d8;vertical-align:top}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .muted{color:#7a5c4d;font-size:13px}
+  #msg{position:fixed;right:16px;bottom:16px;background:#2b1a12;color:#fff;padding:10px 14px;border-radius:10px;display:none}
+</style>
+</head>
+<body>
+<header><h1>🏮 Quản trị Hội chợ online</h1><input id="key" type="password" placeholder="Mã quản trị (ADMIN_KEY)" style="max-width:240px"><button id="login">Đăng nhập</button></header>
+<main>
+  <section><h2>Tổng quan</h2><div class="grid" id="kpi"><div class="muted">Nhập mã quản trị để xem.</div></div></section>
+  <section>
+    <h2>Đợt treo thưởng</h2>
+    <div class="grid">
+      <div><label>Mã đợt (đổi mã = bắt đầu Bảng vàng mới)</label><input id="evId"></div>
+      <div><label>Tên đợt</label><input id="evName"></div>
+      <div><label>Bắt đầu</label><input id="evStart" type="datetime-local"></div>
+      <div><label>Kết thúc</label><input id="evEnd" type="datetime-local"></div>
+    </div>
+    <label>Giải thưởng (mỗi dòng: Hạng | Phần quà)</label><textarea id="evPrizes"></textarea>
+    <label>Thể lệ hiển thị cho người chơi</label><textarea id="evRules"></textarea>
+    <div class="row" style="margin-top:10px"><button id="saveEv">Lưu đợt thưởng</button><span class="muted">Giờ theo múi giờ của máy tính đang dùng.</span></div>
+  </section>
+  <section>
+    <h2>Bảng vàng và danh sách trúng giải</h2>
+    <div class="row"><label style="margin:0">Số người đứng đầu</label><input id="top" type="number" value="20" style="max-width:90px"><button id="csv">Tải file CSV</button></div>
+    <p class="muted">File gồm biệt danh, mã người chơi và điểm từng gian. Liên hệ người trúng giải qua Zalo OA của phường; chỉ xin số điện thoại khi trao giải.</p>
+  </section>
+  <section>
+    <h2>Báo cáo tin nhắn</h2>
+    <table><thead><tr><th>Tin nhắn</th><th>Người gửi</th><th>Số báo cáo</th><th>Xử lý</th></tr></thead><tbody id="reports"><tr><td colspan="4" class="muted">Chưa tải.</td></tr></tbody></table>
+    <p class="muted">Tin có từ 3 báo cáo được tự động ẩn. “Khóa chat” chặn người đó gửi tin nhưng vẫn cho chơi.</p>
+  </section>
+  <section>
+    <h2>Nội dung câu hỏi</h2>
+    <p class="muted">Sửa các file trong <code>server/content/</code> (cards.json, rebus.json) rồi bấm nút dưới để nạp lại mà không cần khởi động lại máy chủ.</p>
+    <button class="ghost" id="reload">Nạp lại nội dung</button>
+  </section>
+</main>
+<div id="msg"></div>
+<script>
+const $ = id => document.getElementById(id);
+let KEY = sessionStorage.getItem("adminKey") || "";
+$("key").value = KEY;
+const note = t => { const m = $("msg"); m.textContent = t; m.style.display = "block"; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = "none", 2500); };
+const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+async function call(path, opt = {}) {
+  const res = await fetch(path, { ...opt, headers: { "content-type": "application/json", "x-admin-key": KEY, ...(opt.headers || {}) } });
+  if (!res.ok) { let e = {}; try { e = await res.json(); } catch (_) {} throw new Error(e.error || "Lỗi " + res.status); }
+  return res.headers.get("content-type").includes("json") ? res.json() : res.blob();
+}
+const toLocal = iso => { const d = new Date(iso); const p = n => String(n).padStart(2, "0"); return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes()); };
+async function load() {
+  try {
+    const s = await call("/api/admin/summary");
+    $("kpi").innerHTML = [["Người chơi", s.players], ["Lượt chơi", s.runs], ["Lượt chơi 24 giờ qua", s.runsToday], ["Báo cáo chờ xử lý", s.openReports], ["Đang dạo hội", s.khu.reduce((a, k) => a + k.online, 0)], ["Đợt thưởng", s.active ? "Đang diễn ra" : "Không diễn ra"]].map(k => '<div class="kpi">' + k[0] + "<b>" + k[1] + "</b></div>").join("");
+    const e = s.event; $("evId").value = e.id; $("evName").value = e.name; $("evStart").value = toLocal(e.start); $("evEnd").value = toLocal(e.end);
+    $("evPrizes").value = e.prizes.map(p => p.join(" | ")).join("\n"); $("evRules").value = e.rules || "";
+    const r = await call("/api/admin/reports");
+    $("reports").innerHTML = r.reports.length ? r.reports.map(x => "<tr><td>" + esc(x.text) + (x.hidden ? ' <span class="muted">(đã ẩn)</span>' : "") + '<div class="muted">Khu ' + x.khu + " · " + new Date(x.ts).toLocaleString("vi-VN") + "</div></td><td>" + esc(x.nick) + '<div class="muted">' + esc(x.player) + "</div></td><td>" + x.reports + '</td><td class="row"><button class="ghost" data-a="dismiss" data-id="' + x.id + '">Bỏ qua</button><button class="ghost" data-a="hide" data-id="' + x.id + '">Ẩn tin</button><button data-a="ban" data-id="' + x.id + '">Ẩn và khóa chat</button></td></tr>').join("") : '<tr><td colspan="4" class="muted">Không có báo cáo nào.</td></tr>';
+    document.querySelectorAll("#reports button").forEach(b => b.onclick = async () => { await call("/api/admin/reports/" + b.dataset.id, { method: "POST", body: JSON.stringify({ action: b.dataset.a }) }); note("Đã xử lý"); load(); });
+  } catch (e) { note(e.message); }
+}
+$("login").onclick = () => { KEY = $("key").value.trim(); sessionStorage.setItem("adminKey", KEY); load(); };
+$("saveEv").onclick = async () => {
+  try {
+    const prizes = $("evPrizes").value.split("\n").map(l => l.split("|").map(s => s.trim())).filter(p => p[0]);
+    await call("/api/admin/event", { method: "PUT", body: JSON.stringify({ id: $("evId").value.trim(), name: $("evName").value.trim(), start: new Date($("evStart").value).toISOString(), end: new Date($("evEnd").value).toISOString(), prizes, rules: $("evRules").value }) });
+    note("Đã lưu đợt thưởng"); load();
+  } catch (e) { note(e.message); }
+};
+$("csv").onclick = async () => { try { const blob = await call("/api/admin/winners.csv?top=" + $("top").value); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "bang-vang.csv"; a.click(); } catch (e) { note(e.message); } };
+$("reload").onclick = async () => { try { await call("/api/admin/reload-content", { method: "POST" }); note("Đã nạp lại nội dung"); } catch (e) { note(e.message); } };
+if (KEY) load();
+</script>
+</body>
+</html>

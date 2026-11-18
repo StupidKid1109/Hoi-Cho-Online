@@ -1,0 +1,19 @@
+{
+  "name": "hoi-cho-online-miniapp",
+  "version": "1.0.0",
+  "description": "Giao diện Hội chợ online cho Zalo Mini App",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "zalo:start": "zmp start",
+    "zalo:deploy": "zmp deploy"
+  },
+  "dependencies": {
+    "zmp-sdk": "latest"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}
