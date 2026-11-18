@@ -327,3 +327,47 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 .conn{position:absolute;right:10px;top:10px;z-index:3;font-size:11px;font-weight:700;border-radius:99px;padding:4px 9px;background:rgba(255,255,255,.9);color:var(--ink)}
 .conn.off{background:#fde8e8;color:#991b1b}
 .notcount{display:inline-block;margin-top:6px;font-size:11px;background:#fff7d6;color:#7a5200;border-radius:99px;padding:2px 9px;font-weight:700}
+
+/* ===== Đồ họa Three.js (sảnh và Gian 3) ===== */
+#viewport.gl{background:#1d0f3d;touch-action:none}
+#viewport.gl #cam,#viewport.gl .sky{display:none}
+.gl3{position:absolute;inset:0;width:100%;height:100%;display:block;z-index:1;touch-action:none;outline:none}
+.lbl3{position:absolute;inset:0;pointer-events:none;z-index:2;overflow:hidden}
+.l3{position:absolute;left:0;top:0;width:0;height:0;will-change:transform}
+.l3.bbw .bbest{left:0;top:auto;bottom:0;transform:translateX(-50%)}
+.tpb3{position:absolute;left:0;top:0;transform:translate(-50%,-50%);font-size:11px;background:rgba(255,255,255,.72);color:#5a3a00;padding:2px 9px;border-radius:99px;font-weight:800;white-space:nowrap}
+.l3 .avt{top:auto}
+#road.gl{background:#bfe4ff}
+#road.gl .hills,#road.gl .rplane,#road.gl .fog{display:none}
+.g3tap{position:absolute;inset:0;pointer-events:none;z-index:1}
+.g3tap .e{position:absolute;top:70%;width:60px;height:10px}
+
+/* ===== Làm đẹp Gian 1, Gian 2 (chỉ đổi giao diện, không đổi cách chơi) ===== */
+#g1,#g2,#g3{background:var(--cream)}
+#g1field{background:
+  radial-gradient(circle at 50% 42%,rgba(255,255,255,.95) 0 28%,transparent 62%),
+  radial-gradient(circle,rgba(200,16,46,.07) 1.5px,transparent 2px) 0 0/22px 22px,
+  linear-gradient(180deg,#fff8ec,#fde8dc)}
+/* thẻ phía sau chỉ là gợi ý thẻ kế tiếp: ẩn chữ để không lộ xuyên qua thẻ đang chơi */
+.scard.back{transform:translateY(-50%) translateZ(-140px) translateY(26px)}
+.scard.back>*{visibility:hidden}
+.scard{box-shadow:0 14px 30px rgba(43,26,18,.18),0 0 0 4px rgba(220,38,38,calc(var(--n,0) * .85)),0 0 0 4px rgba(31,157,85,calc(var(--y,0) * .85))}
+.scard::before{content:"";position:absolute;left:50%;top:7px;width:46px;height:5px;margin-left:-23px;border-radius:9px;background:#e9dccb}
+.scard .from{margin-top:6px}
+.scard .from .ic{background:linear-gradient(160deg,#fff3dc,#ffe1c2);box-shadow:inset 0 0 0 2px #fff,0 2px 6px rgba(0,0,0,.08)}
+.scard .txt{position:relative;box-shadow:inset 0 -2px 0 rgba(0,0,0,.04)}
+.stamp{background:rgba(255,255,255,.92);z-index:3}
+.sb{position:relative;overflow:hidden}
+.sb::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(255,255,255,.22),transparent 55%);pointer-events:none}
+.g2body{background:
+  radial-gradient(circle,rgba(15,138,95,.08) 1.5px,transparent 2px) 0 0/22px 22px,
+  linear-gradient(180deg,#fff8ec,#e9f6ee)}
+.frame{position:relative;overflow:hidden}
+.frame::after{content:"";position:absolute;top:0;bottom:0;width:40%;left:-60%;background:linear-gradient(100deg,transparent,rgba(255,255,255,.7),transparent);animation:shine 3.2s ease-in-out infinite;pointer-events:none}
+@keyframes shine{0%,55%{left:-60%}100%{left:130%}}
+.frame>span:not(.plus){display:inline-block;animation:bob2 2.6s ease-in-out infinite}
+.frame>span:nth-child(3){animation-delay:-.8s}.frame>span:nth-child(5){animation-delay:-1.6s}
+@keyframes bob2{50%{transform:translateY(-5px) rotate(-3deg)}}
+.g2acts button{box-shadow:0 3px 0 var(--line)}
+.g2acts button:active{transform:translateY(2px);box-shadow:none}
+@media (prefers-reduced-motion:reduce){.frame::after,.frame>span{animation:none}}

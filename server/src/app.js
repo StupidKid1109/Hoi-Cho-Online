@@ -155,11 +155,16 @@ export function createApp(config) {
     return send(res, 404, { error: "Không tìm thấy" });
   }
 
+  // Có bản build (client/www, tạo bằng "npm run build" trong client) thì phục vụ bản build: đồ họa Three.js.
+  // Chưa build thì phục vụ thẳng mã nguồn: giao diện vẫn chạy, sảnh và Gian 3 dùng bản CSS 3D.
+  const BUILT = join(ROOT_DIR, "client", "www");
+  const CLIENT_DIR = existsSync(join(BUILT, "index.html")) ? BUILT : join(ROOT_DIR, "client");
+
   function serveStatic(req, res, url) {
     let p = decodeURIComponent(url.pathname), base;
     if (p === "/admin" || p === "/admin/") { base = join(ROOT_DIR, "admin"); p = "/index.html"; }
     else if (p.startsWith("/shared/")) { base = join(ROOT_DIR, "shared"); p = p.slice(7); }
-    else { base = join(ROOT_DIR, "client"); if (p === "/") p = "/index.html"; }
+    else { base = CLIENT_DIR; if (p === "/") p = "/index.html"; }
     const file = pnorm(join(base, p));
     if (!file.startsWith(base + sep) || !existsSync(file) || !statSync(file).isFile()) return send(res, 404, { error: "Không tìm thấy" });
     res.writeHead(200, { "content-type": MIME[extname(file)] || "application/octet-stream", "cache-control": "no-cache" });

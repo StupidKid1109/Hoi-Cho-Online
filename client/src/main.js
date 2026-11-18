@@ -26,6 +26,7 @@ async function boot() {
     stepTo(70, "Đang treo đèn lồng…");
     const [me, khu] = await Promise.all([api("/api/me"), api("/api/khu")]);
     S.me = me; S.event = me.event;
+    stepTo(85, "Đang dựng gian hàng 3D…"); await hub.prepareHub();
     stepTo(100, "Sắp xong rồi…");
     setTimeout(() => landing(khu.khu), 300);
   } catch (e) {

@@ -19,7 +19,15 @@ hoi-cho-online/
 │  └─ .env.example    Mẫu cấu hình
 ├─ client/            Giao diện (chạy trong Zalo Mini App hoặc trình duyệt)
 │  ├─ index.html
-│  └─ src/            main.js, hub.js (sảnh 3D), chat.js, games/ (3 gian)
+│  ├─ www/            Bản build (tạo bằng npm run build, không đưa lên git)
+│  └─ src/
+│     ├─ main.js, chat.js, ui.js, api.js, platform.js
+│     ├─ hub.js       Chọn bản vẽ sảnh: Three.js nếu có WebGL, không thì CSS 3D
+│     ├─ hub3d.js     Sảnh hội chợ bằng Three.js
+│     ├─ hubCss.js    Sảnh hội chợ bằng CSS 3D (dự phòng)
+│     ├─ gfx/         Phát hiện WebGL, mức chất lượng, công cụ Three.js dùng chung
+│     └─ games/       swipe.js (Gian 1), rebus.js (Gian 2), runner.js (Gian 3:
+│                     mô phỏng) + runner3d.js / runnerCss.js (Gian 3: phần vẽ)
 ├─ shared/            Code dùng chung cho cả máy chủ và giao diện
 │  ├─ runnerSim.js    Mô phỏng Gian 3 (máy chủ chạy lại để chấm điểm)
 │  └─ chatFilter.js   Bộ lọc chat
@@ -43,6 +51,26 @@ hoi-cho-online/
 4. Mở trình duyệt:
    - Trò chơi: http://localhost:8787
    - Quản trị: http://localhost:8787/admin (đăng nhập bằng `ADMIN_KEY`)
+
+### Đồ họa 3D (Three.js)
+
+Sảnh hội chợ và Gian 3 vẽ bằng Three.js (ánh sáng, bóng đổ, gian hàng, nhân vật). Phần này cần build giao diện một lần:
+
+```
+cd client
+npm install
+npm run build
+```
+
+Lệnh build tạo thư mục `client/www`. Máy chủ thấy thư mục này thì tự phục vụ bản build (dòng `Giao diện:` khi khởi động sẽ báo). Sửa giao diện xong thì build lại.
+Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, sảnh và Gian 3 tự dùng bản CSS 3D.
+
+**Sửa giao diện cho nhanh:** chạy máy chủ như trên, mở thêm một Terminal, `cd client` rồi `npm run dev`, mở http://localhost:3000. Trang tự tải lại khi sửa file; API và chat được chuyển tiếp sang máy chủ ở cổng 8787.
+
+**Máy yếu và máy không có WebGL:**
+- Mức chất lượng (0 thấp, 1 vừa, 2 cao) tự chọn theo cấu hình máy. Nếu khung hình xuống dưới 40 hình/giây, trò chơi tự hạ một mức (giảm độ nét, tắt bóng đổ) và nhớ cho lần sau.
+- Thử một mức cố định: thêm `?q=0`, `?q=1` hoặc `?q=2` vào địa chỉ.
+- Máy không có WebGL tự dùng bản CSS 3D. Thử bản này trên máy tính: thêm `?gfx=css` vào địa chỉ.
 
 **Thử nhiều người chơi:** mở thêm một cửa sổ ẩn danh (Ctrl+Shift+N), vào cùng một khu sẽ thấy nhau đi lại và chat với nhau.
 
