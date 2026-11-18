@@ -67,6 +67,8 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 
 **Sửa giao diện cho nhanh:** chạy máy chủ như trên, mở thêm một Terminal, `cd client` rồi `npm run dev`, mở http://localhost:3000. Trang tự tải lại khi sửa file; API và chat được chuyển tiếp sang máy chủ ở cổng 8787.
 
+**Mô hình 3D có sẵn:** quầy hàng, xe đẩy, ghế, cờ, đèn đường lấy từ bộ *Fantasy Town Kit* của Kenney (www.kenney.nl), giấy phép CC0: được dùng cả cho mục đích thương mại, không bắt buộc ghi nguồn. File nằm ở `client/public/models/kenney` (kèm `License.txt`, khoảng 280 KB). Nếu không tải được mô hình, sảnh tự dùng gian hàng tự dựng. Thêm `?kit=0` vào địa chỉ để xem bản tự dựng.
+
 **Máy yếu và máy không có WebGL:**
 - Mức chất lượng (0 thấp, 1 vừa, 2 cao) tự chọn theo cấu hình máy. Nếu khung hình xuống dưới 40 hình/giây, trò chơi tự hạ một mức (giảm độ nét, tắt bóng đổ) và nhớ cho lần sau.
 - Thử một mức cố định: thêm `?q=0`, `?q=1` hoặc `?q=2` vào địa chỉ.

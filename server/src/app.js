@@ -12,7 +12,7 @@ import { ROOT_DIR, SERVER_DIR } from "./config.js";
 
 const RUN_TTL = 15 * 60 * 1000, RUNS_PER_DAY = 300;
 const GAME_NAMES = { g1: "Gian 1", g2: "Gian 2", g3: "Gian 3" };
-const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".webp": "image/webp", ".ico": "image/x-icon" };
+const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8", ".json": "application/json; charset=utf-8", ".png": "image/png", ".jpg": "image/jpeg", ".svg": "image/svg+xml", ".webp": "image/webp", ".ico": "image/x-icon", ".glb": "model/gltf-binary", ".txt": "text/plain; charset=utf-8" };
 
 function loadContent() {
   const read = f => JSON.parse(readFileSync(join(SERVER_DIR, "content", f), "utf8"));

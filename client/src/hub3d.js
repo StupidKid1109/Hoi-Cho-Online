@@ -11,6 +11,7 @@ import {
   rrect, fitText, mergeParts, disposeTree, waitFonts, FONT
 } from "./gfx/kit.js";
 import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
+import { loadKit, hasKit, model } from "./gfx/models.js";
 
 export { EMOTES };
 
@@ -31,7 +32,7 @@ let ctx = null, peers = new Map(), hidden = new Set();
 let G = null; // mọi thứ thuộc về cảnh Three.js hiện tại
 
 /** Nạp trước phông chữ để vẽ biển hiệu. main.js gọi qua hub.prepareHub() lúc đang tải. */
-export function preload() { return waitFonts(); }
+export function preload() { return Promise.all([waitFonts(), loadKit()]); }
 
 /* =====================================================================
    DỰNG CẢNH
@@ -60,9 +61,11 @@ export function buildHub(context) {
   buildTrees(scene);
   buildLanterns(scene);
   buildGate(scene);
-  BOOTHS.forEach(b => buildStall(scene, b));
-  buildLocked(scene, 430, 1010, -135, "Gian 4", "s4");
-  buildLocked(scene, 970, 1010, 135, "Gian 5", "s5");
+  const kit = hasKit();
+  BOOTHS.forEach(b => (kit ? buildStallKit : buildStall)(scene, b));
+  (kit ? buildLockedKit : buildLocked)(scene, 430, 1010, -135, "Gian 4", "s4");
+  (kit ? buildLockedKit : buildLocked)(scene, 970, 1010, 135, "Gian 5", "s5");
+  if (kit) buildDecor(scene);
   buildBoard(scene);
   buildFireworks(scene);
   buildMarker(scene);
@@ -76,6 +79,7 @@ export function buildHub(context) {
   $("emo").querySelectorAll("button").forEach(btn => btn.onclick = () => { const i = +btn.dataset.e; bubble("avo", EMOTES[i][0]); hop("avo"); beep("coin"); ctx.send({ t: "emote", e: i }); ctx.onEmote && ctx.onEmote(i); });
 
   G.ro = new ResizeObserver(resize); G.ro.observe(vp); resize();
+  window.__hub3d = () => G && { calls: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, q: G.q }; // hỗ trợ kiểm thử, đo hiệu năng
   bindInput();
   cam.dist = CAM_INTRO.dist; cam.pitch = CAM_INTRO.pitch; cam.x = me.x; cam.y = me.y;
 }
@@ -203,6 +207,7 @@ function buildTrees(scene) {
   const spots = [];
   for (let i = 0; i < 20; i++) { const a = i / 20 * Math.PI * 2; if (Math.abs(a - Math.PI / 2) < .75) continue; spots.push([wx(CX + Math.cos(a) * 650), wz(CY + Math.sin(a) * 610), i]); }
   for (let i = 0; i < 26; i++) { const a = i / 26 * Math.PI * 2 + .1; if (Math.abs(a - Math.PI / 2) < .5) continue; spots.push([Math.cos(a) * 10.5, Math.sin(a) * 10.5 + 0.6, i + 3]); }
+  if (hasKit()) for (let i = spots.length - 1; i >= 0; i--) if (DECOR.some(d => Math.hypot(d.x - spots[i][0], d.z - spots[i][1]) < 1.4)) spots.splice(i, 1);
   const trunkGeo = new THREE.CylinderGeometry(0.1, 0.16, 1.2, 6); trunkGeo.translate(0, 0.6, 0);
   const crownGeo = new THREE.IcosahedronGeometry(0.85, 0);
   const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: 0x6b4423 }), spots.length);
@@ -373,6 +378,79 @@ function buildStall(scene, b) {
   G.occ.push({ id: b.id, x: sp.x, y: sp.y, g, op: 1 });
   const pill = textPlane("bb_" + b.id, 0.95, { bg: "#ffffff", fg: "#2b1a12", sprite: true });
   pill.position.set(0, 3.78, -0.2); g.add(pill); G.anim.push({ o: pill, k: "bob", y: 3.78, p: sp.x / 300 });
+}
+
+/* ---------- Gian hàng dùng mô hình Kenney (CC0) ---------- */
+function buildStallKit(scene, b) {
+  const sp = SPOTS[b.id], g = new THREE.Group();
+  g.position.set(wx(sp.x), 0, wz(sp.y)); g.rotation.y = -sp.r * DEG;
+  const M = woodMats(), blue = b.id === "g3" ? "blue" : null;
+  // quầy hàng mái bạt, phóng to bằng gian thật (khoảng 2,4 × 3 đơn vị)
+  const stall = model(b.id === "g2" ? "stall-green" : "stall-red", 2.4, { own: true, tint: blue });
+  stall.rotation.y = Math.PI / 2; // mặt dài của quầy hướng ra trước
+  g.add(stall);
+  // biển tên trên nóc
+  const smat = new THREE.MeshStandardMaterial({ map: signTex(b), roughness: 0.55 });
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(1.9, 0.72, 0.08), [M.dark, M.dark, M.dark, M.dark, smat, M.dark]);
+  sign.position.set(0, 3.5, 0); g.add(sign); G.anim.push({ o: sign, k: "bob", y: 3.5, p: sp.x / 300 });
+  for (const sx of [-0.6, 0.6]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.6, 6), M.dark); st.position.set(sx, 3.0, 0); g.add(st); }
+  // băng rôn chữ dưới mép bạt
+  const ban = new THREE.Mesh(new THREE.PlaneGeometry(1.7, 0.3), new THREE.MeshStandardMaterial({ map: counterTex(b.goods), roughness: 0.8, side: THREE.DoubleSide }));
+  ban.position.set(0, 0.62, 0.82); g.add(ban);
+  // đồ trưng bày nổi trên quầy
+  const goods = emojiSprite(b.icons, 0.75); goods.position.set(0, 1.35, 0.1); g.add(goods); G.anim.push({ o: goods, k: "float", y: 1.35, p: sp.x / 200 });
+  // cờ đuôi nheo, ghế đẩu, đèn lồng
+  for (const sx of [-1, 1]) {
+    const f = model(b.id === "g2" ? "banner-green" : "banner-red", 1.8, { own: true, tint: blue }); f.position.set(sx * 1.5, 0, 0.75); g.add(f);
+    const stool = model("stall-stool", 1.7, { own: true }); stool.position.set(sx * 0.75, 0, 1.25); g.add(stool);
+    const lan = new THREE.Mesh(new THREE.SphereGeometry(0.13, 10, 8), new THREE.MeshLambertMaterial({ color: 0xe01b3c, emissive: 0xff3a1a, emissiveIntensity: 0.6 }));
+    lan.scale.y = 1.3; lan.position.set(sx * 1.0, 1.95, 1.0); g.add(lan); G.anim.push({ o: lan, k: "swing", p: sx + sp.x });
+  }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.pick = b.id; G.pick.push(o); } });
+  goods.userData.pick = b.id; G.pick.push(goods);
+  scene.add(g);
+  G.occ.push({ id: b.id, x: sp.x, y: sp.y, g, op: 1 });
+  const pill = textPlane("bb_" + b.id, 0.95, { bg: "#ffffff", fg: "#2b1a12", sprite: true });
+  pill.position.set(0, 4.13, 0); g.add(pill); G.anim.push({ o: pill, k: "bob", y: 4.13, p: sp.x / 300 });
+}
+
+function buildLockedKit(scene, x, y, r, name, id) {
+  const g = new THREE.Group(); g.position.set(wx(x), 0, wz(y)); g.rotation.y = -r * DEG;
+  const st = model("stall-red", 1.9, { own: true, tint: "gray" }); st.rotation.y = Math.PI / 2; g.add(st);
+  const tex = canvasTex(256, 128, (c, w, h) => {
+    c.fillStyle = "#5e5246"; rrect(c, 4, 4, w - 8, h - 8, 18); c.fill();
+    c.strokeStyle = "#ffc533"; c.lineWidth = 6; rrect(c, 7, 7, w - 14, h - 14, 15); c.stroke();
+    c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#fff"; fitText(c, "🔒 " + name, w / 2, 50, w - 30, 38, 900);
+    c.fillStyle = "rgba(255,255,255,.8)"; fitText(c, "Sắp mở", w / 2, 92, w - 30, 26, 700);
+  });
+  const post = new THREE.MeshStandardMaterial({ color: 0x5e3816, roughness: 0.85 });
+  const board = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.5, 0.05), [post, post, post, post, new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 }), post]);
+  board.position.set(0, 0.85, 1.25); board.rotation.x = -0.15; g.add(board);
+  for (const sx of [-0.4, 0.4]) { const p = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.85, 6), post); p.position.set(sx, 0.42, 1.27); g.add(p); }
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(g);
+  G.occ.push({ id, x, y, g, op: 1 });
+}
+
+/* ---------- Đồ trang trí quanh sân: sạp chợ nhỏ, xe đẩy, ghế băng, đèn đường, hàng rào cây ---------- */
+const DECOR = [
+  { k: "stall-green", x: -5.75, z: 0.3, s: 1.5 }, { k: "stall-red", x: 5.75, z: 0.3, s: 1.5 },
+  { k: "stall-red", x: -4.7, z: -3.5, s: 1.4 }, { k: "stall-green", x: 4.7, z: -3.5, s: 1.4 },
+  { k: "cart-high", x: -2.6, z: -5.3, s: 1.5 }, { k: "cart", x: 2.6, z: -5.3, s: 1.5 },
+  { k: "cart", x: -4.9, z: 3.3, s: 1.4 }, { k: "cart-high", x: 4.9, z: 3.3, s: 1.4 }
+];
+function buildDecor(scene) {
+  for (const d of DECOR) {
+    const o = model(d.k, d.s); o.position.set(d.x, 0, d.z); o.rotation.y = Math.atan2(-d.x, -d.z) + (d.k.startsWith("stall") ? Math.PI / 2 : 0); scene.add(o);
+    BLOCK.push([d.x * U + CX, d.z * U + CY, 80]);
+  }
+  // ghế băng ở mép sân, quay vào giữa
+  for (const [x, z] of [[-3.9, 1.0], [3.9, 1.0], [-1.6, 4.4], [1.6, 4.4]]) { const b = model("stall-bench", 2); b.position.set(x, 0, z); b.rotation.y = Math.atan2(-x, -z) + Math.PI / 2; scene.add(b); }
+  // hai cột đèn đường hai bên cổng
+  const gz = wz(1150), glow = [];
+  for (const sx of [-1, 1]) { const l = model("lantern", 1.4); l.position.set(sx * 1.9, 0, gz + 0.5); scene.add(l); glow.push(sx * 1.9, 2.12, gz + 0.5); }
+  const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(glow), 3));
+  scene.add(new THREE.Points(gg, new THREE.PointsMaterial({ map: glowTex(), color: 0xffe2a0, size: 0.9, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })));
 }
 
 function buildLocked(scene, x, y, r, name, id) {
