@@ -145,44 +145,6 @@ export function mergeParts(parts) {
   return out;
 }
 
-const SKIN = ["#f6d2b3", "#eec19c", "#d9a47c", "#b97f57"];
-const SHIRT = ["#e63946", "#2a9d8f", "#3a86ff", "#ff9f1c", "#8338ec", "#06d6a0", "#ef476f", "#118ab2", "#f4a261"];
-const PANTS = ["#264653", "#3d405b", "#1d3557", "#5c4033"];
-const HAIR = ["#1b1b1b", "#2e1d12", "#4a2c17", "#121212"];
-
-/**
- * Nhân vật kiểu chibi khoảng 1,15 đơn vị chiều cao, gộp thành 1 mesh.
- * seed quyết định màu áo, tóc, mũ. mine = true: đội nón lá, áo đỏ.
- */
-export function charGeometry(seed, mine) {
-  const h = Math.abs(seed);
-  const skin = SKIN[h % SKIN.length], shirt = mine ? "#d62839" : SHIRT[(h >> 3) % SHIRT.length], pants = PANTS[(h >> 6) % PANTS.length], hair = HAIR[(h >> 8) % HAIR.length];
-  const hat = mine ? 1 : (h >> 10) % 4; // 0 không mũ, 1 nón lá, 2 mũ lưỡi trai, 3 tóc dài
-  const P = [
-    [new THREE.SphereGeometry(0.09, 8, 6), "#2b2b2b", -0.1, 0.07, 0.03, 0, 0, 0, 1, 0.7, 1.4],
-    [new THREE.SphereGeometry(0.09, 8, 6), "#2b2b2b", 0.1, 0.07, 0.03, 0, 0, 0, 1, 0.7, 1.4],
-    [new THREE.CylinderGeometry(0.17, 0.2, 0.26, 10), pants, 0, 0.22, 0],
-    [new THREE.CapsuleGeometry(0.2, 0.18, 4, 10), shirt, 0, 0.47, 0],
-    [new THREE.CapsuleGeometry(0.06, 0.2, 3, 6), shirt, -0.25, 0.46, 0, 0, 0, 0.35],
-    [new THREE.CapsuleGeometry(0.06, 0.2, 3, 6), shirt, 0.25, 0.46, 0, 0, 0, -0.35],
-    [new THREE.SphereGeometry(0.06, 6, 5), skin, -0.31, 0.3, 0],
-    [new THREE.SphereGeometry(0.06, 6, 5), skin, 0.31, 0.3, 0],
-    [new THREE.SphereGeometry(0.25, 14, 12), skin, 0, 0.9, 0],
-    [new THREE.SphereGeometry(0.035, 6, 5), "#1a1a1a", -0.085, 0.92, 0.225],
-    [new THREE.SphereGeometry(0.035, 6, 5), "#1a1a1a", 0.085, 0.92, 0.225],
-    [new THREE.SphereGeometry(0.04, 6, 5), "#ff8a8a", -0.15, 0.85, 0.19, 0, 0, 0, 1, 0.6, 0.5],
-    [new THREE.SphereGeometry(0.04, 6, 5), "#ff8a8a", 0.15, 0.85, 0.19, 0, 0, 0, 1, 0.6, 0.5],
-    [new THREE.SphereGeometry(0.262, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), hair, 0, 0.92, -0.02, -0.25]
-  ];
-  if (hat === 1) P.push([new THREE.ConeGeometry(0.46, 0.3, 18, 1, true), "#f1d48a", 0, 1.22, 0], [new THREE.TorusGeometry(0.4, 0.015, 4, 18), "#c9a54f", 0, 1.08, 0, Math.PI / 2]);
-  if (hat === 2) P.push([new THREE.SphereGeometry(0.27, 12, 6, 0, Math.PI * 2, 0, Math.PI * 0.45), SHIRT[(h >> 12) % SHIRT.length], 0, 0.95, 0], [new THREE.CylinderGeometry(0.16, 0.16, 0.025, 12, 1, false, -Math.PI / 2, Math.PI), SHIRT[(h >> 12) % SHIRT.length], 0, 1.0, 0.18]);
-  if (hat === 3) P.push([new THREE.CapsuleGeometry(0.2, 0.25, 3, 8), hair, 0, 0.78, -0.12, 0, 0, 0, 1.15, 1, 0.6]);
-  const g = mergeParts(P);
-  P.forEach(p => p[0].dispose());
-  g.computeBoundingSphere();
-  return g;
-}
-
 /** Giải phóng bộ nhớ GPU của cả một cây đối tượng. */
 export function disposeTree(root) {
   root.traverse(o => {

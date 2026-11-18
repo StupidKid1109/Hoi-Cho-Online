@@ -8,8 +8,9 @@ import { EMOTES } from "./hubCss.js";
 import { initialQuality } from "./gfx/webgl.js";
 import {
   createRenderer, applyQuality, QualityWatch, setMaxAniso, canvasTex, emojiSprite, blobTex, glowTex,
-  rrect, fitText, charGeometry, mergeParts, disposeTree, waitFonts, FONT
+  rrect, fitText, mergeParts, disposeTree, waitFonts, FONT
 } from "./gfx/kit.js";
+import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
 
 export { EMOTES };
 
@@ -85,7 +86,7 @@ function dispose() {
   G.ro && G.ro.disconnect();
   G.observers.forEach(o => o.disconnect());
   disposeTree(G.scene);
-  charMat = null; shadowGeo = null;
+  shadowGeo = null;
   G.renderer.dispose();
   G.renderer.domElement.remove(); G.labels.remove();
   G = null;
@@ -493,12 +494,10 @@ function addLabel(key, html, obj, offset, cls) {
 }
 function removeLabel(key) { if (!G.lbls) return; const i = G.lbls.findIndex(l => l.key === key); if (i >= 0) { G.lbls[i].el.remove(); G.lbls.splice(i, 1); } }
 
-let shadowGeo = null, charMat = null;
+let shadowGeo = null;
 function addAvatar(id, name, seed, mine) {
-  if (!charMat) charMat = new THREE.MeshLambertMaterial({ vertexColors: true });
   if (!shadowGeo) { shadowGeo = new THREE.PlaneGeometry(0.9, 0.9); shadowGeo.rotateX(-Math.PI / 2); }
-  const root = new THREE.Group(), body = new THREE.Mesh(charGeometry(seed, mine), charMat);
-  body.userData.keepMat = true;
+  const root = new THREE.Group(), mat = characterMaterial(), body = new THREE.Mesh(characterGeometry(seed, mine), mat);
   const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ map: blobTex(), transparent: true, depthWrite: false }));
   sh.position.y = 0.02; sh.userData.keepGeo = true;
   root.add(sh, body);
@@ -508,17 +507,18 @@ function addAvatar(id, name, seed, mine) {
   }
   G.scene.add(root);
   const el = addLabel(id, '<div class="avt' + (mine ? " mine" : "") + '" id="' + id + '"><span class="bub"></span><span class="nm">' + esc(name) + "</span></div>", root, new THREE.Vector3(0, 1.45, 0), "av");
-  const a = { id, root, body, el, phase: Math.random() * 6, walk: false, hop: 0, face: 0 };
+  const a = { id, root, body, mat, el, phase: Math.random() * 6, walk: false, hop: 0, face: 0, wave: 0 };
   G.avatars.set(id, a);
   return a;
 }
 function removeAvatar(id) {
   const a = G && G.avatars.get(id); if (!a) return;
   G.scene.remove(a.root);
-  a.body.geometry.dispose(); a.root.children.forEach(o => { if (o !== a.body && o.material) o.material.dispose(); if (o.geometry && !o.userData.keepGeo && o !== a.body) o.geometry.dispose(); });
+  a.body.geometry.dispose(); a.mat.dispose(); a.root.children.forEach(o => { if (o !== a.body && o.material) o.material.dispose(); if (o.geometry && !o.userData.keepGeo && o !== a.body) o.geometry.dispose(); });
   removeLabel(id); G.avatars.delete(id);
 }
-function hop(id) { const a = G && G.avatars.get(id); if (a) a.hop = 1; }
+/** Chào: vẫy tay và nhún nhẹ. */
+function hop(id) { const a = G && G.avatars.get(id); if (a) { a.hop = 1; a.wave = 1.6; } }
 
 /* ---------- Người chơi khác (cùng giao diện hàm với bản CSS) ---------- */
 function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0; return h; }
@@ -680,14 +680,16 @@ function animateAvatar(a, x, y, dx, dy, walking, dt) {
   a.root.position.set(wx(x), 0, wz(y));
   if (Math.abs(dx) + Math.abs(dy) > 0.05) { const want = Math.atan2(dx, dy); const d = ((want - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += d * Math.min(1, dt * 12); }
   a.body.rotation.y = a.face;
-  a.phase += dt * (walking ? 13 : 2.2);
-  a.hop = Math.max(0, a.hop - dt * 2.2);
-  const bounce = walking ? Math.abs(Math.sin(a.phase)) * 0.12 : Math.sin(a.phase) * 0.012;
-  const jump = Math.sin(a.hop * Math.PI) * 0.45;
+  a.phase += dt * (walking ? 11 : 2.2);
+  a.hop = Math.max(0, a.hop - dt * 2.5);
+  const bounce = walking ? Math.abs(Math.cos(a.phase)) * 0.05 : 0;
+  const breathe = walking ? 1 : 1 + Math.sin(a.phase) * 0.012;
+  const jump = Math.sin(a.hop * Math.PI) * 0.22;
   a.body.position.y = bounce + jump;
-  a.body.rotation.z = walking ? Math.sin(a.phase) * 0.09 : 0;
-  const sq = walking ? 1 - Math.abs(Math.cos(a.phase)) * 0.05 : 1;
-  a.body.scale.set(1 / Math.sqrt(sq), sq, 1 / Math.sqrt(sq));
+  a.body.rotation.z = walking ? Math.sin(a.phase) * 0.04 : 0;
+  a.body.rotation.x = walking ? 0.06 : 0;
+  a.body.scale.set(1, breathe, 1);
+  animateCharacter(a, walking, dt);
   a.walk = walking;
 }
 
