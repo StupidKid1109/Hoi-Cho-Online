@@ -381,3 +381,5 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 .sitp:active{transform:translateX(-50%) translateY(3px);box-shadow:0 1px 0 var(--gold-d)}
 .sitp kbd{display:inline-block;margin-left:6px;font:inherit;font-size:11px;background:#fff;border-radius:5px;padding:0 5px;box-shadow:0 1px 0 rgba(0,0,0,.25)}
 @keyframes sitpop{from{transform:translateX(-50%) scale(.5);opacity:0}}
+/* Khu đông người: người ở xa chỉ hiện bong bóng chat, không hiện tên */
+.l3.av.far .nm{display:none}

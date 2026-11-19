@@ -98,7 +98,6 @@ function dispose() {
   G.ro && G.ro.disconnect();
   G.observers.forEach(o => o.disconnect());
   disposeTree(G.scene);
-  shadowGeo = null;
   G.renderer.dispose();
   G.renderer.domElement.remove(); G.labels.remove();
   G = null;
@@ -701,27 +700,56 @@ function addLabel(key, html, obj, offset, cls) {
 }
 function removeLabel(key) { if (!G.lbls) return; const i = G.lbls.findIndex(l => l.key === key); if (i >= 0) { G.lbls[i].el.remove(); G.lbls.splice(i, 1); } }
 
-let shadowGeo = null;
+const BLOB_MAX = 256;
+/** Bóng tròn dưới chân của mọi nhân vật gộp thành 1 lần vẽ (khu 100 người chỉ tốn 1 lệnh vẽ cho bóng). */
+function blobs() {
+  if (G.blobs) return G.blobs;
+  const geo = new THREE.PlaneGeometry(0.9, 0.9); geo.rotateX(-Math.PI / 2);
+  const m = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ map: blobTex(), transparent: true, depthWrite: false }), BLOB_MAX);
+  m.count = 0; m.frustumCulled = false; m.renderOrder = 1; G.scene.add(m);
+  return (G.blobs = m);
+}
 function addAvatar(id, name, seed, mine) {
-  if (!shadowGeo) { shadowGeo = new THREE.PlaneGeometry(0.9, 0.9); shadowGeo.rotateX(-Math.PI / 2); }
-  const root = new THREE.Group(), mat = characterMaterial(), body = new THREE.Mesh(characterGeometry(seed, mine), mat);
-  const sh = new THREE.Mesh(shadowGeo, new THREE.MeshBasicMaterial({ map: blobTex(), transparent: true, depthWrite: false }));
-  sh.position.y = 0.02; sh.userData.keepGeo = true;
-  root.add(sh, body);
+  blobs();
+  const root = new THREE.Group(), mat = characterMaterial();
+  // Dựng hình nhân vật dần dần (vài người mỗi khung hình) để vào khu đông người không bị khựng
+  let body = null;
+  if (mine) { body = new THREE.Mesh(characterGeometry(seed, mine), mat); root.add(body); }
   if (mine) {
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.5, 32), new THREE.MeshBasicMaterial({ color: 0xffc533, transparent: true, opacity: 0.9, depthWrite: false }));
     ring.rotation.x = -Math.PI / 2; ring.position.y = 0.025; root.add(ring);
   }
   G.scene.add(root);
   const el = addLabel(id, '<div class="avt' + (mine ? " mine" : "") + '" id="' + id + '"><span class="bub"></span><span class="nm">' + esc(name) + "</span></div>", root, new THREE.Vector3(0, 1.45, 0), "av");
-  const a = { id, root, body, mat, el, phase: Math.random() * 6, walk: false, hop: 0, face: 0, wave: 0 };
+  const a = { id, root, body, mat, el, seed, phase: Math.random() * 6, walk: false, hop: 0, face: 0, wave: 0 };
   G.avatars.set(id, a);
+  if (!body) (G.buildQ || (G.buildQ = [])).push(a);
   return a;
 }
+/** Mỗi khung hình dựng tối đa vài nhân vật đang chờ, ưu tiên người gần mình. */
+function buildPending(maxPerFrame = 4) {
+  const q = G.buildQ; if (!q || !q.length) return;
+  if (q.length > maxPerFrame) q.sort((a, b) => a.root.position.distanceToSquared(G.camera.position) - b.root.position.distanceToSquared(G.camera.position));
+  for (const a of q.splice(0, maxPerFrame)) {
+    if (!G.avatars.has(a.id) || a.body) continue;
+    a.body = new THREE.Mesh(characterGeometry(a.seed, false), a.mat); a.root.add(a.body);
+  }
+}
+/** Đặt bóng tròn cho mọi nhân vật đang hiện. */
+function updateBlobs() {
+  const m = G.blobs; if (!m) return;
+  let n = 0;
+  for (const a of G.avatars.values()) {
+    if (!a.root.visible || n >= BLOB_MAX) continue;
+    BLOB_M.makeTranslation(a.root.position.x, 0.02, a.root.position.z); m.setMatrixAt(n++, BLOB_M);
+  }
+  m.count = n; m.instanceMatrix.needsUpdate = true;
+}
+const BLOB_M = new THREE.Matrix4();
 function removeAvatar(id) {
   const a = G && G.avatars.get(id); if (!a) return;
   G.scene.remove(a.root);
-  a.body.geometry.dispose(); a.mat.dispose(); a.root.children.forEach(o => { if (o !== a.body && o.material) o.material.dispose(); if (o.geometry && !o.userData.keepGeo && o !== a.body) o.geometry.dispose(); });
+  if (a.body) a.body.geometry.dispose(); a.mat.dispose(); a.root.children.forEach(o => { if (o !== a.body && o.material) o.material.dispose(); if (o.geometry && o !== a.body) o.geometry.dispose(); });
   removeLabel(id); G.avatars.delete(id);
 }
 /** Chào: vẫy tay và nhún nhẹ. */
@@ -943,6 +971,8 @@ function loop(ts) {
 
   animateProps(dt);
   updateSeatPrompt();
+  buildPending();
+  updateBlobs();
   if (G.marker.t > 0) { G.marker.t = Math.max(0, G.marker.t - dt * 1.6); G.marker.m.material.opacity = G.marker.t; const s = 1 + (1 - G.marker.t) * 0.8; G.marker.m.scale.set(s, s, s); }
   if (Math.random() < dt * .5) firework();
   updateFireworks(dt);
@@ -955,6 +985,7 @@ function loop(ts) {
 function animateAvatar(a, x, y, dx, dy, walking, dt, seat = -1) {
   if (!a) return;
   a.root.position.set(wx(x), 0, wz(y));
+  if (!a.body) return; // chưa dựng xong hình
   const se = seat >= 0 ? SEATS[seat] : null;
   a.sitAmt = (a.sitAmt || 0) + ((se ? 1 : 0) - (a.sitAmt || 0)) * Math.min(1, dt * 8);
   const want = se ? se.face : Math.abs(dx) + Math.abs(dy) > 0.05 ? Math.atan2(dx, dy) : null;
@@ -1014,16 +1045,29 @@ function setOpacity(o, op) {
 }
 
 /** Đặt nhãn HTML theo vị trí 3D đã chiếu lên màn hình. */
+const NAME_MAX = 12;
 function updateLabels() {
   if (!G.lbls) return;
   const w = G.renderer.domElement.clientWidth, h = G.renderer.domElement.clientHeight, camPos = G.camera.position;
+  // Khu đông: chỉ hiện tên NAME_MAX người gần mình nhất; người xa đang chat hoặc chào thì vẫn hiện bong bóng (không kèm tên)
+  const near = new Set();
+  if (peers.size > NAME_MAX) {
+    const mx = wx(me.x), mz = wz(me.y), list = [];
+    for (const l of G.lbls) if (l.key.startsWith("p_") && l.obj.visible !== false) list.push([Math.hypot(l.obj.position.x - mx, l.obj.position.z - mz), l]);
+    list.sort((a, b) => a[0] - b[0]);
+    for (let i = 0; i < Math.min(NAME_MAX, list.length); i++) near.add(list[i][1]);
+  }
   for (const l of G.lbls) {
     const vis = l.obj.visible !== false && l.el.style.display !== "none";
     l.obj.updateMatrixWorld();
     v3.copy(l.off).applyMatrix4(l.obj.matrixWorld);
     const dist = v3.distanceTo(camPos);
     v3.project(G.camera);
-    const on = vis && v3.z < 1 && v3.x > -1.3 && v3.x < 1.3 && v3.y > -1.3 && v3.y < 1.3 && dist < 26;
+    let far = false;
+    if (peers.size > NAME_MAX && l.key.startsWith("p_") && !near.has(l)) far = true;
+    const talking = far && l.el.querySelector(".bub.on");
+    const on = vis && v3.z < 1 && v3.x > -1.3 && v3.x < 1.3 && v3.y > -1.3 && v3.y < 1.3 && dist < 26 && (!far || talking);
+    if (far !== !!l.far) { l.far = far; l.el.classList.toggle("far", far); }
     if (on !== l.shown) { l.shown = on; l.el.style.visibility = on ? "visible" : "hidden"; }
     if (!on) continue;
     const x = Math.round((v3.x + 1) / 2 * w), y = Math.round((1 - v3.y) / 2 * h);

@@ -50,13 +50,24 @@ export function createApp(config) {
     return { ...res, counted: rec.counted, best: rec.counted ? rec.best : null, newBest: rec.newBest, bests: b, total, rank: lb.me ? lb.me.rank : null };
   }
 
+  /** IP thật của người chơi: sau Caddy/Nginx (TRUST_PROXY=1) thì lấy địa chỉ đầu tiên trong X-Forwarded-For. */
+  function clientIp(req) {
+    if (config.trustProxy) { const f = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim(); if (f) return f; }
+    return req.socket.remoteAddress;
+  }
+  // dọn bộ đếm đăng nhập cũ để không phình bộ nhớ
+  setInterval(() => { const now = Date.now(); for (const [ip, h] of authHits) if (!h.some(t => now - t < 60000)) authHits.delete(ip); }, 60000).unref();
+
   async function api(req, res, url) {
     const path = url.pathname, method = req.method;
-    if (path === "/api/health") return send(res, 200, { ok: true, time: Date.now() });
+    if (path === "/api/health") { // theo dõi khi chạy thật: số người đang trong các khu, bộ nhớ
+      const khu = rt.khuList();
+      return send(res, 200, { ok: true, time: Date.now(), online: khu.reduce((n, k) => n + k.online, 0), khu: khu.map(k => k.online), memMB: Math.round(process.memoryUsage().rss / 1048576) });
+    }
 
     if (path === "/api/auth" && method === "POST") {
-      const ip = req.socket.remoteAddress, now = Date.now(), hits = (authHits.get(ip) || []).filter(t => now - t < 60000);
-      if (hits.length >= 20) return send(res, 429, { error: "Thử lại sau ít phút" });
+      const ip = clientIp(req), now = Date.now(), hits = (authHits.get(ip) || []).filter(t => now - t < 60000);
+      if (hits.length >= config.authPerMin) return send(res, 429, { error: "Thử lại sau ít phút" });
       hits.push(now); authHits.set(ip, hits);
       const id = await auth.identify(await readBody(req));
       if (!id) return send(res, 401, { error: "Không xác thực được tài khoản Zalo" });

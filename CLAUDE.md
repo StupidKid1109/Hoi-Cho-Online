@@ -6,7 +6,8 @@ Mini game tuyên truyền cho Zalo Mini App của một UBND phường. Đối t
 
 - `server/`: Node.js thuần, không có thư viện ngoài. Dùng `node:sqlite` nên **cần Node 22.13 trở lên**. Máy anh đang có Node 18.12.1, phải nâng cấp trước (nodejs.org, bản LTS).
   - Đăng nhập Zalo (`src/auth.js`), chấm điểm 3 gian ở máy chủ (`src/games.js`), Bảng vàng theo đợt (`src/store.js`), WebSocket tự viết (`src/ws.js`), khu hội chợ + chat có lọc (`src/realtime.js`), API + trang quản trị (`src/app.js`).
-  - Kiểm thử: `cd server && npm test` (9 nhóm, có nhóm chỗ ngồi).
+  - Kiểm thử: `cd server && npm test` (9 nhóm, có nhóm chỗ ngồi). Thử tải: `npm run loadtest` (100 người ảo một khu; đạt: CPU 3%, 14 tin/người/giây, 1.800 yêu cầu/giây không lỗi).
+  - Chịu tải: vị trí gom theo nhịp 100 ms (`{t:"poses", p:[[n,x,y],...]}`, n = số thứ tự ngắn trong khu, có trong `welcome`/`join`), khung WebSocket đóng gói một lần cho cả khu, người mạng chậm bị bỏ qua gói vị trí (>256 KB) hoặc ngắt (>4 MB). Mỗi khu 100 người. Sau Caddy/Nginx đặt `TRUST_PROXY=1` (giới hạn đăng nhập theo IP thật, `AUTH_PER_MIN` mặc định 120).
 - `client/`: JavaScript (ES modules), build bằng Vite (`npm install`, `npm run build` → `client/www`; `npm run dev` ở cổng 3000, chuyển tiếp `/api`, `/ws` sang 8787). Máy chủ phục vụ `client/www` nếu có, không thì phục vụ mã nguồn (khi đó bản 3D không nạp được và tự dùng CSS 3D).
   - `hub.js`: lớp chọn bản vẽ, giữ nguyên giao diện hàm cho `main.js`. `prepareHub()` (gọi lúc tải) nạp `hub3d.js` (Three.js) nếu có WebGL; lỗi thì dùng `hubCss.js` (CSS 3D cũ).
   - `hub3d.js`: tọa độ thế giới theo px của `shared/world.js` (100 px = 1 đơn vị 3D). Đi 500 px/giây; vùng bóng đổ đi theo người chơi (vẽ lại khi đi xa hơn 6 đơn vị). Lại gần ghế trống thì hiện nút "Ngồi" (phím E). Nhãn kỷ lục gian hàng và hạng Bảng vàng vẽ trong cảnh, nội dung lấy từ phần tử ẩn `#bb_g1..3`, `#bdTop` mà `main.js` ghi vào.

@@ -119,7 +119,8 @@ test("Khu hội chợ: thấy nhau, chat được lọc, báo cáo đủ 3 lần
   a.send({ t: "pos", x: 500, y: 600 }); a.send({ t: "chat", text: "Chào cả khu, gian 3 vcl khó" });
   await wait(150);
   const got = b.inbox.find(m => m.t === "chat"); assert.ok(got); assert.equal(got.m.text, "Chào cả khu, gian 3 *** khó");
-  assert.ok(b.inbox.find(m => m.t === "pos" && m.x === 500));
+  assert.ok(b.inbox.find(m => m.t === "poses" && m.p.some(p => p[1] === 500 && p[2] === 600)), "vị trí được gom gửi theo nhịp");
+  assert.ok(!a.inbox.some(m => m.t === "pos"), "không còn gửi từng bước lẻ");
   b.send({ t: "chat", text: "kết bạn mình 0912345678" }); await wait(120);
   assert.ok(b.inbox.find(m => m.t === "sys" && /số điện thoại/.test(m.text))); assert.ok(!a.inbox.find(m => m.t === "chat" && /0912/.test(m.m.text)));
   a.send({ t: "chat", text: "spam" }); await wait(120);
@@ -152,7 +153,7 @@ test("Chỗ ngồi: ngồi được, người khác thấy, không ngồi chồn
   assert.equal(c.inbox[0].peers.find(p => p.x === Math.round(SEATS[5].x)).seat, 5, "người vào sau thấy A đang ngồi");
   a.send({ t: "sit", s: 99999 }); a.send({ t: "pos", x: 9999, y: -5 }); await wait(150);
   assert.ok(b.inbox.find(m => m.t === "sit" && m.s === -1), "đi khỏi ghế thì tự đứng dậy");
-  assert.ok(b.inbox.find(m => m.t === "pos" && m.x === WORLD && m.y === 0), "vị trí bị giới hạn trong sân");
+  assert.ok(b.inbox.find(m => m.t === "poses" && m.p.some(p => p[1] === WORLD && p[2] === 0)), "vị trí bị giới hạn trong sân");
   b.send({ t: "sit", s: 5 }); await wait(350);
   assert.ok(c.inbox.find(m => m.t === "sit" && m.s === 5 && m.id !== a.inbox[0].you.id), "ghế trống thì người khác ngồi được");
   b.ws.close(); await wait(150);

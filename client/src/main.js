@@ -11,7 +11,7 @@ import * as runner from "./games/runner.js";
 
 const GAMES = { g1: swipe, g2: rebus, g3: runner };
 const PROVERBS = [["Ăn quả nhớ kẻ trồng cây.", "Tục ngữ"], ["Một cây làm chẳng nên non, ba cây chụm lại nên hòn núi cao.", "Ca dao"], ["Bán anh em xa, mua láng giềng gần.", "Tục ngữ"], ["Đi một ngày đàng, học một sàng khôn.", "Tục ngữ"]];
-const S = { me: null, event: null, khu: 1, myId: null, conn: null, cur: null };
+const S = { me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null };
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* bỏ qua */ } } };
 
 /* ---------- Tải và đăng nhập ---------- */
@@ -71,9 +71,10 @@ function enterFair() {
   }
 }
 function onRealtime(m) {
-  if (m.t === "welcome") { S.myId = m.you.id; hub.resetPeers(m.peers); chat.setHistory(m.history); renderWho(); }
-  else if (m.t === "join") { hub.addPeer(m.peer); renderWho(); }
-  else if (m.t === "leave") { hub.removePeer(m.id); renderWho(); }
+  if (m.t === "welcome") { S.myId = m.you.id; S.myN = m.you.n; S.byN = new Map(m.peers.map(p => [p.n, p.id])); hub.resetPeers(m.peers); chat.setHistory(m.history); renderWho(); }
+  else if (m.t === "join") { S.byN.set(m.peer.n, m.peer.id); hub.addPeer(m.peer); renderWho(); }
+  else if (m.t === "leave") { for (const [n, id] of S.byN) if (id === m.id) S.byN.delete(n); hub.removePeer(m.id); renderWho(); }
+  else if (m.t === "poses") { for (const [n, x, y] of m.p) { if (n === S.myN) continue; const id = S.byN.get(n); if (id) hub.movePeer(id, x, y); } } // vị trí gom theo nhịp
   else if (m.t === "pos") hub.movePeer(m.id, m.x, m.y);
   else if (m.t === "emote") hub.peerEmote(m.id, m.e);
   else if (m.t === "sit") { if (m.id !== S.myId) hub.peerSit(m.id, m.s); }

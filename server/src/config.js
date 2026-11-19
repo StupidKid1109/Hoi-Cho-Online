@@ -31,6 +31,10 @@ export const config = {
   dbFile: env("DB_FILE", join(SERVER_DIR, "data", "hoicho.db")),
   corsOrigin: env("CORS_ORIGIN", "*"),
   khuCount: Number(env("KHU_COUNT", 8)),
-  khuCapacity: Number(env("KHU_CAPACITY", 60)),
-  serveClient: flag("SERVE_CLIENT", true)
+  khuCapacity: Number(env("KHU_CAPACITY", 100)),
+  serveClient: flag("SERVE_CLIENT", true),
+  // Đứng sau Caddy/Nginx: lấy IP thật của người chơi từ X-Forwarded-For (không bật thì mọi người chung một IP của máy trung gian)
+  trustProxy: flag("TRUST_PROXY", false),
+  // Số lần đăng nhập tối đa mỗi phút cho một IP (cả trường, cả phường có thể dùng chung một wifi)
+  authPerMin: Number(env("AUTH_PER_MIN", 120))
 };

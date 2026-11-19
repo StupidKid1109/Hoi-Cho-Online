@@ -5,6 +5,17 @@ import { EventEmitter } from "node:events";
 
 const GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 const MAX_PAYLOAD = 16 * 1024;
+const MAX_BUFFERED = 4 * 1024 * 1024; // quá 4 MB chưa gửi được thì ngắt kết nối
+
+/** Đóng gói một tin văn bản thành khung WebSocket (máy chủ gửi đi không che dữ liệu). */
+export function encodeFrame(text) {
+  const payload = Buffer.from(text), n = payload.length;
+  let head;
+  if (n < 126) head = Buffer.from([0x81, n]);
+  else if (n < 65536) { head = Buffer.alloc(4); head[0] = 0x81; head[1] = 126; head.writeUInt16BE(n, 2); }
+  else { head = Buffer.alloc(10); head[0] = 0x81; head[1] = 127; head.writeBigUInt64BE(BigInt(n), 2); }
+  return Buffer.concat([head, payload]);
+}
 
 export class WsConn extends EventEmitter {
   constructor(socket) {
@@ -15,16 +26,16 @@ export class WsConn extends EventEmitter {
     socket.on("close", () => this._closed());
     socket.on("error", () => this._closed());
   }
-  send(text) {
+  send(text) { this.sendFrame(encodeFrame(text)); }
+  /** Gửi một khung đã đóng gói sẵn (dùng khi gửi cùng một tin cho nhiều người: đóng gói một lần). */
+  sendFrame(frame) {
     if (!this.open) return;
-    const payload = Buffer.from(text);
-    const n = payload.length;
-    let head;
-    if (n < 126) head = Buffer.from([0x81, n]);
-    else if (n < 65536) { head = Buffer.alloc(4); head[0] = 0x81; head[1] = 126; head.writeUInt16BE(n, 2); }
-    else { head = Buffer.alloc(10); head[0] = 0x81; head[1] = 127; head.writeBigUInt64BE(BigInt(n), 2); }
-    this.socket.write(Buffer.concat([head, payload]));
+    // Người mạng chậm: tin dồn ứ quá nhiều thì ngắt để trình duyệt tự kết nối lại, tránh phình bộ nhớ máy chủ
+    if (this.socket.writableLength > MAX_BUFFERED) return this.close(1013);
+    this.socket.write(frame);
   }
+  /** Dữ liệu đang chờ gửi (byte): lớn tức là mạng của người này đang chậm. */
+  get buffered() { return this.socket.writableLength; }
   sendJSON(obj) { this.send(JSON.stringify(obj)); }
   ping() { if (this.open) this.socket.write(Buffer.from([0x89, 0])); }
   close(code = 1000) {

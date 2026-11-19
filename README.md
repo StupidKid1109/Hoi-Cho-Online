@@ -91,6 +91,27 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Giữa là sân trống để trò chuyện, có **80 chỗ ngồi**: 16 ghế băng (mỗi ghế 3 chỗ) quay vào giữa và 8 bàn tròn (mỗi bàn 4 ghế đẩu). Sân rộng 7200×7200 (gấp 3 lần mỗi chiều so với bản đầu), có đèn lồng dọc các lối đi. Đi lại gần một ghế trống thì chỗ ngồi sáng viền vàng và hiện nút **🪑 Ngồi** ngay trên ghế (trên máy tính nhấn phím **E**); bấm là nhân vật ngồi vào đúng chỗ đó. Khi đang ngồi, trên đầu hiện nút **🚶 Đứng dậy** (hoặc nhấn E). Cũng có thể chạm thẳng vào ghế, hoặc bấm nút **🪑 Ngồi** ở dưới để đi tới ghế trống gần nhất; đi tiếp thì tự đứng dậy. Người khác trong khu thấy mình ngồi; mỗi ghế chỉ một người.
 - Bố cục nằm trong `shared/world.js`, dùng chung cho máy chủ và giao diện.
 
+## Sức chịu tải (100 người cùng lúc)
+
+- Mỗi khu chứa tối đa **100 người** (`KHU_CAPACITY`), có 8 khu (`KHU_COUNT`), tổng cộng 800 người.
+- Vị trí người chơi được máy chủ **gom lại và gửi theo nhịp 0,1 giây** (một gói cho cả khu), thay vì chuyển từng bước đi. Người mạng chậm được bỏ qua gói vị trí khi đang dồn ứ, dồn quá 4 MB thì ngắt để kết nối lại.
+- Trên điện thoại: khu đông chỉ hiện tên 12 người gần nhất (người xa đang chat vẫn hiện bong bóng), bóng dưới chân mọi nhân vật gộp thành 1 lần vẽ, nhân vật được dựng dần vài người mỗi khung hình.
+- **Thử tải:** trong thư mục `server` chạy `npm run loadtest` (100 người ảo cùng một khu trong 30 giây: đi lại, chat, ngồi ghế, rồi cùng chơi Gian 1). Đổi số người, số giây: `node tools/loadtest.mjs 200 60`.
+
+  Kết quả trên máy thử (1 nhân CPU), 100 người trong một khu:
+
+  | Chỉ số | Trước khi tối ưu | Sau |
+  | --- | --- | --- |
+  | CPU máy chủ | 22% | 3% |
+  | Bộ nhớ máy chủ | 99 MB | 60 MB |
+  | Tin mỗi điện thoại nhận/giây | 664 | 14 |
+  | Dữ liệu mỗi điện thoại/giây | 31 KB | 10 KB |
+  | Độ trễ thấy nhau | 3 ms | khoảng 50 ms (95% dưới 95 ms) |
+
+  100 người cùng chơi Gian 1: khoảng 1.800 yêu cầu/giây, không lỗi, phản hồi trung vị 43 ms.
+- **Khi chạy sau Caddy/Nginx phải đặt `TRUST_PROXY=1`**: nếu không, máy chủ thấy mọi người chung một IP và giới hạn đăng nhập (`AUTH_PER_MIN`, mặc định 120 lần/phút cho mỗi IP) sẽ chặn bớt người vào.
+- Theo dõi khi chạy thật: `GET /api/health` trả về số người đang online ở từng khu và bộ nhớ máy chủ.
+
 ## Cơ chế chống gian lận (quan trọng khi treo thưởng)
 
 - **Gian 1, Gian 2:** đáp án chỉ nằm trên máy chủ. Điện thoại gửi lựa chọn, máy chủ chấm và tính giờ theo đồng hồ của máy chủ.
