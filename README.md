@@ -62,7 +62,10 @@ npm install
 npm run build
 ```
 
-**Lấy mã từ GitHub về:** thư mục `client/www` không đưa lên GitHub, nên bản clone chưa có đồ họa Three.js cho tới khi build. Cách dễ nhất trên Windows là bấm đúp `chay-thu.cmd`: lần đầu file này tự chạy `npm install` và `npm run build` (cần mạng, khoảng 1 phút), các lần sau mở ngay.
+**Lấy mã từ GitHub về:** thư mục `client/www` không đưa lên GitHub, nên bản clone chưa có đồ họa Three.js cho tới khi build. Cách dễ nhất trên Windows là bấm đúp `chay-thu.cmd`. Mỗi lần chạy, file này so mã giao diện với lần build trước (bằng `client/scripts/build-check.mjs`, so theo nội dung chứ không theo ngày giờ file):
+- mã chưa đổi: mở ngay;
+- mã đã đổi (ví dụ sau khi `git pull` hoặc tự sửa trong `client/src`): tự build lại;
+- `package-lock.json` đổi hoặc chưa cài thư viện: tự chạy `npm install` rồi build (cần mạng, khoảng 1 phút).
 
 Lệnh build tạo thư mục `client/www`. Máy chủ thấy thư mục này thì tự phục vụ bản build (dòng `Giao diện:` khi khởi động sẽ báo). Sửa giao diện xong thì build lại.
 Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, sảnh và Gian 3 tự dùng bản CSS 3D.

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && node scripts/build-check.mjs --write",
     "zalo:start": "zmp start",
     "zalo:deploy": "zmp deploy"
   },
