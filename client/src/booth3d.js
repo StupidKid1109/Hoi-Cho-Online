@@ -29,11 +29,12 @@ const THEMES = {
  */
 export async function openRoom({ container, game, title, nick, solo, send }) {
   const T = THEMES[game] || THEMES.g1;
-  const q = initialQuality(), renderer = createRenderer(Math.min(q, 1)); // phòng nhỏ: không cần mức cao
+  const q = initialQuality(), renderer = createRenderer(Math.min(q, 1), { alpha: game === "cafe" }); // phòng nhỏ: không cần mức cao; quán: nền trong suốt được để khoét chỗ video
   renderer.shadowMap.enabled = false; setMaxAniso(renderer);
   container.appendChild(renderer.domElement);
   const labels = document.createElement("div"); labels.className = "lbl3"; container.appendChild(labels);
-  const scene = new THREE.Scene(); scene.background = new THREE.Color(T.wall).multiplyScalar(0.55);
+  const scene = new THREE.Scene(), bgColor = new THREE.Color(T.wall).multiplyScalar(0.55);
+  if (game === "cafe") renderer.setClearColor(bgColor, 1); else scene.background = bgColor; // quán: màu nền vẽ bằng clear để chỗ khoét giữ trong suốt
   const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 80);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8a7a, 1.6));
   const sun = new THREE.DirectionalLight(0xfff1dc, 1.5); sun.position.set(-4, 9, 6); scene.add(sun);
@@ -67,7 +68,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   const scr = document.createElement("canvas"); scr.width = 1024; scr.height = BIG ? 576 : 384;
   const scrTex = new THREE.CanvasTexture(scr); scrTex.colorSpace = THREE.SRGBColorSpace;
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ map: scrTex, toneMapped: false }));
-  screen.position.set(0, SY, -H / 2 + 0.1); scene.add(screen); // tách hẳn khỏi tường để không nhấp nháy vệt đen khi xoay
+  screen.position.set(0, SY, -H / 2 + 0.1); scene.add(screen);
+  // "Lỗ" trong suốt đúng chỗ màn hình: video (HTML) nằm sau khung vẽ 3D, lộ ra qua lỗ này; người, đồ vật đứng trước vẫn che được video
+  const scrMat = screen.material, holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, blending: THREE.NoBlending }); // tách hẳn khỏi tường để không nhấp nháy vệt đen khi xoay
   const frame = new THREE.Mesh(new THREE.BoxGeometry(SW + 0.3, SH + 0.3, 0.12), new THREE.MeshLambertMaterial({ color: 0x1d1f24 })); frame.position.set(0, SY, -H / 2 + 0.02); scene.add(frame);
   function drawScreen(big, line1, line2) {
     const g = scr.getContext("2d"), w = scr.width, h = scr.height;
@@ -325,8 +328,10 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       if (musicOn) { const k = (t * 0.45 + nt.p) % 1; nt.o.position.set(nt.sx * (4.65 + Math.sin(k * 6 + nt.p * 9) * 0.3), 2.8 + k * 1.6, -H / 2 + 0.6 + k * 0.6); nt.o.material.opacity = 1 - k; }
     }
     for (const o of anim) { if (o.swing) o.o.rotation.z = Math.sin(t * 2.3 + o.p) * 0.12; else o.o.position.y = o.y + Math.sin(t * 2.4 + o.p) * 0.1; }
+    const vidOn = !!(cssObj && cssObj.element.isConnected && !cssObj.element.hidden);
+    screen.material = vidOn ? holeMat : scrMat;
     renderer.render(scene, camera);
-    if (cssObj && cssObj.element.isConnected && !cssObj.element.hidden) css.render(scene, camera);
+    if (vidOn) css.render(scene, camera);
     // nhãn tên: chỉ hiện 10 người gần mình nhất (và người đang chào) cho đỡ rối
     const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
     const near = [...people.values()].sort((p1, p2) => Math.hypot(p1.x - me.x, p1.y - me.y) - Math.hypot(p2.x - me.x, p2.y - me.y));
@@ -372,7 +377,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     setCinema(on, cb) { onCinema = cb || onCinema; cinema = !!on; ui.classList.toggle("cine", cinema); },
     /** Đặt phần tử el (khung video 640×360) lên màn hình lớn trên tường. */
     attachScreen(el) {
-      if (!css) { css = new CSS3DRenderer(); css.domElement.className = "css3"; container.insertBefore(css.domElement, labels); css.setSize(container.clientWidth || 1, container.clientHeight || 1); }
+      if (!css) { css = new CSS3DRenderer(); css.domElement.className = "css3"; container.insertBefore(css.domElement, renderer.domElement); /* nằm SAU khung vẽ 3D */ css.setSize(container.clientWidth || 1, container.clientHeight || 1); }
       if (cssObj) { scene.remove(cssObj); }
       el.style.width = VID_W + "px"; el.style.height = VID_H + "px";
       cssObj = new CSS3DObject(el); cssObj.scale.setScalar(VID_WORLD / VID_W); cssObj.position.set(0, SY, -H / 2 + 0.12); scene.add(cssObj);

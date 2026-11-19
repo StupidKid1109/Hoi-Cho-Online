@@ -18,8 +18,8 @@ export function waitFonts() {
 const PR_CAP = [1.5, 2, 2.5];
 
 /** Tạo WebGLRenderer theo mức chất lượng q (0, 1, 2). Ném lỗi nếu máy không tạo được WebGL. */
-export function createRenderer(q) {
-  const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: q >= 2 ? "high-performance" : "default", alpha: false, stencil: false });
+export function createRenderer(q, { alpha = false } = {}) {
+  const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: q >= 2 ? "high-performance" : "default", alpha, stencil: false });
   r.outputColorSpace = THREE.SRGBColorSpace;
   r.toneMapping = THREE.ACESFilmicToneMapping;
   r.toneMappingExposure = 1.05;
