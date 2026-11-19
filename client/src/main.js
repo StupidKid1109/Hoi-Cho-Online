@@ -54,7 +54,7 @@ function enterFair() {
   show("fair");
   const send = o => S.conn && S.conn.send(o);
   hub.buildHub({
-    nick: S.me.nick, hidden: [...chat.hiddenIds()], send,
+    nick: S.me.nick, hidden: [...chat.hiddenIds()], send, toast,
     onBooth: id => boothSheet(id), onBoard: () => board("all"),
     onEmote: i => chat.onEmoteSelf(hub.EMOTES[i][0] + " " + hub.EMOTES[i][1])
   });
@@ -76,6 +76,8 @@ function onRealtime(m) {
   else if (m.t === "leave") { hub.removePeer(m.id); renderWho(); }
   else if (m.t === "pos") hub.movePeer(m.id, m.x, m.y);
   else if (m.t === "emote") hub.peerEmote(m.id, m.e);
+  else if (m.t === "sit") { if (m.id !== S.myId) hub.peerSit(m.id, m.s); }
+  else if (m.t === "sitno") { hub.sitRejected(m.s); toast(m.text); }
   else if (m.t === "rename") hub.renamePeer(m.id, m.nick);
   else if (m.t === "chat") chat.onChat(m.m);
   else if (m.t === "hide") chat.onHide(m.id);

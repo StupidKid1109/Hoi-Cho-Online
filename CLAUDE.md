@@ -6,7 +6,7 @@ Mini game tuyên truyền cho Zalo Mini App của một UBND phường. Đối t
 
 - `server/`: Node.js thuần, không có thư viện ngoài. Dùng `node:sqlite` nên **cần Node 22.13 trở lên**. Máy anh đang có Node 18.12.1, phải nâng cấp trước (nodejs.org, bản LTS).
   - Đăng nhập Zalo (`src/auth.js`), chấm điểm 3 gian ở máy chủ (`src/games.js`), Bảng vàng theo đợt (`src/store.js`), WebSocket tự viết (`src/ws.js`), khu hội chợ + chat có lọc (`src/realtime.js`), API + trang quản trị (`src/app.js`).
-  - Kiểm thử: `cd server && npm test` (8 nhóm, đều đạt khi bàn giao).
+  - Kiểm thử: `cd server && npm test` (9 nhóm, có nhóm chỗ ngồi).
 - `client/`: JavaScript (ES modules), build bằng Vite (`npm install`, `npm run build` → `client/www`; `npm run dev` ở cổng 3000, chuyển tiếp `/api`, `/ws` sang 8787). Máy chủ phục vụ `client/www` nếu có, không thì phục vụ mã nguồn (khi đó bản 3D không nạp được và tự dùng CSS 3D).
   - `hub.js`: lớp chọn bản vẽ, giữ nguyên giao diện hàm cho `main.js`. `prepareHub()` (gọi lúc tải) nạp `hub3d.js` (Three.js) nếu có WebGL; lỗi thì dùng `hubCss.js` (CSS 3D cũ).
   - `hub3d.js`: tọa độ thế giới vẫn theo px (sân 1400×1400, 100 px = 1 đơn vị) vì máy chủ dùng hệ này. Nhãn kỷ lục gian hàng và hạng Bảng vàng vẽ trong cảnh, nội dung lấy từ phần tử ẩn `#bb_g1..3`, `#bdTop` mà `main.js` ghi vào.
@@ -15,6 +15,7 @@ Mini game tuyên truyền cho Zalo Mini App của một UBND phường. Đối t
   - `games/swipe.js` (Gian 1), `games/rebus.js` (Gian 2), `games/runner.js` (Gian 3: vòng mô phỏng bước cố định + ghi `inputs`), phần vẽ Gian 3 ở `games/runner3d.js` (Three.js) hoặc `games/runnerCss.js`.
   - `platform.js`: kết nối `zmp-sdk` (import động, ngoài Zalo tự chuyển sang chế độ thử).
 - `shared/runnerSim.js`: mô phỏng tất định Gian 3, máy chủ chạy lại để chấm điểm. **Không được đổi luật mô phỏng ở một phía mà không đổi phía kia.**
+- `shared/world.js`: **bố cục khu hội chợ dùng chung** cho máy chủ, bản Three.js và bản CSS 3D: sân 2400×2400 px, cổng phía nam, 3 gian ở tây/bắc/đông quay vào giữa, Bảng vàng góc tây nam, Gian 4–5 góc bắc, sân trống giữa và 40 chỗ ngồi (`SEATS`: 8 ghế băng × 3, 4 bàn × 4 ghế đẩu). Máy chủ dùng `WORLD`, `SPAWN`, `SEATS` (tin nhắn `sit`/`sitno`, mỗi ghế một người, rời ghế >40 px hoặc thoát thì nhả ghế). Đổi bố cục chỉ sửa file này.
 - `shared/chatFilter.js`: bộ lọc chat dùng chung.
 - `admin/index.html`: trang quản trị (đợt thưởng, báo cáo chat, xuất CSV trúng giải, nạp lại nội dung).
 - `chay-thu.cmd`: chạy máy chủ ở chế độ thử (DEV_LOGIN=1, ADMIN_KEY=hoicho2026) bằng cách bấm đúp.

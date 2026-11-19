@@ -1,5 +1,6 @@
 // Kiểm thử máy chủ: chạy bằng `npm test` trong thư mục server.
 import { test, before, after } from "node:test";
+import { SPAWN, SEATS, WORLD } from "../../shared/world.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
@@ -130,6 +131,34 @@ test("Khu hội chợ: thấy nhau, chat được lọc, báo cáo đủ 3 lần
   assert.equal((await call("/api/admin/reports", { admin: "sai" })).status, 403);
   const khu = await call("/api/khu"); assert.equal(khu.data.khu[0].online, 4);
   for (const x of [a, b, c, d]) x.ws.close();
+});
+
+test("Chỗ ngồi: ngồi được, người khác thấy, không ngồi chồng, đứng dậy hoặc thoát thì nhả ghế", async () => {
+  const toks = await Promise.all(["seat-a", "seat-b", "seat-c"].map(login));
+  const open = tok => new Promise((resolve, reject) => {
+    const ws = new WebSocket(base.replace("http", "ws") + "/ws?khu=2&token=" + encodeURIComponent(tok)), inbox = [];
+    ws.onmessage = e => inbox.push(JSON.parse(e.data)); ws.onerror = reject;
+    ws.onopen = () => resolve({ ws, inbox, send: o => ws.send(JSON.stringify(o)) });
+  });
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const [a, b] = [await open(toks[0]), await open(toks[1])];
+  await wait(120);
+  assert.equal(a.inbox[0].you.x, SPAWN.x, "xuất hiện ở ngoài cổng chào");
+  a.send({ t: "sit", s: 5 }); await wait(120);
+  assert.ok(b.inbox.find(m => m.t === "sit" && m.s === 5), "người khác thấy A ngồi ghế 5");
+  b.send({ t: "sit", s: 5 }); await wait(120);
+  assert.ok(b.inbox.find(m => m.t === "sitno" && m.s === 5), "không ngồi chồng lên người khác");
+  const c = await open(toks[2]); await wait(120);
+  assert.equal(c.inbox[0].peers.find(p => p.x === Math.round(SEATS[5].x)).seat, 5, "người vào sau thấy A đang ngồi");
+  a.send({ t: "sit", s: 99999 }); a.send({ t: "pos", x: 9999, y: -5 }); await wait(150);
+  assert.ok(b.inbox.find(m => m.t === "sit" && m.s === -1), "đi khỏi ghế thì tự đứng dậy");
+  assert.ok(b.inbox.find(m => m.t === "pos" && m.x === WORLD && m.y === 0), "vị trí bị giới hạn trong sân");
+  b.send({ t: "sit", s: 5 }); await wait(350);
+  assert.ok(c.inbox.find(m => m.t === "sit" && m.s === 5 && m.id !== a.inbox[0].you.id), "ghế trống thì người khác ngồi được");
+  b.ws.close(); await wait(150);
+  c.send({ t: "sit", s: 5 }); await wait(150);
+  assert.ok(a.inbox.filter(m => m.t === "sit" && m.s === 5).length >= 3, "thoát ra thì ghế được nhả cho người khác");
+  for (const x of [a, c]) x.ws.close();
 });
 
 test("Quản trị: đổi đợt thưởng và xuất danh sách Bảng vàng", async () => {

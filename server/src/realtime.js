@@ -1,5 +1,6 @@
 // Các khu hội chợ thời gian thực: vị trí người chơi, cử chỉ, chat có kiểm duyệt.
 import { blockReason, cleanText, normalize, CHAT_GAP_MS } from "../../shared/chatFilter.js";
+import { WORLD, SPAWN, SEATS } from "../../shared/world.js";
 
 const EMOTES = 4, HIDE_AFTER_REPORTS = 3;
 
@@ -14,7 +15,15 @@ export function makeRealtime({ db, store, auth, config }) {
   const hideChat = db.prepare("UPDATE chat SET hidden = 1 WHERE id = ?");
 
   const broadcast = (khu, msg, except) => { const s = JSON.stringify(msg); for (const c of rooms.get(khu).values()) if (c !== except) c.conn.send(s); };
-  const pub = c => ({ id: c.pid, nick: c.nick, x: Math.round(c.x), y: Math.round(c.y) });
+  const pub = c => ({ id: c.pid, nick: c.nick, x: Math.round(c.x), y: Math.round(c.y), seat: c.seat });
+  // Chỗ ngồi: mỗi khu một bảng ghế -> người đang ngồi
+  const seatsOf = new Map(); for (const k of rooms.keys()) seatsOf.set(k, new Map());
+  function standUp(c, announce = true) {
+    if (c.seat < 0) return;
+    const occ = seatsOf.get(c.khu); if (occ.get(c.seat) === c.pid) occ.delete(c.seat);
+    c.seat = -1;
+    if (announce) broadcast(c.khu, { t: "sit", id: c.pid, s: -1 });
+  }
 
   function onConnection(conn, url) {
     const pid = auth.verify(url.searchParams.get("token"));
@@ -24,7 +33,7 @@ export function makeRealtime({ db, store, auth, config }) {
     if (room.size >= config.khuCapacity && !room.has(pid)) { conn.sendJSON({ t: "full", text: "Khu đã đầy, hãy chọn khu khác" }); return conn.close(4002); }
     const player = store.ensurePlayer(pid);
     const old = room.get(pid); if (old) old.conn.close(4003); // mở ở máy khác: đóng kết nối cũ
-    const c = { conn, pid, khu, nick: player.nick, banned: !!player.banned, x: 700, y: 1265, lastPos: 0, lastChat: 0, lastEmote: 0, posN: 0 };
+    const c = { conn, pid, khu, nick: player.nick, banned: !!player.banned, x: SPAWN.x, y: SPAWN.y, seat: -1, lastPos: 0, lastChat: 0, lastEmote: 0, lastSit: 0, posN: 0 };
     room.set(pid, c);
     conn.sendJSON({ t: "welcome", you: pub(c), peers: [...room.values()].filter(x => x !== c).map(pub),
       history: recent.all(khu).reverse().map(m => ({ id: m.id, pid: m.player, nick: m.nick, text: m.text, ts: m.ts })) });
@@ -37,8 +46,19 @@ export function makeRealtime({ db, store, auth, config }) {
         if (now - c.lastPos < 90) return; // tối đa khoảng 10 lần/giây
         const x = Number(m.x), y = Number(m.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-        c.x = Math.max(0, Math.min(1400, x)); c.y = Math.max(0, Math.min(1400, y)); c.lastPos = now;
+        c.x = Math.max(0, Math.min(WORLD, x)); c.y = Math.max(0, Math.min(WORLD, y)); c.lastPos = now;
+        if (c.seat >= 0 && Math.hypot(c.x - SEATS[c.seat].x, c.y - SEATS[c.seat].y) > 40) standUp(c); // đã rời ghế
         broadcast(khu, { t: "pos", id: pid, x: Math.round(c.x), y: Math.round(c.y) }, c);
+      } else if (m.t === "sit") {
+        // s = số thứ tự chỗ ngồi trong shared/world.js, -1 = đứng dậy
+        const s = Number(m.s); if (!Number.isInteger(s) || s < -1 || s >= SEATS.length || now - c.lastSit < 300) return;
+        c.lastSit = now;
+        if (s === -1) return standUp(c);
+        const occ = seatsOf.get(khu), who = occ.get(s);
+        if (who && who !== pid) return conn.sendJSON({ t: "sitno", s, text: "Ghế này đã có người ngồi, bạn chọn ghế khác nhé." });
+        standUp(c, false);
+        occ.set(s, pid); c.seat = s; c.x = SEATS[s].x; c.y = SEATS[s].y;
+        broadcast(khu, { t: "sit", id: pid, s });
       } else if (m.t === "emote") {
         const e = Number(m.e); if (!Number.isInteger(e) || e < 0 || e >= EMOTES || now - c.lastEmote < 1500) return;
         c.lastEmote = now; broadcast(khu, { t: "emote", id: pid, e }, c);
@@ -58,7 +78,12 @@ export function makeRealtime({ db, store, auth, config }) {
         if (countReports.get(row.id).n >= HIDE_AFTER_REPORTS) { hideChat.run(row.id); broadcast(khu, { t: "hide", id: row.id }); }
       }
     });
-    conn.on("close", () => { if (room.get(pid) === c) { room.delete(pid); broadcast(khu, { t: "leave", id: pid }); } });
+    conn.on("close", () => {
+      // nhả ghế (trừ khi người này vừa mở lại ở máy khác và đang ngồi đúng ghế đó)
+      const now = room.get(pid);
+      if (c.seat >= 0 && (!now || now === c || now.seat !== c.seat)) standUp(c, false);
+      if (now === c) { room.delete(pid); broadcast(khu, { t: "leave", id: pid }); }
+    });
   }
 
   function khuList() { return [...rooms.entries()].map(([k, r]) => ({ khu: k, online: r.size, capacity: config.khuCapacity })); }

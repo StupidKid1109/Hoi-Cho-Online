@@ -57,3 +57,6 @@ export const selfSay = text => impl.selfSay(text);
 export const hidePeer = id => impl.hidePeer(id);
 export const resetPeers = list => impl.resetPeers(list);
 export const peerCount = () => impl.peerCount();
+// Chỗ ngồi chỉ có ở bản Three.js; bản CSS 3D bỏ qua (người ngồi vẫn hiện đúng vị trí).
+export const peerSit = (id, s) => impl.peerSit && impl.peerSit(id, s);
+export const sitRejected = s => impl.sitRejected && impl.sitRejected(s);

@@ -1,15 +1,15 @@
 // Sảnh hội chợ 3D (CSS 3D): đi lại tự do, máy quay xoay quanh nhân vật, thấy người chơi khác trong cùng khu.
 import { $, esc, beep } from "./ui.js";
 import { BOOTHS, PLACE_NAME } from "./config.js";
+import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK, standPoint } from "../../shared/world.js";
 
-const FW = 1400, CX = 700, CY = 756;
-const SPOTS = { g1: { x: 400, y: 560, r: -35 }, g2: { x: 700, y: 440, r: 0 }, g3: { x: 1000, y: 560, r: 35 }, board: { x: 700, y: 790, r: 0 } };
-const BLOCK = [[400, 560, 140], [700, 440, 140], [1000, 560, 140], [700, 790, 110], [430, 1010, 110], [970, 1010, 110]];
+// Bố cục lấy từ shared/world.js (dùng chung với bản Three.js và máy chủ).
+const FW = WORLD, CX = CENTER.x, CY = CENTER.y;
 export const EMOTES = [["👋", "Chào"], ["🙏", "Cảm ơn"], ["👏", "Vỗ tay"], ["🎉", "Chúc mừng"]];
 const PEOPLE = ["👩", "👨", "🧒", "👧", "🧓", "👵", "👦", "🧑‍🦱", "👱"];
 const WOOD = "--fr:linear-gradient(180deg,#a8692f,#7a4a1f);--sd:#6b3d1a;--tp:#5e3816";
 
-const me = { x: 700, y: 1265 }, cam = { x: 700, y: 1265, yaw: 0, zoom: -1200, tilt: 84 }, camT = { zoom: 0, tilt: 58, yaw: null };
+const me = { x: SPAWN.x, y: SPAWN.y }, cam = { x: SPAWN.x, y: SPAWN.y, yaw: 0, zoom: -1200, tilt: 84 }, camT = { zoom: 0, tilt: 58, yaw: null };
 let target = null, onArrive = null, zoomCb = null, raf = 0, last = null, keys = {}, moved = false, sentAt = 0, sentX = 0, sentY = 0;
 let ctx = null, peers = new Map(), OCC = [], hidden = new Set();
 
@@ -41,14 +41,14 @@ function avHTML(id, name, emo, mine) {
 export function buildHub(context) {
   ctx = context; OCC = []; peers = new Map(); hidden = new Set(ctx.hidden || []);
   let h = '<div class="grass" style="left:-1200px;top:-1200px;width:' + (FW + 2400) + "px;height:" + (FW + 2400) + 'px"></div><div class="floor" id="floor" style="left:0;top:0;width:' + FW + "px;height:" + FW + 'px"></div>';
-  for (let i = 0; i < 20; i++) { const a = i / 20 * 6.283; if (Math.abs(a - Math.PI / 2) < .75) continue; h += bill(CX + Math.cos(a) * 650, CY + Math.sin(a) * 610, '<div class="bi3"><span class="tree3">' + ["🌳", "🌸", "🌳", "🌴"][i % 4] + "</span></div>"); }
-  for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283 + .3; if (Math.abs(a - Math.PI / 2) < .45) continue; const x = CX + Math.cos(a) * 470, y = CY + Math.sin(a) * 470;
+  for (let i = 0; i < 20; i++) { const a = i / 20 * 6.283; if (Math.abs(a - Math.PI / 2) < .75) continue; h += bill(CX + Math.cos(a) * 1080, CY + Math.sin(a) * 1080, '<div class="bi3"><span class="tree3">' + ["🌳", "🌸", "🌳", "🌴"][i % 4] + "</span></div>"); }
+  for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283 + .3; if (Math.abs(a - Math.PI / 2) < .45) continue; const x = CX + Math.cos(a) * 925, y = CY + Math.sin(a) * 925;
     h += at(x, y, up(cub(10, 220, 10, "--fr:#6b3d1a;--sd:#4a2a10;--tp:#6b3d1a"))) + bill(x, y, '<div class="bi3" style="bottom:192px"><span class="lanp" style="animation-delay:' + (-i * .37) + 's">🏮</span></div>'); }
   const red = "--fr:linear-gradient(90deg,#a50e27,#e01b3c,#a50e27);--sd:#8f0b20;--tp:#c8102e";
-  h += at(700, 1150, shadowAt(320, 60) + up(cub(24, 250, 24, red, "", 0, -125) + cub(24, 250, 24, red, "", 0, 125) +
+  h += at(GATE.x, GATE.y, shadowAt(320, 60) + up(cub(24, 250, 24, red, "", 0, -125) + cub(24, 250, 24, red, "", 0, 125) +
     cub(290, 66, 30, "--fr:linear-gradient(180deg,#e01b3c,#a50e27);--sd:#8f0b20;--tp:#c8102e", '<div class="beamtx">HỘI CHỢ ONLINE<small>' + esc(PLACE_NAME) + "</small></div>", 220)), 0, "occ_gate");
   BOOTHS.forEach(b => { const sp = SPOTS[b.id]; h += at(sp.x, sp.y, stall(b, 200, 130, 110), sp.r, "occ_" + b.id); });
-  [[430, 1010, -135, "Gian 4"], [970, 1010, 135, "Gian 5"]].forEach(g => h += at(g[0], g[1], shadowAt(220, 150) + up(cub(160, 110, 100, "--fr:linear-gradient(180deg,#8a7a6a,#5e5246);--sd:#4f453b;--tp:#4f453b", '<div class="soon">🔒 ' + g[3] + "<small>Sắp mở</small></div>")), g[2], "occ_s" + g[3].slice(-1)));
+  LOCKED.map(l => [l.x, l.y, l.r, l.name]).forEach(g => h += at(g[0], g[1], shadowAt(220, 150) + up(cub(160, 110, 100, "--fr:linear-gradient(180deg,#8a7a6a,#5e5246);--sd:#4f453b;--tp:#4f453b", '<div class="soon">🔒 ' + g[3] + "<small>Sắp mở</small></div>")), g[2], "occ_s" + g[3].slice(-1)));
   const S = SPOTS.board;
   h += at(S.x, S.y, shadowAt(240, 90) + up(
     cub(12, 90, 12, "--fr:#8a5a00;--sd:#6b4600;--tp:#8a5a00", "", 0, -55) + cub(12, 90, 12, "--fr:#8a5a00;--sd:#6b4600;--tp:#8a5a00", "", 0, 55) +
@@ -86,7 +86,6 @@ export function resetPeers(list) { for (const id of [...peers.keys()]) removePee
 export const peerCount = () => peers.size;
 
 /* ---------- Điều khiển ---------- */
-function standPoint(id) { const sp = SPOTS[id], r = sp.r * Math.PI / 180, dist = id === "board" ? 130 : 175; return { x: sp.x - Math.sin(r) * dist, y: sp.y + Math.cos(r) * dist }; }
 export function goTo(id) {
   const p = standPoint(id);
   walkTo(p.x, p.y, () => { camT.yaw = -SPOTS[id].r; if (id === "board") ctx.onBoard(); else { camT.zoom = 250; camT.tilt = 52; zoomCb = () => ctx.onBooth(id); } });

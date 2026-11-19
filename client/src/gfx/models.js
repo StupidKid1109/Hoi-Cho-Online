@@ -3,7 +3,7 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 
-const NAMES = ["stall-red", "stall-green", "stall-bench", "stall-stool", "cart", "cart-high", "lantern", "banner-red", "banner-green"];
+const NAMES = ["stall", "stall-red", "stall-green", "stall-bench", "stall-stool", "cart", "cart-high", "lantern", "banner-red", "banner-green"];
 let kit = null, loading = null;
 
 /** Nạp tất cả mô hình (một lần). Trả về true nếu nạp được, false nếu lỗi (khi đó dùng gian hàng tự dựng). */

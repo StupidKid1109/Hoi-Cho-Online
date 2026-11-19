@@ -132,7 +132,7 @@ function toonRamp() {
 }
 const HEAD = /* glsl */`
 attribute float limb;
-uniform float uSwing; uniform float uWave; uniform float uBlink;
+uniform float uSwing; uniform float uWave; uniform float uBlink; uniform float uSit;
 mat3 rotX(float a) { float c = cos(a), s = sin(a); return mat3(1., 0., 0., 0., c, s, 0., -s, c); }
 mat3 rotZ(float a) { float c = cos(a), s = sin(a); return mat3(c, s, 0., -s, c, 0., 0., 0., 1.); }
 `;
@@ -141,12 +141,12 @@ mat3 limbR = mat3(1.0); vec3 limbP = vec3(0.0); float limbS = 1.0;
 if (limb > 0.5 && limb < 2.5) {           // tay: vung ngược với chân cùng bên
   float side = limb < 1.5 ? -1.0 : 1.0;
   limbP = vec3(side * 0.2, ${SHOULDER_Y.toFixed(2)}, 0.0);
-  limbR = rotX(uSwing * side * 0.9);
+  limbR = rotX(uSwing * side * 0.9 - uSit * 0.55);   // ngồi: tay đặt lên đùi
   if (limb > 1.5) limbR = rotZ(uWave) * limbR;   // tay phải vẫy khi chào
 } else if (limb > 2.5 && limb < 4.5) {    // chân
   float side = limb < 3.5 ? -1.0 : 1.0;
   limbP = vec3(0.0, ${HIP_Y.toFixed(2)}, 0.0);
-  limbR = rotX(-uSwing * side * 0.75);
+  limbR = rotX(-uSwing * side * 0.75 - uSit * 1.4);  // ngồi: chân duỗi ra trước
 } else if (limb > 4.5) {                  // mắt: chớp
   limbS = uBlink;
 }
@@ -162,7 +162,7 @@ if (limb > 4.5) transformed.y = ${EYE_Y.toFixed(2)} + (transformed.y - ${EYE_Y.t
 
 /** Vật liệu riêng cho mỗi nhân vật (cùng chương trình shader, khác giá trị chuyển động). */
 export function characterMaterial() {
-  const u = { uSwing: { value: 0 }, uWave: { value: 0 }, uBlink: { value: 1 } };
+  const u = { uSwing: { value: 0 }, uWave: { value: 0 }, uBlink: { value: 1 }, uSit: { value: 0 } };
   const m = new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: toonRamp() });
   m.onBeforeCompile = sh => {
     Object.assign(sh.uniforms, u);
@@ -170,7 +170,7 @@ export function characterMaterial() {
       .replace("#include <beginnormal_vertex>", NORMAL)
       .replace("#include <begin_vertex>", BEGIN);
   };
-  m.customProgramCacheKey = () => "hoicho-char-v1";
+  m.customProgramCacheKey = () => "hoicho-char-v2";
   m.userData.u = u;
   return m;
 }
@@ -183,6 +183,7 @@ export function animateCharacter(a, walking, dt) {
   const u = a.mat.userData.u;
   a.walkAmt = (a.walkAmt || 0) + ((walking ? 1 : 0) - (a.walkAmt || 0)) * Math.min(1, dt * 10);
   u.uSwing.value = Math.sin(a.phase) * 0.75 * a.walkAmt;
+  u.uSit.value = a.sitAmt || 0;
   // vẫy tay: giơ tay lên rồi lắc
   a.wave = Math.max(0, (a.wave || 0) - dt);
   const w = a.wave > 0 ? Math.min(1, a.wave * 3, (1.6 - a.wave) * 6) : 0;
