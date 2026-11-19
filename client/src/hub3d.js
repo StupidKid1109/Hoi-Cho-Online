@@ -30,7 +30,14 @@ const CAM_NORMAL = { dist: 8.6, pitch: 33 }, CAM_BOOTH = { dist: 9.5, pitch: 14 
 
 const me = { x: SPAWN.x, y: SPAWN.y };
 const cam = { x: SPAWN.x, y: SPAWN.y, yaw: 0, dist: CAM_INTRO.dist, pitch: CAM_INTRO.pitch, look: 0 };
+// Góc nhìn kiểu "đi chùa online": thứ ba = máy quay sát sau vai (lệch sang phải), thứ nhất = nhìn bằng mắt nhân vật.
+// Kéo màn hình để nhìn quanh (cả trái phải và lên xuống), W A S D / cần điều khiển để đi, Shift để chạy.
+const VIEW = { eye: 0.98, dist: 4.2, side: 0.55, height: 1.7, ahead: 1.6 };
+let view = (() => { try { return localStorage.getItem("hc_view") === "first" ? "first" : "third"; } catch (e) { return "third"; } })();
+let lookPitch = -6, viewBlend = view === "third" ? 1 : 0, intro = 1; // lookPitch: độ, âm = nhìn xuống
+const joy = { x: 0, y: 0 };
 const camT = { dist: CAM_NORMAL.dist, pitch: CAM_NORMAL.pitch, yaw: null, look: 0 };
+let zoomAt = 0;
 let target = null, onArrive = null, zoomCb = null, raf = 0, last = null, keys = {}, moved = false, sentAt = 0, sentX = 0, sentY = 0, stuck = 0;
 let ctx = null, peers = new Map(), hidden = new Set();
 let mySeat = -1; const seatOcc = new Map(); // chỗ ngồi -> "me" hoặc mã người chơi
@@ -84,7 +91,7 @@ export function buildHub(context) {
   $("jumps").innerHTML = BOOTHS.map(b => '<button data-j="' + b.id + '"><i>' + b.icons.slice(0, 2) + "</i>" + b.tag + "</button>").join("") + '<button data-j="cafe"><i>☕</i>Cà phê</button><button data-j="board"><i>🏆</i>Bảng vàng</button><button id="sitBtn"><i>🪑</i>Ngồi</button>';
   $("jumps").querySelectorAll("button[data-j]").forEach(btn => btn.onclick = () => goTo(btn.dataset.j));
   $("sitBtn").onclick = () => (mySeat >= 0 ? standUp() : sitNearest());
-  $("hint3").textContent = "Chạm mặt đất để đi · Kéo để xoay · Chạm ghế để ngồi";
+  $("hint3").textContent = matchMedia("(hover: hover) and (pointer: fine)").matches ? "W A S D để đi · Shift chạy · Kéo chuột để nhìn · V đổi góc nhìn" : "Cần điều khiển để đi · Kéo để nhìn quanh · Chạm đất để đi tới";
   mySeat = -1; seatOcc.clear(); me.x = SPAWN.x; me.y = SPAWN.y;
   $("emo").innerHTML = EMOTES.map((e, i) => '<button data-e="' + i + '"><i>' + e[0] + "</i>" + e[1] + "</button>").join("");
   $("emo").querySelectorAll("button").forEach(btn => btn.onclick = () => { const i = +btn.dataset.e; bubble("avo", EMOTES[i][0]); hop("avo"); beep("coin"); ctx.send({ t: "emote", e: i }); ctx.onEmote && ctx.onEmote(i); });
@@ -93,9 +100,9 @@ export function buildHub(context) {
   window.__hub3d = () => G && { calls: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, q: G.q, // hỗ trợ kiểm thử, đo hiệu năng
     me: [Math.round(me.x), Math.round(me.y)], cam: G.camera.position.toArray().map(v => +v.toFixed(2)), gate: (G.occ.find(o => o.id === "gate") || {}).op };
   // hỗ trợ kiểm thử: đặt nhân vật và máy quay để chụp ảnh
-  window.__hubView = (x, y, yaw, dist, pitch) => { me.x = x; me.y = y; target = null; cam.x = x; cam.y = y; camT.yaw = cam.yaw = yaw; camT.dist = cam.dist = dist; camT.pitch = cam.pitch = pitch; };
-  bindInput();
-  cam.dist = CAM_INTRO.dist; cam.pitch = CAM_INTRO.pitch; cam.x = me.x; cam.y = me.y;
+  window.__hubView = (x, y, yaw, v, pitch) => { me.x = x; me.y = y; target = null; cam.x = x; cam.y = y; camT.yaw = null; cam.yaw = yaw; intro = 0; if (v === "first" || v === "third") { view = v; viewBlend = v === "third" ? 1 : 0; } if (pitch != null) lookPitch = pitch; };
+  bindInput(); buildJoystick();
+  cam.dist = CAM_INTRO.dist; cam.pitch = CAM_INTRO.pitch; cam.x = me.x; cam.y = me.y; intro = 1;
 }
 
 function dispose() {
@@ -890,7 +897,7 @@ function addAvatar(id, name, seed, mine) {
   }
   G.scene.add(root);
   const el = addLabel(id, '<div class="avt' + (mine ? " mine" : "") + '" id="' + id + '"><span class="bub"></span><span class="nm">' + esc(name) + "</span></div>", root, new THREE.Vector3(0, 1.45, 0), "av");
-  const a = { id, root, body, mat, el, seed, phase: Math.random() * 6, walk: false, hop: 0, face: 0, wave: 0 };
+  const a = { id, root, body, mat, el, seed, phase: Math.random() * 6, walk: false, hop: 0, face: mine ? Math.PI : 0, wave: 0 }; // của mình: quay lưng về máy quay lúc mới vào
   G.avatars.set(id, a);
   if (!body) (G.buildQ || (G.buildQ = [])).push(a);
   return a;
@@ -1010,10 +1017,13 @@ export function goTo(id) {
   walkTo(p.x, p.y, () => {
     camT.yaw = -SPOTS[id].r;
     if (id === "board") ctx.onBoard();
-    else { camT.dist = CAM_BOOTH.dist; camT.pitch = CAM_BOOTH.pitch; camT.look = 1; zoomCb = () => ctx.onBooth(id); }
+    else { lookPitch = 10; zoomCb = () => ctx.onBooth(id); zoomAt = performance.now(); } // ngẩng lên nhìn gian rồi bước vào
   });
 }
-export function zoomOut() { camT.dist = CAM_NORMAL.dist; camT.pitch = CAM_NORMAL.pitch; camT.look = 0; }
+export function zoomOut() { lookPitch = -6; }
+/** Đổi góc nhìn thứ nhất / thứ ba (nhớ cho lần sau). */
+export function toggleView() { view = view === "first" ? "third" : "first"; try { localStorage.setItem("hc_view", view); } catch (e) { /* bỏ qua */ } updateViewBtn(); return view; }
+function updateViewBtn() { const b = $("viewBtn"); if (b) b.innerHTML = view === "first" ? "👁️<span>Thứ nhất</span>" : "🎥<span>Thứ ba</span>"; }
 function walkTo(x, y, cb) { target = { x: Math.max(80, Math.min(FW - 80, x)), y: Math.max(80, Math.min(FW - 80, y)) }; onArrive = cb; }
 
 const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hitP = new THREE.Vector3();
@@ -1034,8 +1044,12 @@ let inputBound = false;
 function bindInput() {
   if (inputBound) return; inputBound = true;
   const vp = $("viewport"); let d = null;
-  vp.addEventListener("pointerdown", e => { if (!G || e.target.closest("button") || e.target.closest(".chat")) return; d = { x: e.clientX, y: e.clientY, yaw: cam.yaw, drag: false }; });
-  window.addEventListener("pointermove", e => { if (!d) return; const dx = e.clientX - d.x; if (!d.drag && Math.abs(dx) + Math.abs(e.clientY - d.y) > 10) d.drag = true; if (d.drag) { cam.yaw = d.yaw - dx * .35; camT.yaw = null; } });
+  vp.addEventListener("pointerdown", e => { if (!G || e.target.closest("button") || e.target.closest(".chat") || e.target.closest(".joy")) return; d = { x: e.clientX, y: e.clientY, yaw: cam.yaw, pitch: lookPitch, drag: false }; });
+  window.addEventListener("pointermove", e => {
+    if (!d) return; const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.drag && Math.abs(dx) + Math.abs(dy) > 10) d.drag = true;
+    if (d.drag) { cam.yaw = d.yaw - dx * .3; camT.yaw = null; lookPitch = Math.max(view === "first" ? -75 : -40, Math.min(view === "first" ? 75 : 35, d.pitch + dy * .25)); }
+  });
   window.addEventListener("pointerup", e => {
     if (!d) return; const wasDrag = d.drag; d = null;
     if (!G || wasDrag || !$("fair").classList.contains("on")) return;
@@ -1052,10 +1066,26 @@ function bindInput() {
   document.addEventListener("keydown", e => {
     if (e.target.tagName === "INPUT") return;
     if ((e.key === "e" || e.key === "E") && !e.repeat && $("fair").classList.contains("on")) { promptAction(); return; }
+    if ((e.key === "v" || e.key === "V") && !e.repeat && $("fair").classList.contains("on")) { toggleView(); return; } // V: đổi góc nhìn
     keys[e.key.toLowerCase()] = true;
   });
   document.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
   window.addEventListener("blur", () => { keys = {}; });
+}
+/* ---------- Cần điều khiển trên màn hình cảm ứng (góc dưới bên phải) ---------- */
+function buildJoystick() {
+  if ($("joy")) return;
+  const el = document.createElement("div"); el.id = "joy"; el.className = "joy"; el.innerHTML = '<i></i>';
+  $("viewport").appendChild(el);
+  const knob = el.firstElementChild; let id = null, cx = 0, cy = 0;
+  const R = 46;
+  const move = e => { let dx = e.clientX - cx, dy = e.clientY - cy; const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; } knob.style.transform = "translate(" + dx + "px," + dy + "px)"; joy.x = dx / R; joy.y = dy / R; };
+  el.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); id = e.pointerId; const r = el.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; try { el.setPointerCapture(id); } catch (_) { /* bỏ qua */ } move(e); el.classList.add("on"); });
+  el.addEventListener("pointermove", e => { if (e.pointerId === id) move(e); });
+  const end = e => { if (e.pointerId !== id) return; id = null; joy.x = joy.y = 0; knob.style.transform = ""; el.classList.remove("on"); };
+  el.addEventListener("pointerup", end); el.addEventListener("pointercancel", end);
+  const vb = document.createElement("button"); vb.id = "viewBtn"; vb.className = "viewbtn"; vb.type = "button"; vb.setAttribute("aria-label", "Đổi góc nhìn");
+  vb.onclick = e => { e.stopPropagation(); toggleView(); }; $("viewport").appendChild(vb); updateViewBtn();
 }
 function tapDot(x, y) { const el = document.createElement("div"); el.className = "tapdot"; el.style.left = x + "px"; el.style.top = y + "px"; $("viewport").appendChild(el); setTimeout(() => el.remove(), 650); }
 function blockPush(p) { BLOCK.forEach(([bx, by, br]) => { const dx = p.x - bx, dy = p.y - by, dd = Math.hypot(dx, dy); if (dd < br && dd > 0) { p.x = bx + dx / dd * br; p.y = by + dy / dd * br; } }); p.x = Math.max(80, Math.min(FW - 80, p.x)); p.y = Math.max(80, Math.min(FW - 80, p.y)); }
@@ -1088,11 +1118,12 @@ function loop(ts) {
   const dt = last == null ? 0 : Math.min(.05, (ts - last) / 1000); last = ts; G.t += dt;
   G.watch.tick(dt);
   const Y = cam.yaw * DEG; let walking = false;
-  const kx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), ky = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
+  const kx = Math.max(-1, Math.min(1, (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0) + joy.x)), ky = Math.max(-1, Math.min(1, (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0) + joy.y));
   const px0 = me.x, py0 = me.y;
-  if (kx || ky) {
-    target = null; onArrive = null; standUp(); const fx = -Math.sin(Y), fy = -Math.cos(Y), rx = Math.cos(Y), ry = -Math.sin(Y), n = Math.hypot(kx, ky);
-    me.x += (rx * kx - fx * ky) / n * SPEED * dt; me.y += (ry * kx - fy * ky) / n * SPEED * dt; blockPush(me); walking = true;
+  if (Math.hypot(kx, ky) > 0.15) {
+    target = null; onArrive = null; standUp(); const fx = -Math.sin(Y), fy = -Math.cos(Y), rx = Math.cos(Y), ry = -Math.sin(Y), n = Math.hypot(kx, ky), amt = Math.min(1, n);
+    const sp = SPEED * (keys.shift ? 1.7 : 1) * amt; // Shift: chạy
+    me.x += (rx * kx - fx * ky) / n * sp * dt; me.y += (ry * kx - fy * ky) / n * sp * dt; blockPush(me); walking = true;
   } else if (target) {
     const done = stepToward(me, target.x, target.y, SPEED, dt);
     stuck = Math.hypot(me.x - px0, me.y - py0) < .2 && dt > 0 ? stuck + 1 : 0;
@@ -1112,15 +1143,32 @@ function loop(ts) {
     const a = G.avatars.get("p_" + p.id); if (a && a.root.visible) animateAvatar(a, p.x, p.y, p.x - ox, p.y - oy, w && p.seat < 0, dt, p.seat);
   }
 
-  // máy quay bám theo
-  const k = Math.min(1, dt * 5), slow = cam.dist > CAM_NORMAL.dist + 4 ? 1.6 : 5;
+  // máy quay: thứ ba (sát sau vai) hoặc thứ nhất (mắt nhân vật); lúc mới vào bay từ trên cao xuống
+  const k = Math.min(1, dt * 12);
   cam.x += (me.x - cam.x) * k; cam.y += (me.y - cam.y) * k;
-  cam.dist += (camT.dist - cam.dist) * Math.min(1, dt * slow); cam.pitch += (camT.pitch - cam.pitch) * Math.min(1, dt * slow); cam.look += (camT.look - cam.look) * Math.min(1, dt * 4);
   if (camT.yaw != null) { const dy = ((camT.yaw - cam.yaw) % 360 + 540) % 360 - 180; cam.yaw += dy * Math.min(1, dt * 5); if (Math.abs(dy) < .3) camT.yaw = null; }
-  const Yc = cam.yaw * DEG, P = cam.pitch * DEG, fx = -Math.sin(Yc), fz = -Math.cos(Yc);
-  look.set(wx(cam.x) + fx * cam.look * 1.4, 0.8 + cam.look * 2.6, wz(cam.y) + fz * cam.look * 1.4);
-  G.camera.position.set(look.x - fx * cam.dist * Math.cos(P), look.y + cam.dist * Math.sin(P), look.z - fz * cam.dist * Math.cos(P));
+  viewBlend += ((view === "third" ? 1 : 0) - viewBlend) * Math.min(1, dt * 8);
+  const Yc = cam.yaw * DEG, LP = lookPitch * DEG, fx = -Math.sin(Yc), fz = -Math.cos(Yc), rgx = Math.cos(Yc), rgz = -Math.sin(Yc);
+  const eyeY = mySeat >= 0 ? SEATS[mySeat].h + VIEW.eye * 0.62 : VIEW.eye, px = wx(cam.x), pz = wz(cam.y);
+  // hướng nhìn (gồm cả ngẩng / cúi)
+  const dirX = fx * Math.cos(LP), dirY = Math.sin(LP), dirZ = fz * Math.cos(LP);
+  // thứ nhất: ở mắt; thứ ba: lùi sau lưng, lệch phải, cao hơn đầu một chút, máy quay nghiêng theo hướng nhìn
+  const back = VIEW.dist * Math.cos(LP * 0.6), up3 = VIEW.height - Math.sin(LP) * VIEW.dist * 0.55;
+  const c1x = px, c1y = eyeY, c1z = pz;
+  const c3x = px - fx * back + rgx * VIEW.side, c3y = Math.max(0.35, eyeY - VIEW.eye + up3), c3z = pz - fz * back + rgz * VIEW.side;
+  let cxp = c1x + (c3x - c1x) * viewBlend, cyp = c1y + (c3y - c1y) * viewBlend, czp = c1z + (c3z - c1z) * viewBlend;
+  look.set(px + dirX * (VIEW.ahead + 2) + rgx * VIEW.side * viewBlend * 0.5, eyeY + dirY * (VIEW.ahead + 2) + 0.15 * viewBlend, pz + dirZ * (VIEW.ahead + 2) + rgz * VIEW.side * viewBlend * 0.5);
+  if (intro > 0) { // mở đầu: nhìn từ trên cao rồi hạ xuống sau lưng nhân vật
+    intro = Math.max(0, intro - dt * 0.45); const e = intro * intro * (3 - 2 * intro), P = CAM_INTRO.pitch * DEG;
+    const ix = px - fx * CAM_INTRO.dist * Math.cos(P), iy = 0.8 + CAM_INTRO.dist * Math.sin(P), iz = pz - fz * CAM_INTRO.dist * Math.cos(P);
+    cxp += (ix - cxp) * e; cyp += (iy - cyp) * e; czp += (iz - czp) * e;
+    look.x += (px - look.x) * e; look.y += (0.8 - look.y) * e; look.z += (pz - look.z) * e;
+  }
+  cam.dist = Math.hypot(cxp - px, czp - pz) + intro * 30; // để phần làm mờ vật che biết máy quay đang xa hay gần
+  G.camera.position.set(cxp, cyp, czp);
   G.camera.lookAt(look);
+  // góc nhìn thứ nhất: ẩn nhân vật và tên của mình
+  if (mine) { const hide = viewBlend < 0.25 && intro === 0; mine.root.visible = !hide; const l = G.lbls && G.lbls.find(x => x.key === "avo"); if (l) l.el.style.display = hide ? "none" : ""; }
   G.sky.position.copy(G.camera.position); G.stars.position.copy(G.camera.position);
   // Sân rộng: vùng bóng đổ đi theo người chơi, vẽ lại bản đồ bóng khi đi xa hơn 6 đơn vị
   if (G.renderer.shadowMap.enabled && Math.hypot(wx(me.x) - G.sunAt.x, wz(me.y) - G.sunAt.y) > 6) {
@@ -1133,8 +1181,8 @@ function loop(ts) {
   const bx = Math.sin(Yc), by = Math.cos(Yc);
   G.occ.forEach(o => {
     const vx = o.x - me.x, vy = o.y - me.y, t = vx * bx + vy * by, perp = Math.abs(vx * by - vy * bx);
-    const near = Math.hypot(wx(o.x) - G.camera.position.x, wz(o.y) - G.camera.position.z) < (o.near || 3);
-    const want = near ? 0.15 : (t > 20 && t < 760 && perp < (o.w || 210) && cam.dist > CAM_BOOTH.dist + 1) ? 0.3 : 1;
+    const near = Math.hypot(wx(o.x) - G.camera.position.x, wz(o.y) - G.camera.position.z) < (o.near || 3) * (view === "first" ? 0.45 : 0.75);
+    const want = near ? 0.15 : (view === "third" && t > 20 && t < 260 && perp < (o.w || 210) && intro === 0) ? 0.3 : 1;
     if (Math.abs(o.op - want) > 0.01) { o.op += (want - o.op) * Math.min(1, dt * 14); if (Math.abs(o.op - want) < 0.02) o.op = want; setOpacity(o, o.op); }
   });
 
@@ -1148,7 +1196,7 @@ function loop(ts) {
   updateFireworks(dt);
   G.renderer.render(G.scene, G.camera);
   updateLabels();
-  if (zoomCb && Math.abs(cam.dist - camT.dist) < 0.12) { const f = zoomCb; zoomCb = null; f(); }
+  if (zoomCb && camT.yaw == null && performance.now() - zoomAt > 650) { const f = zoomCb; zoomCb = null; f(); } // đã quay mặt vào gian
   raf = requestAnimationFrame(loop);
 }
 

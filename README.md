@@ -108,6 +108,13 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 
 
 
+
+## Góc nhìn và điều khiển ở sảnh
+
+- Mặc định **góc nhìn thứ ba sát sau vai** nhân vật; nút **🎥 / 👁️** ở góc phải (máy tính: phím **V**) đổi sang **góc nhìn thứ nhất** (nhìn bằng mắt nhân vật). Lựa chọn được nhớ cho lần sau.
+- Điện thoại: **cần điều khiển** góc dưới bên phải để đi, **kéo màn hình** để nhìn quanh (cả trái phải và lên xuống), chạm mặt đất để đi tới đó.
+- Máy tính: **W A S D** để đi, giữ **Shift** để chạy, giữ chuột trái và kéo để nhìn, nhấp lên sàn để đi tới.
+
 ## Chat trong phòng chờ và quán cà phê có nhạc
 
 - Trong phòng chờ Gian 1, Gian 2 bấm **💬 Chat** để nhắn cho cả phòng: tin hiện thành bong bóng trên đầu nhân vật và trong khung chat góc trái. Dùng chung bộ lọc với chat ở sảnh (chặn số điện thoại, link, mã OTP, che từ tục, chống gửi liên tục).
