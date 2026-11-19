@@ -121,8 +121,10 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     const p = audio.play(); if (p && p.then) p.then(() => { $q(".sp-unlock").hidden = true; }).catch(e => { if (e && e.name === "AbortError") return; console.warn("Chưa phát được nhạc:", e && e.name); $q(".sp-unlock").hidden = false; });
   }
   /* ---------- Video YouTube: trình phát nhúng chính thức của YouTube (hiện trên màn hình, không tải nhạc về) ---------- */
-  let yt = null, ytId = null, ytHidden = false, ytCheck = 0;
+  let yt = null, ytId = null, ytHidden = false, ytCheck = 0, ytOnWall = false;
   const ytBox = cafe ? $q(".sp-yt") : null;
+  // có phòng 3D thì video chiếu trên màn hình lớn của quán; không có (máy không WebGL) thì hiện khung nhỏ góc phải
+  let roomReadyFn = null; const roomReady = new Promise(r => { roomReadyFn = r; });
   function loadYT() {
     if (window.YT && window.YT.Player) return Promise.resolve();
     if (!loadYT.p) loadYT.p = new Promise((res, rej) => {
@@ -152,13 +154,15 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   }
   async function applyYT(m) {
     ytBox.hidden = ytHidden; $q(".sp-music .tv").hidden = false;
-    try { await loadYT(); } catch (e) { ytBox.hidden = true; addLog("Không tải được trình phát YouTube (kiểm tra mạng Internet).", "sys"); return; }
+    if (use3d) await Promise.race([roomReady, new Promise(r => setTimeout(r, 8000))]); // gắn khung lên tường trước khi tạo trình phát (chuyển chỗ iframe sẽ làm tải lại)
+    if (room && !ytOnWall) { ytOnWall = room.attachScreen(ytBox); ytBox.classList.add("onwall"); musicUi(); }
+    try { await loadYT(); } catch (e) { ytBox.hidden = true; addLog("Không tải được trình phát YouTube (kiểm tra mạng Internet).", "sys"); return musicUi(); }
     if (closed || mstate !== m) return;
     const start = Math.floor(Math.max(0, (Date.now() - skew - m.startedAt) / 1000));
     if (!yt) {
       ytId = m.yt;
       yt = new window.YT.Player(ytBox.firstElementChild, {
-        width: 220, height: 200, videoId: m.yt,
+        width: ytOnWall ? 640 : 220, height: ytOnWall ? 360 : 200, videoId: m.yt,
         playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1, rel: 0, iv_load_policy: 3, start },
         events: {
           onReady: () => syncYT(),
@@ -193,7 +197,8 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   function drawLobby() {
     const m = lastLobby; if (!m && !cafe) return;
     clearInterval(cd);
-    if (cafe) {
+    if (cafe && room && ytOnWall && mstate && mstate.yt && !ytHidden && !ytBox.hidden) { room.setScreenVideo(); st.innerHTML = "☕ <b>" + (m ? m.n : 1) + "</b> người trong quán"; }
+    else if (cafe) {
       const n = m ? m.n : 1, on = mstate && (mstate.file || mstate.yt);
       if (room) room.setScreen(on ? "♪ " + mstate.title : "☕ Mời bạn ngồi chơi", n + " người đang trong quán", on ? "Nhạc do ban tổ chức bật" : "Ban tổ chức sẽ bật nhạc sớm thôi");
       st.innerHTML = "☕ <b>" + n + "</b> người trong quán";
@@ -241,15 +246,15 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     close() { closed = true; clearInterval(cd); clearTimeout(ytCheck); if (yt && yt.destroy) yt.destroy(); if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); } if (room) room.close(); el.remove(); }
   };
   st.textContent = cafe ? "☕ Đang vào quán…" : solo ? "Sẵn sàng thì bấm Bắt đầu" : "Đang vào phòng chờ…";
-  if (!use3d) { setTimeout(() => $q(".sp-fade").classList.add("off"), 300); return ctl; }
+  if (!use3d) { roomReadyFn(null); setTimeout(() => $q(".sp-fade").classList.add("off"), 300); return ctl; }
   const t0 = performance.now();
   import("../booth3d.js").then(mod => mod.openRoom({ container: $q(".sp-view"), game, title, nick, solo, send }))
     .then(r => {
       if (closed) { r.close(); return; }
-      room = r; queue.forEach(handle); queue = []; drawLobby(); musicUi();
+      room = r; queue.forEach(handle); queue = []; drawLobby(); musicUi(); roomReadyFn(r);
       if (!el.classList.contains("on")) r.setActive(false);
       setTimeout(() => $q(".sp-fade").classList.add("off"), Math.max(0, 450 - (performance.now() - t0)));
     })
-    .catch(e => { console.warn("Không dựng được không gian gian hàng", e); $q(".sp-fade").classList.add("off"); el.classList.add("flat"); });
+    .catch(e => { console.warn("Không dựng được không gian gian hàng", e); $q(".sp-fade").classList.add("off"); el.classList.add("flat"); roomReadyFn(null); });
   return ctl;
 }

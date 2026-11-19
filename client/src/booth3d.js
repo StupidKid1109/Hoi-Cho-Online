@@ -1,6 +1,7 @@
 // Không gian riêng bên trong mỗi gian hàng (Three.js): phòng theo chủ đề của gian, màn hình lớn báo số người,
 // người chơi cùng phòng chờ đi lại, chào nhau. Toạ độ theo px của BOOTH_ROOM (shared/world.js), 100 px = 1 đơn vị.
 import * as THREE from "three";
+import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
 import { esc } from "./ui.js";
 import { initialQuality } from "./gfx/webgl.js";
 import { createRenderer, setMaxAniso, canvasTex, emojiSprite, glowTex, blobTex, rrect, fitText, disposeTree, FONT } from "./gfx/kit.js";
@@ -75,6 +76,15 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     g.fillStyle = "#ffffff"; fitText(g, big, w / 2, 178, w - 120, 120, 900);
     g.fillStyle = "#cfe3ff"; fitText(g, line1, w / 2, 276, w - 120, 46, 800);
     g.fillStyle = "rgba(255,255,255,.7)"; fitText(g, line2 || "", w / 2, 334, w - 120, 32, 600);
+    scrTex.needsUpdate = true;
+  }
+  /** Màn hình đang chiếu video (khung video YouTube đặt chồng lên): chỉ vẽ nền tối, viền và nốt nhạc hai bên. */
+  function drawVideoFrame() {
+    const g = scr.getContext("2d"), w = scr.width, h = scr.height;
+    g.fillStyle = "#07080c"; g.fillRect(0, 0, w, h);
+    g.strokeStyle = T.trim; g.lineWidth = 10; rrect(g, 10, 10, w - 20, h - 20, 26); g.stroke();
+    g.textAlign = "center"; g.textBaseline = "middle"; g.font = "64px " + FONT; g.fillStyle = "#ffc533";
+    g.fillText("♪", 80, h / 2 - 50); g.fillText("♫", w - 80, h / 2 + 40); g.fillText("♫", 80, h / 2 + 60); g.fillText("♪", w - 80, h / 2 - 60);
     scrTex.needsUpdate = true;
   }
   drawScreen(solo ? "SẴN SÀNG" : "…", solo ? "Bấm “Bắt đầu chạy” khi đã sẵn sàng" : "Đang vào phòng chờ", "");
@@ -234,8 +244,13 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
     renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.8 ? 62 : 52; camera.updateProjectionMatrix();
+    if (css) css.setSize(w, h);
   }
-  const ro = new ResizeObserver(resize); ro.observe(container); resize();
+  const ro = new ResizeObserver(resize); ro.observe(container);
+  // Khung video (YouTube) gắn lên màn hình lớn bằng CSS 3D: phần tử HTML được biến đổi khớp đúng vị trí màn hình trong cảnh
+  let css = null, cssObj = null;
+  const VID_W = 640, VID_H = 360, VID_WORLD = 4.2; // 16:9, cao gần bằng màn hình 2,4
+  resize();
 
   /* ---------- Vòng vẽ ---------- */
   let raf = 0, last = null, t = 0, active = true;
@@ -300,6 +315,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     }
     for (const o of anim) { if (o.swing) o.o.rotation.z = Math.sin(t * 2.3 + o.p) * 0.12; else o.o.position.y = o.y + Math.sin(t * 2.4 + o.p) * 0.1; }
     renderer.render(scene, camera);
+    if (cssObj && cssObj.element.isConnected && !cssObj.element.hidden) css.render(scene, camera);
     // nhãn tên: chỉ hiện 10 người gần mình nhất (và người đang chào) cho đỡ rối
     const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
     const near = [...people.values()].sort((p1, p2) => Math.hypot(p1.x - me.x, p1.y - me.y) - Math.hypot(p2.x - me.x, p2.y - me.y));
@@ -340,6 +356,15 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     selfEmote(e) { bubble(me, EMO[e]); if (!solo) send({ t: "memote", e }); },
     /** Cập nhật màn hình lớn trên tường. */
     setScreen: drawScreen,
+    setScreenVideo: drawVideoFrame,
+    /** Đặt phần tử el (khung video 640×360) lên màn hình lớn trên tường. */
+    attachScreen(el) {
+      if (!css) { css = new CSS3DRenderer(); css.domElement.className = "css3"; container.insertBefore(css.domElement, labels); css.setSize(container.clientWidth || 1, container.clientHeight || 1); }
+      if (cssObj) { scene.remove(cssObj); }
+      el.style.width = VID_W + "px"; el.style.height = VID_H + "px";
+      cssObj = new CSS3DObject(el); cssObj.scale.setScalar(VID_WORLD / VID_W); cssObj.position.set(0, 1.95, -H / 2 + 0.09); scene.add(cssObj);
+      return true;
+    },
     count: () => people.size,
     /** Tạm dừng vẽ khi đang chơi (không tốn pin), vẽ lại khi quay về phòng. */
     setActive(on) { if (on === active) return; active = on; cancelAnimationFrame(raf); for (const k in keys) keys[k] = false; joy.x = joy.y = 0; if (on) { last = null; resize(); raf = requestAnimationFrame(loop); } },
@@ -348,6 +373,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       document.removeEventListener("keydown", onKey); document.removeEventListener("keyup", onKey);
       window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); ui.remove();
       for (const k of [...people.keys()]) removePerson(k);
+      if (cssObj) scene.remove(cssObj); if (css) css.domElement.remove();
       disposeTree(scene); renderer.dispose(); renderer.domElement.remove(); labels.remove();
     }
   };
