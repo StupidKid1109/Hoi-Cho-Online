@@ -10,4 +10,4 @@ Model License:
 If you use this 3D model in your project be sure to copy paste this credit wherever you share it:
 This work is based on "Low Poly Restaurant Interior Scene" (https://sketchfab.com/3d-models/low-poly-restaurant-interior-scene-ce81c3ee5c45471ea75fb6222fd64f9e) by MarkoJantti (https://sketchfab.com/MarkoJantti) licensed under CC-BY-4.0 (http://creativecommons.org/licenses/by/4.0/)
 
-Thay đổi so với bản gốc: đổi tên file, thu nhỏ ảnh kết cấu (4096 -> 2048 px, JPG), bỏ phông nền khi hiển thị, đặt ghế ngồi và màn chiếu trong game Hội chợ online.
+Thay đổi so với bản gốc: đổi tên file, thu nhỏ ảnh kết cấu (4096 -> 2048 px, JPG), bỏ phông nền khi hiển thị, tách bàn ghế khỏi vỏ quán để sắp xếp lại, kéo rộng phòng theo chiều ngang, đặt ghế ngồi và màn chiếu trong game Hội chợ online.

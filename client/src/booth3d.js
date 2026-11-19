@@ -182,11 +182,14 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
         if (!mats.has(src)) mats.set(src, new THREE.MeshLambertMaterial({ map: src.map, color: src.color, transparent: src.transparent, opacity: src.opacity, alphaTest: src.map && src.transparent ? 0.3 : 0, depthWrite: !(src.transparent && !src.map), side: src.side }));
         m.material = mats.get(src); src.dispose();
       });
-      o.scale.setScalar(md.scale); o.position.set(-md.ox * md.scale - W / 2, 0, -md.oz * md.scale - H / 2);
+      // vỏ quán: phóng 1,25 lần, kéo rộng thêm theo chiều ngang (trần giữ nguyên); cụm bàn ghế: đúng cỡ, đặt theo CAFE_ROOM.model.groups
+      const k = md.scale * md.stretch, shell = o.getObjectByName("shell");
+      if (shell) { shell.scale.set(k, md.scale, k); shell.position.set(-md.ox * k - W / 2, 0, -md.oz * k - H / 2); }
+      for (const gr of md.groups) { const n = o.getObjectByName(gr.id); if (n) { n.scale.setScalar(md.scale); n.position.set(wx(gr.x), 0, wz(gr.y)); } }
       scene.add(o); scene.remove(tmp); tmp.geometry.dispose();
     }, undefined, e => console.warn("Không nạp được mô hình quán", e));
     // đèn ấm trong quán
-    const warm = new THREE.PointLight(0xffc98a, 1.2, 14, 1.2); warm.position.set(0, 3.4, 0); scene.add(warm);
+    for (const z of [-H / 4, H / 4]) { const warm = new THREE.PointLight(0xffc98a, 1.0, 16, 1.2); warm.position.set(0, 3.5, z); scene.add(warm); }
     // ghế ngồi được: hình trụ ẩn đặt đúng chỗ ghế trong mô hình để bấm chọn
     const pickGeo = new THREE.CylinderGeometry(0.32, 0.32, 1, 10), pickMat = new THREE.MeshBasicMaterial();
     CAFE_SEATS.forEach((se, i) => { const c = new THREE.Mesh(pickGeo, pickMat); c.scale.y = se.h + 0.3; c.position.set(wx(se.x), (se.h + 0.3) / 2, wz(se.y)); c.visible = false; c.userData.seat = i; scene.add(c); seatPick.push(c); });
@@ -291,7 +294,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   resize();
 
   /* ---------- Vòng vẽ ---------- */
-  let raf = 0, last = null, t = 0, active = true, closed = false;
+  let raf = 0, last = null, t = 0, active = true, closed = false, topView = false;
   const v3 = new THREE.Vector3(), look = new THREE.Vector3();
   let onCinema = null;
   function setCinemaInt(on) { cinema = on; ui.classList.toggle("cine", on); if (onCinema) onCinema(on); }
@@ -359,6 +362,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       const hf = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), d = Math.min((SW / 2 + 0.15) / Math.tan(hf), CAFE ? W - 1 : H + 5) + 0.1;
       cx = sC.x + sN.x * d; cy = SY; cz = sC.z + sN.z * d; look.copy(sC);
     }
+    if (topView) { cx = 0; cy = Math.max(W, H) * 1.05; cz = 0.01; look.set(0, 0, 0); } // chụp thử từ trên xuống (window.__roomView(0, 0, 0, "top"))
     camera.position.set(cx, cy, cz);
     camera.lookAt(look);
     const tooClose = Math.hypot(cx - px, cz - pz) < 0.9 * K && !cinema; // máy quay bị tường đẩy sát người: ẩn nhân vật mình cho khỏi che hết
@@ -386,7 +390,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
   raf = requestAnimationFrame(loop);
   // hỗ trợ chụp thử: đặt chỗ đứng, hướng nhìn, góc nhìn (giống window.__hubView ở sảnh)
-  window.__roomView = (x, y, yw, v, p) => { me.x = x; me.y = y; target = null; if (yw != null) yaw = yw; if (v) { view = v; viewBlend = v === "third" ? 1 : 0; drawView(); } if (p != null) lookPitch = p; };
+  window.__roomView = (x, y, yw, v, p) => { if (v === "top") { topView = true; renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), 3.0)]; return; } me.x = x; me.y = y; target = null; if (yw != null) yaw = yw; if (v) { view = v; viewBlend = v === "third" ? 1 : 0; drawView(); } if (p != null) lookPitch = p; };
 
   return {
     /** Tin "mspace": mình và những người đang ở trong gian. */
