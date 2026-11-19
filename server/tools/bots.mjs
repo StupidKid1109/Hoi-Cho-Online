@@ -5,6 +5,8 @@
 //   node tools/bots.mjs 60 1 http://localhost:8787     (mặc định)
 //
 // Người ảo đi dạo quanh sân, ghé gian hàng, tìm ghế trống ngồi rồi đứng dậy, thỉnh thoảng chào và chat.
+// Khoảng 80% số người ảo vào phòng đấu Gian 1, Gian 2 và chơi thật (để đủ 20 người cho phòng bắt đầu),
+// chơi xong nghỉ vài giây rồi vào phòng mới.
 // Nhấn Ctrl+C (hoặc đóng cửa sổ) để cho tất cả rời khu.
 import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint } from "../../shared/world.js";
 
@@ -25,7 +27,22 @@ function blockPush(p) {
   for (const [bx, by, br] of BLOCK) { const dx = p.x - bx, dy = p.y - by, d = Math.hypot(dx, dy); if (d < br && d > 0) { p.x = bx + dx / d * br; p.y = by + dy / d * br; } }
 }
 /** Chọn nơi đi tiếp: dạo trong sân (phần lớn), ghé gian hàng, hoặc tìm ghế trống. */
+/* Tình trạng phòng chờ (hỏi máy chủ mỗi 1,5 giây) và số người ảo đang trên đường tới mỗi gian */
+let matchInfo = { min: 20, max: 50, g1: { n: 0 }, g2: { n: 0 } };
+const heading = { g1: 0, g2: 0 };
+setInterval(() => fetch(BASE + "/api/match").then(r => r.json()).then(j => { matchInfo = j; }).catch(() => {}), 1500).unref();
+/** Chọn phòng như người chơi thật: dồn vào phòng sắp đủ người cho tới khi đủ tối thiểu, rồi sang phòng còn lại. */
+function pickGame() {
+  const n = g => (matchInfo[g]?.n || 0) + heading[g], { min, max } = matchInfo;
+  const short = ["g1", "g2"].filter(g => n(g) < min).sort((a, c) => n(c) - n(a));
+  if (short.length && n(short[0]) > 0) return short[0];               // phòng đang gom người, nhiều người nhất
+  const counting = ["g1", "g2"].filter(g => n(g) >= min && n(g) < max);
+  if (counting.length && short.length) return short[0];               // một phòng đã đủ: gom người cho phòng còn lại
+  if (counting.length) return counting[0];                            // phòng đang đếm ngược, còn chỗ
+  return Math.random() < 0.5 ? "g1" : "g2";
+}
 function nextGoal(b) {
+  if (b.player) { const g = pickGame(), p = standPoint(g); heading[g]++; return { x: p.x + rnd(-150, 150), y: p.y + rnd(-60, 120), play: g }; }
   const r = Math.random();
   if (r < 0.2) {
     const free = SEATS.map((s, i) => i).filter(i => !seatOcc.has(i));
@@ -43,9 +60,10 @@ async function makeBot(i) {
   if (!data.token) throw new Error(r.status === 401 ? "Máy chủ chưa bật chế độ thử (cần DEV_LOGIN=1, ví dụ chạy bằng chay-thu.cmd)" : "Đăng nhập lỗi: " + (data.error || r.status));
   const ws = new WebSocket(BASE.replace(/^http/, "ws") + "/ws?khu=" + KHU + "&token=" + encodeURIComponent(data.token));
   const a = rnd(0, Math.PI * 2), d = rnd(0, PLAZA_R * 1.4);
-  const b = { i, ws, id: null, x: CENTER.x + Math.cos(a) * d, y: CENTER.y + Math.sin(a) * d, goal: null, until: Date.now() + rnd(0, 4000), seat: -1, nextChat: Date.now() + rnd(20000, 180000), nextEmote: Date.now() + rnd(8000, 40000) };
+  const b = { i, ws, id: null, x: CENTER.x + Math.cos(a) * d, y: CENTER.y + Math.sin(a) * d, goal: null, until: Date.now() + rnd(0, 4000), seat: -1, player: i % 5 !== 0, match: null, nextChat: Date.now() + rnd(20000, 180000), nextEmote: Date.now() + rnd(8000, 40000) };
   ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch (err) { return; }
+    if (m.t && m.t[0] === "m" && m.g) return onMatch(b, m);
     if (m.t === "welcome") { b.id = m.you.id; botIds.add(b.id); for (const p of m.peers) if (p.seat >= 0) seatOcc.set(p.seat, p.id); }
     else if (m.t === "sit") { for (const [k, v] of seatOcc) if (v === m.id) seatOcc.delete(k); if (m.s >= 0) seatOcc.set(m.s, m.id); }
     else if (m.t === "leave") { for (const [k, v] of seatOcc) if (v === m.id) seatOcc.delete(k); }
@@ -62,7 +80,27 @@ async function makeBot(i) {
   return b;
 }
 
+/* ---------- Đấu phòng: người ảo chơi thật ---------- */
+function onMatch(b, m) {
+  const send = o => { if (b.ws.readyState === 1) b.ws.send(JSON.stringify(o)); };
+  if (!b.match) return;
+  if (m.t === "merr") { b.match = null; b.until = Date.now() + rnd(20000, 40000); return; }
+  if (m.t === "mround" && m.g === "g1") { // chọn sau 1,5–7 giây (đúng sai ngẫu nhiên)
+    const k = m.k; b.match.t = setTimeout(() => send({ t: "mans", k, a: Math.random() < 0.5 }), rnd(0.15, 0.7) * m.dur);
+  } else if (m.t === "mround" && m.g === "g2") { // dùng gợi ý dần, đủ chữ thì đoán; một số người bỏ cuộc
+    const k = m.k, len = m.words.reduce((x, y) => x + y, 0);
+    b.match.k = k; b.match.letters = Array(len).fill(""); b.match.giveUp = Math.random() < 0.35;
+    const ask = () => { if (!b.match || b.match.k !== k || b.match.giveUp) return; send({ t: "mhint", k }); b.match.t = setTimeout(ask, rnd(1200, 3000) * m.dur / 30000); };
+    b.match.t = setTimeout(ask, rnd(1500, 4000) * m.dur / 30000);
+  } else if (m.t === "mhint" && b.match.letters) {
+    b.match.letters[m.pos] = m.letter;
+    if (b.match.letters.every(Boolean)) send({ t: "mguess", k: m.k, text: b.match.letters.join("") });
+  } else if (m.t === "mreveal") { clearTimeout(b.match.t); b.match.letters = null; }
+  else if (m.t === "mend") { clearTimeout(b.match.t); b.match = null; b.until = Date.now() + rnd(3000, 8000); }
+}
+
 function stepBot(b, now) {
+  if (b.match) return; // đang trong phòng đấu: đứng yên trước gian
   if (b.closed || b.ws.readyState !== 1) return;
   const send = o => b.ws.send(JSON.stringify(o));
   if (now > b.nextEmote) { send({ t: "emote", e: Math.floor(Math.random() * 4) }); b.nextEmote = now + rnd(20000, 70000); }
@@ -80,6 +118,7 @@ function stepBot(b, now) {
     b.x = g.x; b.y = g.y;
     send({ t: "pos", x: Math.round(b.x), y: Math.round(b.y) });
     if (g.seat !== undefined) { b.seat = g.seat; seatOcc.set(g.seat, b.id); send({ t: "sit", s: g.seat }); b.until = now + rnd(15000, 45000); }
+    else if (g.play) { heading[g.play] = Math.max(0, heading[g.play] - 1); b.match = { g: g.play }; send({ t: "mjoin", g: g.play }); }
     else b.until = now + (g.idle || 2000);
     b.goal = null;
     return;
@@ -100,8 +139,8 @@ try {
 console.log(`Đã vào: ${bots.length} người. Mở trò chơi, chọn khu ${KHU} để gặp họ. Nhấn Ctrl+C để cho tất cả rời khu.`);
 const loop = setInterval(() => { const now = Date.now(); for (const b of bots) stepBot(b, now); }, STEP_MS);
 const status = setInterval(() => {
-  const on = bots.filter(b => !b.closed).length, sit = bots.filter(b => b.seat >= 0).length;
-  console.log(`[${new Date().toLocaleTimeString("vi-VN")}] đang trong khu: ${on} người ảo, đang ngồi: ${sit}`);
+  const on = bots.filter(b => !b.closed).length, sit = bots.filter(b => b.seat >= 0).length, play = bots.filter(b => b.match).length;
+  console.log(`[${new Date().toLocaleTimeString("vi-VN")}] đang trong khu: ${on} người ảo, đang ngồi: ${sit}, đang ở phòng đấu Gian 1/2: ${play}`);
   if (!on) { console.log("Mất kết nối với máy chủ."); process.exit(1); }
 }, 15000);
 const quit = async () => { clearInterval(loop); clearInterval(status); bots.forEach(b => { try { b.ws.close(); } catch (e) { /* bỏ qua */ } }); await wait(300); console.log("Người ảo đã rời khu."); process.exit(0); };

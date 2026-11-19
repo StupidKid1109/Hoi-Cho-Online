@@ -6,6 +6,7 @@ import { openDb } from "./db.js";
 import { makeAuth } from "./auth.js";
 import { makeStore, GAMES } from "./store.js";
 import { makeRealtime } from "./realtime.js";
+import { makeMatches } from "./match.js";
 import { attachWebSocket } from "./ws.js";
 import { swipe, rebus, runner, GameError } from "./games.js";
 import { ROOT_DIR, SERVER_DIR } from "./config.js";
@@ -24,7 +25,14 @@ export function createApp(config) {
   let content = loadContent();
   const auth = makeAuth(config);
   const store = makeStore(db, (({ _ghi_chu, ...e }) => e)(content.event));
-  const rt = makeRealtime({ db, store, auth, config });
+  // Đấu phòng Gian 1, Gian 2: mỗi người trong phòng có một lượt chơi (run) để giới hạn số lượt/ngày và ghi Bảng vàng
+  const matches = makeMatches({
+    config, content: () => content,
+    canPlay: pid => store.runsSince(pid, Date.now() - 864e5) >= RUNS_PER_DAY ? "Bạn đã chơi rất nhiều hôm nay, nghỉ ngơi rồi quay lại nhé!" : null,
+    beginRun: (pid, game, state) => store.createRun(pid, game, state),
+    finishRun: (runId, game, res) => finishResponse(store.loadRun(runId), game, res)
+  });
+  const rt = makeRealtime({ db, store, auth, config, matches });
   const authHits = new Map();
 
   const send = (res, status, data, headers = {}) => {
@@ -77,6 +85,7 @@ export function createApp(config) {
 
     if (path === "/api/event" && method === "GET") return send(res, 200, publicEvent());
     if (path === "/api/khu" && method === "GET") return send(res, 200, { khu: rt.khuList() });
+    if (path === "/api/match" && method === "GET") return send(res, 200, matches.status()); // số người đang chờ ở phòng đấu Gian 1, Gian 2
 
     // Các API dưới đây cần đăng nhập
     if (path.startsWith("/api/") && !path.startsWith("/api/admin/")) {
@@ -100,6 +109,8 @@ export function createApp(config) {
       if (path === "/api/runs" && method === "POST") {
         const { game } = await readBody(req);
         if (!GAMES.includes(game)) return send(res, 400, { error: "Gian không tồn tại" });
+        // Gian 1, Gian 2 chỉ chơi theo phòng (đủ người mới bắt đầu, qua WebSocket): không cho chơi một mình để lấy điểm
+        if (game === "g1" || game === "g2") return send(res, 400, { error: "Gian này chơi theo phòng: vào phòng chờ để chơi cùng mọi người" });
         if (store.runsSince(pid, Date.now() - 864e5) >= RUNS_PER_DAY) return send(res, 429, { error: "Bạn đã chơi rất nhiều hôm nay, nghỉ ngơi rồi quay lại nhé!" });
         const started = game === "g1" ? swipe.start(content.cards) : game === "g2" ? rebus.start(content.rebus) : runner.start();
         const id = store.createRun(pid, game, started.state);

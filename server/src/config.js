@@ -32,6 +32,11 @@ export const config = {
   corsOrigin: env("CORS_ORIGIN", "*"),
   khuCount: Number(env("KHU_COUNT", 8)),
   khuCapacity: Number(env("KHU_CAPACITY", 100)),
+  // Đấu phòng Gian 1, Gian 2: số người tối thiểu để bắt đầu, tối đa mỗi phòng, thời gian đếm ngược khi đủ người (ms)
+  matchMin: Number(env("MATCH_MIN", 20)),
+  matchMax: Number(env("MATCH_MAX", 50)),
+  matchCountdown: Number(env("MATCH_COUNTDOWN", 15000)),
+  matchSpeed: Number(env("MATCH_SPEED", 1)), // chỉ dùng khi thử tải: < 1 cho ván chạy nhanh hơn
   serveClient: flag("SERVE_CLIENT", true),
   // Đứng sau Caddy/Nginx: lấy IP thật của người chơi từ X-Forwarded-For (không bật thì mọi người chung một IP của máy trung gian)
   trustProxy: flag("TRUST_PROXY", false),

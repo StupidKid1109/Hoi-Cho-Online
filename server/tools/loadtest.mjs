@@ -21,7 +21,7 @@ const wait = ms => new Promise(r => setTimeout(r, ms));
 // ---- khởi động máy chủ ----
 const srv = spawn(process.execPath, ["--disable-warning=ExperimentalWarning", "src/index.js"], {
   cwd: SERVER_DIR, stdio: ["ignore", "pipe", "pipe"],
-  env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1", DB_FILE: join(tmp, "load.db"), DEV_LOGIN: "1", ADMIN_KEY: "", SESSION_SECRET: "load-test", KHU_CAPACITY: String(Math.max(N, 100)), TRUST_PROXY: "1", SERVE_CLIENT: "0" }
+  env: { ...process.env, PORT: String(PORT), HOST: "127.0.0.1", DB_FILE: join(tmp, "load.db"), DEV_LOGIN: "1", ADMIN_KEY: "", SESSION_SECRET: "load-test", KHU_CAPACITY: String(Math.max(N, 100)), TRUST_PROXY: "1", SERVE_CLIENT: "0", MATCH_SPEED: "0.1" }
 });
 let srvLog = ""; srv.stdout.on("data", d => { srvLog += d; }); srv.stderr.on("data", d => { srvLog += d; });
 for (let i = 0; i < 100 && !srvLog.includes("đang chạy"); i++) await wait(100);
@@ -90,7 +90,22 @@ console.log("Dữ liệu/người/giây:  " + (bytes / N / dt / 1024).toFixed(1)
 console.log("Độ trễ thấy nhau:    trung vị " + pct(0.5) + ", 95% dưới " + pct(0.95) + "  (" + lat.length + " mẫu)");
 console.log("Chat đã gửi: " + chats + " | lượt ngồi: " + sits + " | ghế đã có người: " + sitno);
 
-// ---- Cả N người cùng chơi một lượt Gian 1 (20 thẻ) rồi cùng mở Bảng vàng ----
+// ---- Đấu phòng: cả N người vào Gian 1 (phòng tối đa 50 người), trả lời ngẫu nhiên; ván chạy nhanh gấp 10 lần ----
+let ends = 0, rounds = 0, starts = 0; const roomSizes = [];
+for (const b of bots) b.ws.addEventListener("message", e => {
+  const m = JSON.parse(e.data);
+  if (m.t === "mstart") { starts++; if (b.i % 50 === 0) roomSizes.push(m.n); }
+  else if (m.t === "mround") { rounds++; setTimeout(() => b.ws.readyState === 1 && b.ws.send(JSON.stringify({ t: "mans", k: m.k, a: Math.random() < 0.5 })), Math.random() * m.dur * 0.8); }
+  else if (m.t === "mend") ends++;
+});
+const m0 = performance.now(), mc0 = cpuTicks();
+for (const b of bots) b.ws.send(JSON.stringify({ t: "mjoin", g: "g1" }));
+while (ends < N && performance.now() - m0 < 120000) await wait(200);
+const mdt = (performance.now() - m0) / 1000, mc1 = cpuTicks();
+console.log("\nĐấu phòng Gian 1:     " + starts + " người vào " + Math.ceil(starts / 50) + " phòng (cỡ phòng: " + [...new Set(roomSizes)].join(", ") + " người), " + ends + "/" + N + " người nhận kết quả");
+console.log("                      " + rounds + " lượt câu hỏi gửi đi trong " + mdt.toFixed(1) + " giây" + (mc0 !== null ? " | CPU máy chủ " + ((mc1 - mc0) / ticksPerSec / mdt * 100).toFixed(0) + "%" : ""));
+
+// ---- Cả N người cùng gọi API: chơi một đoạn Gian 3 rồi mở Bảng vàng ----
 const reqLat = []; let httpErr = 0;
 async function call(b, path, body) {
   const t = performance.now();
@@ -99,18 +114,20 @@ async function call(b, path, body) {
   if (!r.ok) httpErr++;
   return r.json();
 }
+const runs = await Promise.all(bots.map(b => call(b, "/api/runs", { game: "g3" })));
+await wait(700);
 const h0 = performance.now(), hc0 = cpuTicks();
-await Promise.all(bots.map(async b => {
-  const run = await call(b, "/api/runs", { game: "g1" });
-  for (let k = 0; k < 20; k++) await call(b, "/api/runs/" + run.runId + "/answer", { k, scam: Math.random() < 0.5 });
-  await call(b, "/api/runs/" + run.runId + "/finish", {});
+await Promise.all(bots.map(async (b, i) => {
+  await call(b, "/api/me");
+  await call(b, "/api/runs/" + runs[i].runId + "/finish", { inputs: [[5, 2], [20, -1]], frames: 36 });
   await call(b, "/api/leaderboard?tab=all");
+  await call(b, "/api/khu");
 }));
 const hdt = (performance.now() - h0) / 1000, hc1 = cpuTicks();
 reqLat.sort((a, b) => a - b);
 const rq = q => reqLat[Math.min(reqLat.length - 1, Math.floor(reqLat.length * q))].toFixed(0) + " ms";
-console.log("\nCùng chơi Gian 1:    " + reqLat.length + " yêu cầu trong " + hdt.toFixed(1) + " giây (" + (reqLat.length / hdt).toFixed(0) + "/giây), lỗi: " + httpErr);
-console.log("Thời gian phản hồi:  trung vị " + rq(0.5) + ", 95% dưới " + rq(0.95) + (hc0 !== null ? " | CPU máy chủ lúc đó " + ((hc1 - hc0) / ticksPerSec / hdt * 100).toFixed(0) + "%" : ""));
+console.log("\nCùng gọi API:         " + reqLat.length + " yêu cầu, lỗi: " + httpErr + " | " + (reqLat.length / Math.max(hdt, 0.001)).toFixed(0) + " yêu cầu/giây");
+console.log("Thời gian phản hồi:  trung vị " + rq(0.5) + ", 95% dưới " + rq(0.95) + (hc0 !== null ? " | CPU máy chủ lúc đó " + ((hc1 - hc0) / ticksPerSec / Math.max(hdt, 0.001) * 100).toFixed(0) + "%" : ""));
 
 bots.forEach(b => b.ws.close());
 await wait(300);

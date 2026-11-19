@@ -1,0 +1,200 @@
+// Đấu phòng cho Gian 1 (Thật hay giả) và Gian 2 (Đuổi hình bắt chữ).
+// Người chơi vào phòng chờ của gian; đủ MIN người thì đếm ngược rồi bắt đầu, đủ MAX thì bắt đầu ngay.
+// Mọi người trong phòng chơi cùng một đề, cùng lúc. Máy chủ giữ đáp án, tính giờ và chấm điểm.
+// Tin nhắn đi qua kết nối WebSocket của khu hội chợ (realtime.js chuyển các tin bắt đầu bằng "m" sang đây).
+//
+// Điện thoại gửi:  {t:"mjoin", g} · {t:"mleave"} · {t:"mans", k, a} (Gian 1, a = true nếu cho là lừa đảo)
+//                  {t:"mguess", k, text} · {t:"mhint", k} (Gian 2)
+// Máy chủ gửi:     mlobby (phòng chờ) · mstart · mround (mở một câu) · mreveal (đáp án câu đó)
+//                  mguess / mhint (trả lời riêng) · msolved (có người đoán đúng) · mend (kết quả) · merr
+import { shuffle, strip, tilesFor } from "./games.js";
+
+const G1_CARDS = 10, G1_MS = 10000, G1_REVEAL_MS = 4500;
+const G2_MS = 30000, G2_REVEAL_MS = 6000, G2_HINT_COST = 100, G2_PLACE_BONUS = [200, 100, 50];
+const START_DELAY_MS = 2500, FULL_START_MS = 3000;
+
+export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
+  const MIN = config.matchMin || 20, MAX = config.matchMax || 50;
+  const COUNTDOWN = config.matchCountdown ?? 15000, SPEED = config.matchSpeed || 1;
+  const ms = v => Math.round(v * SPEED);
+  const lobbies = new Map();   // game -> phòng chờ hiện tại
+  const where = new Map();     // pid -> phòng chờ hoặc phòng đang chơi
+  let nextRoom = 1;
+
+  const send = (c, o) => { if (c.open) c.conn.sendJSON(o); };
+  const toAll = (room, o) => { const s = JSON.stringify(o); for (const p of room.players.values()) if (p.c.open && !p.left) p.c.conn.send(s); };
+  const ranking = room => [...room.players.values()].sort((a, b) => b.score - a.score || a.joinAt - b.joinAt);
+  const top = (room, n) => ranking(room).slice(0, n).map(p => ({ nick: p.nick, score: p.score }));
+
+  /* ---------- Phòng chờ ---------- */
+  function lobbyOf(game) {
+    let L = lobbies.get(game);
+    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true }; lobbies.set(game, L); }
+    return L;
+  }
+  function lobbyState(L) {
+    const names = [...L.players.values()].map(p => p.nick);
+    toAll(L, { t: "mlobby", g: L.game, n: L.players.size, min: MIN, max: MAX, startIn: L.startAt ? Math.max(0, L.startAt - Date.now()) : null, names });
+  }
+  function schedule(L) {
+    clearTimeout(L.timer); L.timer = null;
+    const n = L.players.size;
+    if (n < MIN) { L.startAt = null; return; }
+    if (n >= MAX && lobbies.get(L.game) === L) lobbies.delete(L.game); // đủ người tối đa: đóng phòng chờ, người sau vào phòng chờ mới
+    const wait = n >= MAX ? Math.min(FULL_START_MS, L.startAt ? L.startAt - Date.now() : FULL_START_MS) : (L.startAt ? L.startAt - Date.now() : COUNTDOWN);
+    L.startAt = Date.now() + Math.max(0, wait);
+    L.timer = setTimeout(() => startRoom(L), Math.max(0, wait));
+  }
+  function join(c, game) {
+    if (game !== "g1" && game !== "g2") return;
+    const cur = where.get(c.pid);
+    if (cur && cur.players.has(c.pid)) cur.players.get(c.pid).c = c; // kết nối lại: gắn vào kết nối mới
+    if (cur && cur.lobby && cur.game === game) return lobbyState(cur); // đã ở phòng chờ này
+    if (cur && !cur.lobby && cur.game === game && !cur.players.get(c.pid).left) return send(c, { t: "mstart", g: game, room: cur.id, n: cur.players.size, total: cur.set.length, in: 0, rejoin: true });
+    if (cur) leave(c);
+    const why = canPlay(c.pid); if (why) return send(c, { t: "merr", g: game, text: why });
+    const L = lobbyOf(game);
+    L.players.set(c.pid, { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0 });
+    where.set(c.pid, L);
+    schedule(L); lobbyState(L);
+  }
+  function leave(c) {
+    const R = where.get(c.pid); if (!R) return;
+    where.delete(c.pid);
+    if (R.lobby) { R.players.delete(c.pid); schedule(R); lobbyState(R); return; }
+    const p = R.players.get(c.pid); if (p) p.left = true; // rời giữa ván: vẫn tính điểm đã có khi ván kết thúc
+    if ([...R.players.values()].every(x => x.left || !x.c.open)) endRoom(R, true);
+  }
+
+  /* ---------- Bắt đầu ván ---------- */
+  function startRoom(L) {
+    if (lobbies.get(L.game) === L) lobbies.delete(L.game);
+    clearTimeout(L.timer);
+    // người đã mất kết nối thì bỏ khỏi phòng; còn dưới MIN (hiếm) thì quay lại chờ
+    for (const [pid, p] of L.players) if (!p.c.open) { L.players.delete(pid); where.delete(pid); }
+    if (L.players.size < MIN) {
+      const N = lobbyOf(L.game);
+      for (const [pid, p] of L.players) { N.players.set(pid, p); where.set(pid, N); }
+      schedule(N); lobbyState(N); return;
+    }
+    const R = { id: L.id, game: L.game, players: L.players, lobby: false, k: -1, open: false, timer: null, startedAt: Date.now() };
+    const c = content();
+    if (R.game === "g1") R.set = shuffle([...c.cards.cards.keys()]).slice(0, G1_CARDS);
+    else R.set = shuffle([...c.rebus.puzzles.keys()]).slice(0, c.rebus.perRound || 5);
+    for (const p of R.players.values()) {
+      Object.assign(p, { score: 0, ok: 0, streak: 0, top: 0, miss: [], hints: 0, solved: 0, runId: beginRun(p.pid, R.game, { room: R.id }) });
+      where.set(p.pid, R);
+    }
+    toAll(R, { t: "mstart", g: R.game, room: R.id, n: R.players.size, total: R.set.length, in: ms(START_DELAY_MS) });
+    R.timer = setTimeout(() => nextRound(R), ms(START_DELAY_MS));
+  }
+
+  function nextRound(R) {
+    R.k++;
+    if (R.k >= R.set.length) return endRoom(R);
+    const c = content(); R.open = true; R.openAt = Date.now(); R.answers = new Map(); R.placed = 0;
+    if (R.game === "g1") {
+      const card = c.cards.cards[R.set[R.k]];
+      R.dur = ms(G1_MS);
+      toAll(R, { t: "mround", g: "g1", k: R.k, total: R.set.length, card: { icon: card.icon, from: card.from, text: card.text }, dur: R.dur });
+    } else {
+      const pz = c.rebus.puzzles[R.set[R.k]];
+      R.ans = strip(pz.name); R.dur = ms(G2_MS);
+      for (const p of R.players.values()) { p.lock = []; p.rHints = 0; p.rGain = 0; p.rOk = false; }
+      toAll(R, { t: "mround", g: "g2", k: R.k, total: R.set.length, pics: pz.pics, words: pz.name.split(/\s+/).map(w => strip(w).length), tiles: tilesFor(R.ans), dur: R.dur });
+    }
+    R.timer = setTimeout(() => reveal(R), R.dur + 300); // chờ thêm chút cho người mạng chậm
+  }
+  const active = R => [...R.players.values()].filter(p => !p.left && p.c.open);
+  const left = R => Math.max(0, 1 - (Date.now() - R.openAt) / R.dur);
+
+  /* ---------- Gian 1: trả lời ---------- */
+  function answerG1(c, m) {
+    const R = where.get(c.pid); if (!R || R.lobby || R.game !== "g1" || !R.open || m.k !== R.k || R.answers.has(c.pid)) return;
+    R.answers.set(c.pid, { scam: !!m.a, left: left(R) });
+    if (active(R).every(p => R.answers.has(p.pid))) { clearTimeout(R.timer); reveal(R); } // ai cũng đã trả lời
+  }
+
+  /* ---------- Gian 2: đoán, gợi ý ---------- */
+  function guessG2(c, m) {
+    const R = where.get(c.pid); if (!R || R.lobby || R.game !== "g2" || !R.open || m.k !== R.k) return;
+    const p = R.players.get(c.pid); if (!p || p.rOk) return;
+    const now = Date.now(); if (now - (p.lastGuess || 0) < 250) return; p.lastGuess = now;
+    if (strip(m.text || "") !== R.ans) return send(c, { t: "mguess", g: "g2", k: R.k, ok: false });
+    const place = ++R.placed, gain = Math.max(50, 300 + Math.round(700 * left(R)) - G2_HINT_COST * p.rHints) + (G2_PLACE_BONUS[place - 1] || 0);
+    p.rOk = true; p.rGain = gain; p.score += gain; p.ok++;
+    send(c, { t: "mguess", g: "g2", k: R.k, ok: true, gain, place, score: p.score });
+    toAll(R, { t: "msolved", g: "g2", k: R.k, nick: p.nick, place, n: active(R).length });
+    if (active(R).every(x => x.rOk)) { clearTimeout(R.timer); reveal(R); } // ai cũng đã đoán đúng
+  }
+  function hintG2(c, m) {
+    const R = where.get(c.pid); if (!R || R.lobby || R.game !== "g2" || !R.open || m.k !== R.k) return;
+    const p = R.players.get(c.pid); if (!p || p.rOk) return;
+    const pos = [...R.ans].findIndex((_, i) => !p.lock.includes(i)); if (pos < 0) return;
+    p.lock.push(pos); p.rHints++; p.hints++;
+    send(c, { t: "mhint", g: "g2", k: R.k, pos, letter: R.ans[pos] });
+  }
+
+  /* ---------- Đáp án từng câu ---------- */
+  function reveal(R) {
+    if (!R.open) return;
+    R.open = false; clearTimeout(R.timer);
+    const c = content(), n = R.players.size;
+    if (R.game === "g1") {
+      const card = c.cards.cards[R.set[R.k]]; let nScam = 0, nAns = 0;
+      for (const p of R.players.values()) {
+        const a = R.answers.get(p.pid);
+        if (a) { nAns++; if (a.scam) nScam++; }
+        const ok = !!a && a.scam === card.scam;
+        p.rGain = 0;
+        if (ok) { p.streak++; p.ok++; p.top = Math.max(p.top, p.streak); p.rGain = 500 + Math.round(500 * a.left) + 50 * Math.min(5, p.streak - 1); p.score += p.rGain; }
+        else { p.streak = 0; if (!p.miss.includes(R.set[R.k])) p.miss.push(R.set[R.k]); }
+        p.rOk = ok; p.rAns = a ? a.scam : null;
+      }
+      const ranked = ranking(R), t3 = ranked.slice(0, 3).map(p => ({ nick: p.nick, score: p.score }));
+      ranked.forEach((p, i) => send(p.c, { t: "mreveal", g: "g1", k: R.k, last: R.k >= R.set.length - 1, scam: card.scam, why: card.why,
+        you: { ok: p.rOk, answered: p.rAns !== null, gain: p.rGain, score: p.score, streak: p.streak }, pctScam: nAns ? Math.round(100 * nScam / nAns) : 0, answered: nAns, top: t3, rank: i + 1, n, next: ms(G1_REVEAL_MS) }));
+      R.timer = setTimeout(() => nextRound(R), ms(G1_REVEAL_MS));
+    } else {
+      const pz = c.rebus.puzzles[R.set[R.k]], solved = [...R.players.values()].filter(p => p.rOk).length;
+      const ranked = ranking(R), t3 = ranked.slice(0, 3).map(p => ({ nick: p.nick, score: p.score }));
+      ranked.forEach((p, i) => send(p.c, { t: "mreveal", g: "g2", k: R.k, last: R.k >= R.set.length - 1, name: pz.name, info: pz.info, pics: pz.pics,
+        you: { ok: p.rOk, gain: p.rGain, score: p.score }, solved, top: t3, rank: i + 1, n, next: ms(G2_REVEAL_MS) }));
+      R.timer = setTimeout(() => nextRound(R), ms(G2_REVEAL_MS));
+    }
+  }
+
+  /* ---------- Kết thúc ván: ghi điểm, gửi xếp hạng ---------- */
+  function endRoom(R, abandoned = false) {
+    if (R.ended) return; R.ended = true; clearTimeout(R.timer);
+    const c = content(), ranked = ranking(R), t10 = top(R, 10), n = R.players.size;
+    ranked.forEach((p, i) => {
+      if (where.get(p.pid) === R) where.delete(p.pid);
+      let res;
+      if (R.game === "g1") res = { score: p.score, stats: { ok: p.ok, n: R.set.length, top: p.top },
+        review: p.miss.map(j => ({ icon: c.cards.cards[j].icon, text: c.cards.cards[j].text, scam: c.cards.cards[j].scam, why: c.cards.cards[j].why })) };
+      else res = { score: p.score, stats: { ok: p.ok, total: R.set.length, hints: p.hints },
+        review: R.set.map(j => ({ pics: c.rebus.puzzles[j].pics, name: c.rebus.puzzles[j].name, info: c.rebus.puzzles[j].info })) };
+      const out = finishRun(p.runId, R.game, res);
+      if (!abandoned) send(p.c, { t: "mend", g: R.game, rank: i + 1, n, top: t10, result: out });
+    });
+  }
+
+  function onMessage(c, m) {
+    if (m.t === "mjoin") join(c, m.g);
+    else if (m.t === "mleave") leave(c);
+    else if (m.t === "mans") answerG1(c, m);
+    else if (m.t === "mguess") guessG2(c, m);
+    else if (m.t === "mhint") hintG2(c, m);
+  }
+  /** Mất kết nối: rời phòng chờ, hoặc đánh dấu đã rời ván đang chơi. */
+  function onClose(c) { const R = where.get(c.pid); if (R && R.players.get(c.pid)?.c === c) leave(c); }
+  /** Tình trạng công khai: số người đang chờ ở mỗi gian, số phòng và số người đang chơi. */
+  function status() {
+    const rooms = new Set([...where.values()].filter(r => !r.lobby));
+    const wait = g => { const L = lobbies.get(g); return L ? { n: L.players.size, startIn: L.startAt ? Math.max(0, L.startAt - Date.now()) : null } : { n: 0, startIn: null }; };
+    return { min: MIN, max: MAX, g1: wait("g1"), g2: wait("g2"), rooms: rooms.size, playing: [...rooms].reduce((n, r) => n + [...r.players.values()].filter(p => !p.left).length, 0) };
+  }
+
+  return { onMessage, onClose, status, MIN, MAX };
+}

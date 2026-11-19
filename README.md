@@ -4,8 +4,8 @@ Hội chợ 3D có 3 gian trò chơi tuyên truyền, Bảng vàng chung để t
 
 | Gian | Trò chơi | Chủ đề |
 | --- | --- | --- |
-| Gian 1 | Thật hay giả? (vuốt trái/phải) | Phòng chống lừa đảo |
-| Gian 2 | Đuổi hình bắt chữ | Địa danh, văn hóa |
+| Gian 1 | Thật hay giả? (vuốt trái/phải) · **đấu phòng 20–50 người** | Phòng chống lừa đảo |
+| Gian 2 | Đuổi hình bắt chữ · **đấu phòng 20–50 người** | Địa danh, văn hóa |
 | Gian 3 | Đường về an toàn (chạy vô tận 3D: đổi làn, nhảy, cúi) | An toàn giao thông |
 
 ## Cấu trúc thư mục
@@ -93,6 +93,15 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Giữa là sân trống để trò chuyện, có **80 chỗ ngồi**: 16 ghế băng (mỗi ghế 3 chỗ) quay vào giữa và 8 bàn tròn (mỗi bàn 4 ghế đẩu). Sân rộng 7200×7200 (gấp 3 lần mỗi chiều so với bản đầu), có đèn lồng dọc các lối đi. Đi lại gần một ghế trống thì chỗ ngồi sáng viền vàng và hiện nút **🪑 Ngồi** ngay trên ghế (trên máy tính nhấn phím **E**); bấm là nhân vật ngồi vào đúng chỗ đó. Khi đang ngồi, trên đầu hiện nút **🚶 Đứng dậy** (hoặc nhấn E). Cũng có thể chạm thẳng vào ghế, hoặc bấm nút **🪑 Ngồi** ở dưới để đi tới ghế trống gần nhất; đi tiếp thì tự đứng dậy. Người khác trong khu thấy mình ngồi; mỗi ghế chỉ một người.
 - Bố cục nằm trong `shared/world.js`, dùng chung cho máy chủ và giao diện.
 
+## Gian 1, Gian 2: đấu phòng 20–50 người
+
+- Vào gian là vào **phòng chờ** (hiện số người và biệt danh). Đủ **20 người** thì đếm ngược 15 giây để người khác kịp vào; đủ **50 người** thì đóng phòng và bắt đầu sau 3 giây, người đến sau vào phòng chờ mới. Bảng thông tin của gian trên sảnh cho biết phòng chờ đang có bao nhiêu người.
+- **Gian 1:** cả phòng cùng xem 10 tin nhắn, mỗi tin 10 giây chọn Lừa đảo hay An toàn. Đúng được 500 điểm cộng tối đa 500 điểm theo tốc độ, đúng liên tiếp thưởng thêm. Sau mỗi tin: đáp án, giải thích, tỉ lệ cả phòng chọn, 3 người dẫn đầu.
+- **Gian 2:** cả phòng cùng đoán 5 câu, mỗi câu 30 giây. Đúng được 300 điểm cộng tối đa 700 điểm theo tốc độ; ai đúng nhất, nhì, ba được thêm 200, 100, 50; mỗi gợi ý trừ 100.
+- Cuối ván: xếp hạng trong phòng; điểm vẫn tính vào Bảng vàng (điểm cao nhất của mỗi gian). Rời giữa ván vẫn giữ số điểm đã có.
+- Máy chủ ghép phòng, gửi đề, giữ đáp án, tính giờ và chấm điểm (`server/src/match.js`); hai gian này không chơi một mình được. Số người đổi bằng `MATCH_MIN`, `MATCH_MAX`, thời gian đếm ngược `MATCH_COUNTDOWN` (mili giây) trong `server/.env`.
+- Thử khi chưa đủ người thật: bấm đúp `nguoi-ao.cmd` (khoảng 80% người ảo vào phòng đấu và chơi).
+
 ## Gian 3: vượt chướng ngại vật
 
 - Điện thoại: vuốt trái, phải (hoặc chạm hai bên xe) để đổi làn, **vuốt lên để nhảy**, **vuốt xuống để cúi**. Máy tính: A, D (hoặc mũi tên trái, phải) đổi làn, **W nhảy**, **S cúi**. Đang nhảy mà cúi thì rơi nhanh xuống.
@@ -116,7 +125,7 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
   | Dữ liệu mỗi điện thoại/giây | 31 KB | 10 KB |
   | Độ trễ thấy nhau | 3 ms | khoảng 50 ms (95% dưới 95 ms) |
 
-  100 người cùng chơi Gian 1: khoảng 1.800 yêu cầu/giây, không lỗi, phản hồi trung vị 43 ms.
+  Đấu phòng: 100 người vào 2 phòng 50 người cùng chơi Gian 1, máy chủ dùng khoảng 2% CPU. 100 người cùng gọi API: khoảng 1.650 yêu cầu/giây, không lỗi.
 - **Khi chạy sau Caddy/Nginx phải đặt `TRUST_PROXY=1`**: nếu không, máy chủ thấy mọi người chung một IP và giới hạn đăng nhập (`AUTH_PER_MIN`, mặc định 120 lần/phút cho mỗi IP) sẽ chặn bớt người vào.
 - Theo dõi khi chạy thật: `GET /api/health` trả về số người đang online ở từng khu và bộ nhớ máy chủ.
 

@@ -85,6 +85,7 @@ function onRealtime(m) {
   else if (m.t === "sys") chat.onSys(m.text, m.ok);
   else if (m.t === "feed") feed(m.text);
   else if (m.t === "full" || m.t === "error") toast(m.text);
+  else if (m.g && m.t[0] === "m" && S.cur === m.g && GAMES[m.g].onMsg) GAMES[m.g].onMsg(m); // đấu phòng
 }
 function renderWho() { $("who").innerHTML = "🧑 <b>" + esc(S.me.nick) + "</b> · Khu " + S.khu + " · " + (hub.peerCount() + 1) + " người đang dạo"; }
 function feed(text) { const row = document.createElement("div"); row.textContent = text; const f = $("feed"); f.appendChild(row); while (f.children.length > 2) f.firstChild.remove(); setTimeout(() => row.remove(), 6000); }
@@ -100,6 +101,11 @@ function boothSheet(id) {
   const b = BOOTH(id), v = S.me.bests[id];
   openSheet('<button class="xx" aria-label="Đóng">✕</button><div class="bsh"><div class="ic">' + b.icons + "</div><h2>" + b.tag + " · " + b.name + '</h2><span class="tpill" style="background:' + b.c + '">' + b.topic + "</span><p>" + b.desc + '</p><div class="kv"><div><b>' + (v ? fmt(v) : "–") + '</b>Kỷ lục của bạn</div><div><b>' + fmt(S.me.total) + '</b>Tổng điểm hội chợ</div></div><button class="btn" id="enter" style="background:' + b.c + '">Vào gian hàng</button></div>', { onClose: () => hub.zoomOut() });
   $("enter").onclick = () => { closeSheet(); openGame(id); };
+  if (id === "g1" || id === "g2") api("/api/match").then(s => { // đấu phòng: đang có bao nhiêu người chờ
+    const el = $("sheet").querySelector(".bsh p"); if (!el || !$("enter")) return;
+    const w = s[id], txt = w.startIn != null ? "👥 Phòng chờ đủ " + w.n + " người, sắp bắt đầu!" : "👥 Phòng chờ: " + w.n + "/" + s.min + " người (cần " + s.min + "–" + s.max + " người)";
+    el.insertAdjacentHTML("afterend", '<div class="wait-pill">' + txt + "</div>");
+  }).catch(() => {});
 }
 
 /* ---------- Gian hàng ---------- */
@@ -110,7 +116,8 @@ function openGame(id) {
   pre.classList.add("on");
   pre.querySelector("button").onclick = () => { pre.classList.remove("on"); play(id); };
 }
-const gameCtx = { toast, result, leave: leaveGame };
+// send: gửi tin qua kết nối của khu (đấu phòng Gian 1, Gian 2)
+const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.send(o) };
 function play(id) { GAMES[id].start(gameCtx).catch(e => { toast(e.message); leaveGame(); }); }
 function leaveGame() { if (S.cur) GAMES[S.cur].stop(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); }
 function result(id, r, stats, review) {

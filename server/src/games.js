@@ -2,7 +2,7 @@
 import { randomInt } from "node:crypto";
 import { replay, validInputs, FPS } from "../../shared/runnerSim.js";
 
-const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+export const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 export const strip = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toUpperCase().replace(/[^A-Z]/g, "");
 export class GameError extends Error { constructor(msg, status = 400) { super(msg); this.status = status; } }
 
@@ -36,7 +36,7 @@ export const swipe = {
 };
 
 /* ---------- Gian 2: Đuổi hình bắt chữ ---------- */
-function tilesFor(ans) {
+export function tilesFor(ans) {
   const fill = "ABCDEGHIKLMNOPQRSTUVXY", n = Math.max(14, Math.ceil((ans.length + 4) / 7) * 7), letters = ans.split("");
   while (letters.length < n) letters.push(fill[randomInt(fill.length)]);
   return shuffle(letters);

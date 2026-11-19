@@ -38,42 +38,14 @@ test("đăng nhập thử và từ chối khi thiếu phiên", async () => {
   assert.equal((await call("/api/auth", { method: "POST", body: { devId: "X!" } })).status, 401);
 });
 
-test("Gian 1: máy chủ chấm đúng/sai và giữ đáp án", async () => {
-  const t = await login("swipe-a");
-  const start = await call("/api/runs", { token: t, method: "POST", body: { game: "g1" } });
-  assert.equal(start.status, 200);
-  assert.ok(start.data.cards.length > 10);
-  assert.equal(start.data.cards[0].scam, undefined, "không được lộ đáp án");
-  const run = start.data.runId;
-  // Trả lời đúng 3 thẻ đầu, sai thẻ thứ 4 (tra đáp án từ nội dung để kiểm thử)
-  const answerFor = c => cards.find(x => x.text === c.text).scam;
-  let r;
-  for (let k = 0; k < 3; k++) { r = await call(`/api/runs/${run}/answer`, { token: t, method: "POST", body: { k, scam: answerFor(start.data.cards[k]) } }); assert.equal(r.data.ok, true); }
-  assert.equal(r.data.score, 50 + 60 + 70);
-  r = await call(`/api/runs/${run}/answer`, { token: t, method: "POST", body: { k: 3, scam: !answerFor(start.data.cards[3]) } });
-  assert.equal(r.data.ok, false); assert.equal(r.data.streak, 0);
-  assert.equal((await call(`/api/runs/${run}/answer`, { token: t, method: "POST", body: { k: 9, scam: true } })).status, 400, "sai thứ tự");
-  const fin = await call(`/api/runs/${run}/finish`, { token: t, method: "POST" });
-  assert.equal(fin.data.score, 180); assert.equal(fin.data.counted, true); assert.equal(fin.data.best, 180);
-  assert.equal((await call(`/api/runs/${run}/finish`, { token: t, method: "POST" })).status, 409, "không kết thúc 2 lần");
-});
-
-test("Gian 2: đoán sai được thử lại, gợi ý trừ điểm, đúng thì cộng điểm", async () => {
-  const t = await login("rebus-a");
-  const start = await call("/api/runs", { token: t, method: "POST", body: { game: "g2" } });
-  const run = start.data.runId;
-  let p = (await call(`/api/runs/${run}/next`, { token: t, method: "POST" })).data.puzzle;
-  assert.ok(p.tiles.length >= 14); assert.equal(p.name, undefined);
-  const ans = rebusContent.puzzles.find(x => JSON.stringify(x.pics) === JSON.stringify(p.pics)).name;
-  assert.equal((await call(`/api/runs/${run}/guess`, { token: t, method: "POST", body: { guess: "SAI" } })).data.ok, false);
-  const h = await call(`/api/runs/${run}/hint`, { token: t, method: "POST" });
-  assert.equal(h.data.pos, 0);
-  const g = await call(`/api/runs/${run}/guess`, { token: t, method: "POST", body: { guess: ans } });
-  assert.equal(g.data.ok, true); assert.ok(g.data.gain >= 300 && g.data.gain <= 350, "trừ 50 điểm vì 1 gợi ý: " + g.data.gain);
-  p = (await call(`/api/runs/${run}/next`, { token: t, method: "POST" })).data.puzzle; assert.equal(p.index, 1);
-  const s = await call(`/api/runs/${run}/skip`, { token: t, method: "POST" }); assert.equal(s.data.ok, false); assert.ok(s.data.name);
-  const fin = await call(`/api/runs/${run}/finish`, { token: t, method: "POST" });
-  assert.equal(fin.data.score, g.data.gain);
+test("Gian 1, Gian 2 chỉ chơi theo phòng: không chơi một mình qua API để lấy điểm", async () => {
+  const t = await login("solo-a");
+  for (const game of ["g1", "g2"]) {
+    const r = await call("/api/runs", { token: t, method: "POST", body: { game } });
+    assert.equal(r.status, 400); assert.match(r.data.error, /theo phòng/);
+  }
+  const m = await call("/api/match"); // tình trạng phòng chờ công khai
+  assert.equal(m.status, 200); assert.equal(m.data.min, 20); assert.equal(m.data.max, 50); assert.equal(m.data.g1.n, 0);
 });
 
 test("Gian 3: máy chủ chạy lại mô phỏng, không tin điểm gửi lên", async () => {
@@ -136,11 +108,18 @@ test("Gian 3: nhảy qua rào thấp, cúi qua biển treo; máy chủ chạy l�
 });
 
 test("Bảng vàng: tổng điểm cao nhất 3 gian, có thứ hạng của tôi", async () => {
-  const t = await login("swipe-a");
-  const lb = await call("/api/leaderboard?tab=all", { token: t });
-  assert.equal(lb.status, 200); assert.ok(lb.data.rows.length >= 2); assert.ok(lb.data.me.rank >= 1);
-  const scores = lb.data.rows.map(r => r.score); assert.deepEqual(scores, [...scores].sort((a, b) => b - a));
-  const g1 = await call("/api/leaderboard?tab=g1", { token: t }); assert.equal(g1.data.rows[0].score, 180);
+  // hai người chơi Gian 3 một đoạn ngắn (khai số khung hình không vượt thời gian thực)
+  const play = async (id, frames) => {
+    const t = await login(id), r = (await call("/api/runs", { token: t, method: "POST", body: { game: "g3" } })).data;
+    await new Promise(res => setTimeout(res, frames / 60 * 1000 + 100));
+    return { t, fin: (await call(`/api/runs/${r.runId}/finish`, { token: t, method: "POST", body: { inputs: [], frames } })).data };
+  };
+  const a = await play("board-a", 40), b = await play("board-b", 12);
+  assert.ok(a.fin.score > b.fin.score && b.fin.score > 0);
+  const lb = await call("/api/leaderboard?tab=all", { token: b.t });
+  assert.equal(lb.status, 200); assert.ok(lb.data.rows.length >= 2); assert.ok(lb.data.me.rank >= 2);
+  const scores = lb.data.rows.map(r => r.score); assert.deepEqual(scores, [...scores].sort((x, y) => y - x));
+  const g3 = await call("/api/leaderboard?tab=g3", { token: a.t }); assert.ok(g3.data.rows.some(r => r.me && r.score === a.fin.score));
 });
 
 test("Khu hội chợ: thấy nhau, chat được lọc, báo cáo đủ 3 lần thì ẩn tin", async () => {
@@ -198,6 +177,92 @@ test("Chỗ ngồi: ngồi được, người khác thấy, không ngồi chồn
   c.send({ t: "sit", s: 5 }); await wait(150);
   assert.ok(a.inbox.filter(m => m.t === "sit" && m.s === 5).length >= 3, "thoát ra thì ghế được nhả cho người khác");
   for (const x of [a, c]) x.ws.close();
+});
+
+test("Đấu phòng Gian 1, Gian 2: đủ người mới bắt đầu, chơi cùng đề, chấm và xếp hạng ở máy chủ", async () => {
+  // Phòng nhỏ, chạy nhanh để thử: tối thiểu 3, tối đa 4 người
+  const mapp = createApp({ ...cfg, matchMin: 3, matchMax: 4, matchCountdown: 250, matchSpeed: 0.025 });
+  await new Promise(r => mapp.server.listen(0, "127.0.0.1", r));
+  const mbase = "http://127.0.0.1:" + mapp.server.address().port;
+  const tok = async id => (await (await fetch(mbase + "/api/auth", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ devId: id }) })).json()).token;
+  const open = async id => {
+    const ws = new WebSocket(mbase.replace("http", "ws") + "/ws?khu=1&token=" + encodeURIComponent(await tok(id))), inbox = [];
+    ws.onmessage = e => inbox.push(JSON.parse(e.data));
+    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+    const waitFor = (pred, ms = 4000) => new Promise((res, rej) => { const t0 = Date.now(); const f = () => { const m = inbox.find(pred); if (m) return res(m); if (Date.now() - t0 > ms) return rej(new Error(id + ": hết giờ chờ tin nhắn " + pred.toString().slice(0, 80) + " | đã nhận: " + inbox.map(x => x.t).join(","))); setTimeout(f, 15); }; f(); });
+    return { ws, inbox, waitFor, send: o => ws.send(JSON.stringify(o)) };
+  };
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const cards = JSON.parse(readFileSync(new URL("../content/cards.json", import.meta.url))).cards;
+  const puzzles = JSON.parse(readFileSync(new URL("../content/rebus.json", import.meta.url))).puzzles;
+  const [a, b, c, d, e] = [await open("match-a"), await open("match-b"), await open("match-c"), await open("match-d"), await open("match-e")];
+  try {
+
+  // --- Gian 1 ---
+  a.send({ t: "mjoin", g: "g1" }); b.send({ t: "mjoin", g: "g1" }); await wait(120);
+  const l2 = [...b.inbox].reverse().find(m => m.t === "mlobby");
+  assert.equal(l2.n, 2); assert.equal(l2.min, 3); assert.equal(l2.startIn, null, "2 người: chưa đếm ngược");
+  c.send({ t: "mjoin", g: "g1" });
+  const l3 = await c.waitFor(m => m.t === "mlobby" && m.n === 3);
+  assert.ok(l3.startIn > 0, "đủ 3 người: bắt đầu đếm ngược");
+  await a.waitFor(m => m.t === "mstart");
+  d.send({ t: "mjoin", g: "g1" });
+  const ld = await d.waitFor(m => m.t === "mlobby");
+  assert.equal(ld.n, 1, "người đến sau vào phòng chờ mới");
+  // A trả lời đúng mọi câu, B trả lời sai mọi câu, C không trả lời
+  const answered = new Set();
+  const play = setInterval(() => {
+    for (const m of a.inbox) if (m.t === "mround" && m.g === "g1" && !answered.has(m.k)) {
+      answered.add(m.k); const card = cards.find(x => x.text === m.card.text);
+      assert.ok(!("scam" in m.card), "đáp án không được gửi xuống trước");
+      a.send({ t: "mans", k: m.k, a: card.scam }); b.send({ t: "mans", k: m.k, a: !card.scam });
+    }
+  }, 10);
+  const [ea, eb, ec] = await Promise.all([a.waitFor(m => m.t === "mend", 20000), b.waitFor(m => m.t === "mend", 20000), c.waitFor(m => m.t === "mend", 20000)]);
+  clearInterval(play);
+  assert.equal(ea.n, 3); assert.equal(ea.rank, 1); assert.ok(ea.result.score >= 10 * 500, "A đúng 10/10");
+  assert.equal(eb.result.score, 0); assert.equal(ec.result.score, 0);
+  assert.equal(ea.result.stats.ok, 10); assert.equal(eb.result.stats.ok, 0);
+  assert.ok(ea.top[0].score === ea.result.score && ea.result.counted, "ghi vào Bảng vàng");
+  const rv = a.inbox.find(m => m.t === "mreveal" && m.g === "g1");
+  assert.ok(typeof rv.why === "string" && rv.top.length === 3 && rv.pctScam >= 0, "mỗi câu có đáp án, giải thích, tỉ lệ chọn, top 3");
+
+  // --- Phòng đủ tối đa (4) thì đóng cửa: người thứ 5 vào phòng chờ mới ---
+  for (const x of [a, b, c, d, e]) x.inbox.length = 0;
+  for (const x of [a, b, c, d, e]) x.send({ t: "mjoin", g: "g2" });
+  const s4 = await a.waitFor(m => m.t === "mstart" && m.g === "g2");
+  assert.equal(s4.n, 4, "phòng không vượt quá số người tối đa");
+  const le = [...e.inbox].reverse().find(m => m.t === "mlobby" && m.g === "g2");
+  assert.ok(!e.inbox.some(m => m.t === "mstart") && le && le.n < 4, "người thứ 5 chờ ở phòng mới");
+  for (const x of [a, b, c, d, e]) x.send({ t: "mleave" });
+  await wait(100);
+
+  // --- Gian 2 ---
+  for (const x of [a, b, c, d, e]) x.inbox.length = 0;
+  for (const x of [a, b, c]) x.send({ t: "mjoin", g: "g2" });
+  await a.waitFor(m => m.t === "mstart" && m.g === "g2");
+  const done = new Set();
+  const play2 = setInterval(() => {
+    for (const m of a.inbox) if (m.t === "mround" && m.g === "g2" && !done.has(m.k)) {
+      done.add(m.k);
+      const pz = puzzles.find(p => p.pics.join() === m.pics.join());
+      a.send({ t: "mguess", k: m.k, text: "SAI ROI" });                    // đoán sai trước
+      setTimeout(() => a.send({ t: "mguess", k: m.k, text: pz.name }), 300); // rồi đoán đúng
+      b.send({ t: "mhint", k: m.k });
+      setTimeout(() => b.send({ t: "mguess", k: m.k, text: pz.name }), 380); // B đoán đúng sau A
+    }
+  }, 10);
+  const [fa, fb, fc] = await Promise.all([a.waitFor(m => m.t === "mend" && m.g === "g2", 20000), b.waitFor(m => m.t === "mend" && m.g === "g2", 20000), c.waitFor(m => m.t === "mend" && m.g === "g2", 20000)]);
+  clearInterval(play2);
+  assert.ok(a.inbox.some(m => m.t === "mguess" && m.ok === false), "đoán sai thì được thử lại");
+  assert.ok(a.inbox.some(m => m.t === "mguess" && m.ok && m.place === 1), "A đoán đúng đầu tiên");
+  assert.ok(b.inbox.some(m => m.t === "mhint" && typeof m.letter === "string"), "gợi ý mở một chữ");
+  assert.ok(fa.result.score > fb.result.score && fb.result.score > 0 && fc.result.score === 0, "đúng trước được nhiều điểm hơn");
+  assert.equal(fa.rank, 1); assert.equal(fa.result.stats.ok, fa.result.stats.total);
+  } finally { // luôn dọn dẹp để kiểm thử không treo khi có lỗi
+    for (const x of [a, b, c, d, e]) x.ws.close();
+    await mapp.close();
+  }
 });
 
 test("Quản trị: đổi đợt thưởng và xuất danh sách Bảng vàng", async () => {
