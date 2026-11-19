@@ -95,7 +95,8 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 
 ## Gian 1, Gian 2: đấu phòng 20–50 người
 
-- Mỗi gian là **một không gian 3D riêng**: bấm vào gian trên sảnh thì máy quay phóng tới rồi bước vào phòng của gian đó (Gian 1 tông đỏ, Gian 2 tông xanh lá, Gian 3 mặt đường). Trong phòng thấy những người đang chờ cùng mình, đi lại (chạm sàn hoặc W A S D), bấm Chào hoặc Vỗ tay. Màn hình lớn trên tường báo số người và đếm ngược. Nút 📜 Luật chơi (lần đầu vào tự hiện), 🚪 Ra hội chợ.
+- Trước thềm mỗi gian trên sảnh có nút **🚪 Vào phòng chờ** (Gian 3: **▶ Vào chơi**), hiện luôn số người đang chờ; đứng gần thì nút to lên, máy tính bấm phím E.
+- Mỗi gian là **một không gian 3D riêng**: bấm nút vào (hoặc bấm vào gian) trên sảnh thì máy quay phóng tới rồi bước vào phòng của gian đó (Gian 1 tông đỏ, Gian 2 tông xanh lá, Gian 3 mặt đường). Trong phòng thấy những người đang chờ cùng mình, đi lại (chạm sàn hoặc W A S D), bấm Chào hoặc Vỗ tay. Màn hình lớn trên tường báo số người và đếm ngược. Nút 📜 Luật chơi (lần đầu vào tự hiện), 🚪 Ra hội chợ.
 - Đủ **20 người** thì đếm ngược 15 giây để người khác kịp vào; đủ **50 người** thì đóng phòng và bắt đầu sau 3 giây, người đến sau vào phòng chờ mới. Ván bắt đầu thì chuyển sang màn hình chơi; "Chơi lại" đưa về phòng chờ của gian.
 - Gian 3 chơi một mình: phòng riêng có nút **🛵 Bắt đầu chạy**.
 - Máy không có WebGL: dùng thẻ luật chơi và phòng chờ 2D như cũ.

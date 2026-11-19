@@ -448,3 +448,14 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 .sp-rules li{background:var(--cream);border-radius:12px;padding:9px 12px;font-size:13px;font-weight:600;display:flex;gap:9px;align-items:center}
 .sp-rules li i{font-style:normal;font-size:20px}
 .space .avt .nm{color:var(--ink)}
+
+/* Nút "Vào phòng chờ" trước thềm mỗi gian */
+.l3.eb{z-index:2}
+.entb{position:absolute;left:0;top:0;transform:translateX(-50%);transform-origin:50% 0;pointer-events:auto;display:flex;flex-direction:column;align-items:center;gap:1px;background:var(--c);color:#fff;border:3px solid var(--gold);border-radius:18px;padding:7px 16px 6px;white-space:nowrap;box-shadow:0 4px 0 rgba(0,0,0,.35),0 8px 18px rgba(0,0,0,.3);transition:transform .15s}
+.entb b{font-size:14px;font-weight:900}
+.entb small{font-size:10.5px;font-weight:700;opacity:.92}
+.entb kbd{display:none;margin-left:6px;font:inherit;font-size:11px;background:#fff;color:#5a3a00;border-radius:5px;padding:0 5px}
+.entb.near{transform:translateX(-50%) scale(1.1);animation:entPulse 1.4s ease-in-out infinite}
+@media (hover:hover){.entb.near kbd{display:inline-block}}
+.entb:active{transform:translateX(-50%) translateY(3px)}
+@keyframes entPulse{50%{box-shadow:0 4px 0 rgba(0,0,0,.35),0 0 0 8px rgba(255,197,51,.35)}}

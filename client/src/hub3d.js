@@ -73,6 +73,7 @@ export function buildHub(context) {
   buildFireworks(scene);
   buildMarker(scene);
   buildSeatPrompt(scene);
+  buildEnterButtons(scene);
   addAvatar("avo", ctx.nick + " (bạn)", 7, true);
   setShadows(q >= 1);
 
@@ -731,9 +732,37 @@ function buildSeatPrompt(scene) {
   btn.addEventListener("click", e => { e.stopPropagation(); promptAction(); });
   G.prompt = { ring, anchor, el, btn, seat: -1, mode: "" };
 }
-/** Bấm nút gợi ý (hoặc phím E): ngồi vào ghế đang được gợi ý, hoặc đứng dậy nếu đang ngồi. */
+/* ---------- Nút "Vào phòng chờ" trước thềm mỗi gian ---------- */
+const NEAR_BOOTH = 300; // px quanh chỗ đứng trước gian: nút to lên, phím E để vào
+function buildEnterButtons(scene) {
+  G.enter = BOOTHS.map(b => {
+    const sp = SPOTS[b.id], r = sp.r * DEG, d = PAVILION.hd + 110;
+    const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 0.05, wz(sp.y + Math.cos(r) * d)); // trên thảm, nút treo xuống dưới điểm này scene.add(anchor);
+    const solo = b.id === "g3";
+    const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (solo ? " · chơi một mình" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
+    const btn = el.querySelector("button");
+    btn.addEventListener("click", e => { e.stopPropagation(); goTo(b.id); });
+    btn.addEventListener("pointerdown", e => e.stopPropagation());
+    return { id: b.id, el, btn, small: btn.querySelector("small"), stand: standPoint(b.id), near: false };
+  });
+  G.nearBooth = null;
+}
+/** Số người đang chờ (main.js lấy từ /api/match) hiện dưới nút vào gian. */
+export function setBoothInfo(id, text) { const e = G && G.enter && G.enter.find(x => x.id === id); if (e) e.small.textContent = text; }
+function updateEnterButtons() {
+  if (!G.enter) return;
+  let nearest = null;
+  for (const e of G.enter) {
+    const near = !target && !zoomCb && Math.hypot(e.stand.x - me.x, e.stand.y - me.y) < NEAR_BOOTH;
+    if (near) nearest = e.id;
+    if (near !== e.near) { e.near = near; e.btn.classList.toggle("near", near); }
+  }
+  G.nearBooth = nearest;
+}
+/** Bấm nút gợi ý (hoặc phím E): vào gian đang đứng trước; ngồi vào ghế đang được gợi ý, hoặc đứng dậy nếu đang ngồi. */
 function promptAction() {
   if (!G || !G.prompt) return;
+  if (G.nearBooth && mySeat < 0) return goTo(G.nearBooth);
   if (mySeat >= 0) return standUp();
   if (G.prompt.seat >= 0) sitAt(G.prompt.seat);
 }
@@ -1045,6 +1074,7 @@ function loop(ts) {
 
   animateProps(dt);
   updateSeatPrompt();
+  updateEnterButtons();
   buildPending();
   updateBlobs();
   if (G.marker.t > 0) { G.marker.t = Math.max(0, G.marker.t - dt * 1.6); G.marker.m.material.opacity = G.marker.t; const s = 1 + (1 - G.marker.t) * 0.8; G.marker.m.scale.set(s, s, s); }

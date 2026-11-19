@@ -62,7 +62,7 @@ function enterFair() {
   chat.initChat({ khu: S.khu, send, nick: () => S.me.nick, get myId() { return S.myId; }, onPeerSay: hub.peerSay, onSelfSay: hub.selfSay, onHide: hub.hidePeer });
   if (!$("conn")) { const c = document.createElement("div"); c.id = "conn"; c.className = "conn"; $("viewport").appendChild(c); }
   S.conn = connectKhu(S.khu, onRealtime, ok => { const c = $("conn"); c.textContent = ok ? "● Trực tuyến" : "● Mất kết nối, đang nối lại…"; c.classList.toggle("off", !ok); });
-  renderHud(); hub.startHub();
+  renderHud(); hub.startHub(); pollMatch();
   const note = hub.fallbackNotice();
   if (note && !$("gfxNote")) {
     const n = document.createElement("div"); n.id = "gfxNote"; n.className = "gfxnote";
@@ -97,6 +97,22 @@ function renderHud() {
   BOOTHS.forEach(b => { const v = S.me.bests[b.id]; const el = $("bb_" + b.id); if (el) el.textContent = v ? "Kỷ lục: " + fmt(v) : "Chưa chơi"; });
   const bd = $("bdTop"); if (bd) bd.textContent = S.me.rank ? "Bạn đang hạng #" + S.me.rank : "Chơi để lên bảng";
   renderWho();
+}
+
+/* ---------- Số người đang chờ, hiện dưới nút "Vào phòng chờ" trước mỗi gian ---------- */
+let matchPoll = 0;
+function pollMatch() {
+  if (matchPoll) return;
+  const tick = () => {
+    if (!$("fair").classList.contains("on") || document.hidden) return;
+    api("/api/match").then(s => {
+      for (const id of ["g1", "g2"]) {
+        const w = s[id];
+        hub.setBoothInfo(id, w.startIn != null ? "👥 " + w.n + " người · sắp bắt đầu!" : w.n ? "👥 " + w.n + "/" + s.min + " người đang chờ" : "Chưa có ai chờ · cần " + s.min + " người");
+      }
+    }).catch(() => {});
+  };
+  tick(); matchPoll = setInterval(tick, 5000);
 }
 
 /* ---------- Gian hàng ---------- */
