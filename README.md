@@ -88,7 +88,7 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 ## Khu hội chợ
 
 - Cổng chào ở phía nam. Ba gian ở ba phía còn lại, mặt quay vào giữa: Gian 1 phía tây, Gian 2 phía bắc, Gian 3 phía đông. Bảng vàng ở góc tây nam, Gian 4 và 5 (sắp mở) ở hai góc phía bắc.
-- Giữa là sân trống để trò chuyện, có **40 chỗ ngồi**: 8 ghế băng (mỗi ghế 3 chỗ) quay vào giữa và 4 bàn tròn (mỗi bàn 4 ghế đẩu). Chạm vào ghế, hoặc bấm nút **🪑 Ngồi** để đi tới ghế trống gần nhất; đi tiếp thì tự đứng dậy. Người khác trong khu thấy mình ngồi; mỗi ghế chỉ một người.
+- Giữa là sân trống để trò chuyện, có **40 chỗ ngồi**: 8 ghế băng (mỗi ghế 3 chỗ) quay vào giữa và 4 bàn tròn (mỗi bàn 4 ghế đẩu). Đi lại gần một ghế trống thì chỗ ngồi sáng viền vàng và hiện nút **🪑 Ngồi** ngay trên ghế (trên máy tính nhấn phím **E**); bấm là nhân vật ngồi vào đúng chỗ đó. Khi đang ngồi, trên đầu hiện nút **🚶 Đứng dậy** (hoặc nhấn E). Cũng có thể chạm thẳng vào ghế, hoặc bấm nút **🪑 Ngồi** ở dưới để đi tới ghế trống gần nhất; đi tiếp thì tự đứng dậy. Người khác trong khu thấy mình ngồi; mỗi ghế chỉ một người.
 - Bố cục nằm trong `shared/world.js`, dùng chung cho máy chủ và giao diện.
 
 ## Cơ chế chống gian lận (quan trọng khi treo thưởng)

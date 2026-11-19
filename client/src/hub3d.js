@@ -71,6 +71,7 @@ export function buildHub(context) {
   buildBoard(scene);
   buildFireworks(scene);
   buildMarker(scene);
+  buildSeatPrompt(scene);
   addAvatar("avo", ctx.nick + " (bạn)", 7, true);
   setShadows(q >= 1);
 
@@ -84,7 +85,8 @@ export function buildHub(context) {
   $("emo").querySelectorAll("button").forEach(btn => btn.onclick = () => { const i = +btn.dataset.e; bubble("avo", EMOTES[i][0]); hop("avo"); beep("coin"); ctx.send({ t: "emote", e: i }); ctx.onEmote && ctx.onEmote(i); });
 
   G.ro = new ResizeObserver(resize); G.ro.observe(vp); resize();
-  window.__hub3d = () => G && { calls: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, q: G.q }; // hỗ trợ kiểm thử, đo hiệu năng
+  window.__hub3d = () => G && { calls: G.renderer.info.render.calls, tris: G.renderer.info.render.triangles, q: G.q, // hỗ trợ kiểm thử, đo hiệu năng
+    me: [Math.round(me.x), Math.round(me.y)], cam: G.camera.position.toArray().map(v => +v.toFixed(2)), gate: (G.occ.find(o => o.id === "gate") || {}).op };
   bindInput();
   cam.dist = CAM_INTRO.dist; cam.pitch = CAM_INTRO.pitch; cam.x = me.x; cam.y = me.y;
 }
@@ -320,7 +322,7 @@ function buildGate(scene) {
   }
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(g);
-  G.occ.push({ id: "gate", x: GATE.x, y: GATE.y, g, op: 1 });
+  G.occ.push({ id: "gate", x: GATE.x, y: GATE.y, g, op: 1, near: 5 }); // cổng rộng: mờ hẳn khi máy quay còn cách xa hơn
 }
 
 /* ---------- Gian hàng ---------- */
@@ -498,11 +500,12 @@ function buildSeating(scene, kit) {
     const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.12, 0.55, 8), dark); leg.position.y = 0.28; tb.add(leg);
     const tea = emojiSprite("🍵", 0.28); tea.position.y = 0.76; tb.add(tea); // ấm trà trên bàn
     tb.position.set(wx(t.x), 0, wz(t.y));
-    tb.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); scene.add(tb);
     // đèn lồng nhỏ treo giữa bàn
     const lan = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 8), new THREE.MeshLambertMaterial({ color: 0xffb703, emissive: 0xff7b00, emissiveIntensity: 0.7 }));
-    lan.position.set(wx(t.x), 1.9, wz(t.y)); scene.add(lan);
-    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.3, 5), dark); pole.position.set(wx(t.x), 1.3, wz(t.y)); scene.add(pole);
+    lan.position.y = 1.9; tb.add(lan);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.3, 5), new THREE.MeshLambertMaterial({ color: 0x6b4423 })); pole.position.y = 1.3; tb.add(pole);
+    tb.traverse(m => { if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; } }); scene.add(tb);
+    G.occ.push({ id: t.id, x: t.x, y: t.y, g: tb, op: 1 }); // mờ đi khi che máy quay
     for (const si of t.seats) {
       const se = SEATS[si];
       let st;
@@ -617,6 +620,45 @@ function updateFireworks(dt) {
 }
 
 /* ---------- Vòng đánh dấu điểm chạm ---------- */
+/* ---------- Nút "Ngồi" hiện khi lại gần ghế trống ---------- */
+const NEAR_SEAT = 130; // px
+function buildSeatPrompt(scene) {
+  const ring = new THREE.Mesh(new THREE.RingGeometry(0.2, 0.3, 32), new THREE.MeshBasicMaterial({ color: 0xffc533, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+  ring.rotation.x = -Math.PI / 2; ring.visible = false; ring.renderOrder = 5; scene.add(ring);
+  const anchor = new THREE.Object3D(); scene.add(anchor);
+  const el = addLabel("sitPrompt", '<button class="sitp" type="button"></button>', anchor, new THREE.Vector3(0, 0, 0), "sp");
+  el.style.display = "none";
+  const btn = el.querySelector("button");
+  btn.addEventListener("click", e => { e.stopPropagation(); promptAction(); });
+  G.prompt = { ring, anchor, el, btn, seat: -1, mode: "" };
+}
+/** Bấm nút gợi ý (hoặc phím E): ngồi vào ghế đang được gợi ý, hoặc đứng dậy nếu đang ngồi. */
+function promptAction() {
+  if (!G || !G.prompt) return;
+  if (mySeat >= 0) return standUp();
+  if (G.prompt.seat >= 0) sitAt(G.prompt.seat);
+}
+/** Mỗi khung hình: tìm ghế trống gần nhất trong tầm với để gợi ý. */
+function updateSeatPrompt() {
+  const P = G.prompt; if (!P) return;
+  let seat = -1, mode = "";
+  if (mySeat >= 0) mode = "stand";
+  else if (!target) {
+    let bd = NEAR_SEAT;
+    SEATS.forEach((se, i) => { if (!freeSeat(i)) return; const d = Math.hypot(se.x - me.x, se.y - me.y); if (d < bd) { bd = d; seat = i; } });
+    if (seat >= 0) mode = "sit";
+  }
+  if (mode !== P.mode || seat !== P.seat) {
+    P.mode = mode; P.seat = seat;
+    P.el.style.display = mode ? "" : "none";
+    P.btn.innerHTML = mode === "stand" ? "🚶 Đứng dậy" : "🪑 Ngồi" + (matchMedia("(hover: hover)").matches ? " <kbd>E</kbd>" : "");
+  }
+  if (mode === "sit") { const se = SEATS[seat]; P.anchor.position.set(wx(se.x), se.h + 0.75, wz(se.y)); P.ring.position.set(wx(se.x), se.h + 0.02, wz(se.y)); }
+  else if (mode === "stand") P.anchor.position.set(wx(me.x), 1.85, wz(me.y));
+  P.ring.visible = mode === "sit";
+  if (P.ring.visible) { const k = 1 + Math.sin(G.t * 5) * 0.12; P.ring.scale.set(k, k, k); }
+}
+
 function buildMarker(scene) {
   const m = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
   m.rotation.x = -Math.PI / 2; m.position.y = 0.03; scene.add(m); G.marker = { m, t: 0 };
@@ -713,8 +755,11 @@ function sitAt(i) {
 /** Đứng dậy (khi đi tiếp, vào gian hàng, bấm nút). */
 function standUp() {
   if (mySeat < 0) return;
+  const se = SEATS[mySeat];
   if (seatOcc.get(mySeat) === "me") seatOcc.delete(mySeat);
   mySeat = -1; ctx.send({ t: "sit", s: -1 }); updateSitBtn();
+  // bước ra phía trước ghế để không đứng lẫn trong ghế
+  if (se) { me.x = se.x + Math.sin(se.face) * 55; me.y = se.y + Math.cos(se.face) * 55; blockPush(me); }
 }
 function updateSitBtn() { const b = $("sitBtn"); if (b) b.innerHTML = mySeat >= 0 ? "<i>🚶</i>Đứng dậy" : "<i>🪑</i>Ngồi"; }
 function clearOcc(id) { for (const [k, v] of seatOcc) if (v === id) seatOcc.delete(k); }
@@ -781,7 +826,11 @@ function bindInput() {
     walkTo(h.x, h.y, null);
   });
   window.addEventListener("pointercancel", () => { d = null; });
-  document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return; keys[e.key.toLowerCase()] = true; });
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT") return;
+    if ((e.key === "e" || e.key === "E") && !e.repeat && $("fair").classList.contains("on")) { promptAction(); return; }
+    keys[e.key.toLowerCase()] = true;
+  });
   document.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
   window.addEventListener("blur", () => { keys = {}; });
 }
@@ -855,12 +904,13 @@ function loop(ts) {
   const bx = Math.sin(Yc), by = Math.cos(Yc);
   G.occ.forEach(o => {
     const vx = o.x - me.x, vy = o.y - me.y, t = vx * bx + vy * by, perp = Math.abs(vx * by - vy * bx);
-    const near = Math.hypot(wx(o.x) - G.camera.position.x, wz(o.y) - G.camera.position.z) < 3;
-    const want = near || (t > 20 && t < 620 && perp < 150 && cam.dist > CAM_BOOTH.dist + 1) ? 0.3 : 1;
-    if (Math.abs(o.op - want) > 0.01) { o.op += (want - o.op) * Math.min(1, dt * 8); if (Math.abs(o.op - want) < 0.02) o.op = want; setOpacity(o, o.op); }
+    const near = Math.hypot(wx(o.x) - G.camera.position.x, wz(o.y) - G.camera.position.z) < (o.near || 3);
+    const want = near ? 0.15 : (t > 20 && t < 760 && perp < 210 && cam.dist > CAM_BOOTH.dist + 1) ? 0.3 : 1;
+    if (Math.abs(o.op - want) > 0.01) { o.op += (want - o.op) * Math.min(1, dt * 14); if (Math.abs(o.op - want) < 0.02) o.op = want; setOpacity(o, o.op); }
   });
 
   animateProps(dt);
+  updateSeatPrompt();
   if (G.marker.t > 0) { G.marker.t = Math.max(0, G.marker.t - dt * 1.6); G.marker.m.material.opacity = G.marker.t; const s = 1 + (1 - G.marker.t) * 0.8; G.marker.m.scale.set(s, s, s); }
   if (Math.random() < dt * .5) firework();
   updateFireworks(dt);
@@ -924,7 +974,9 @@ function setOpacity(o, op) {
     if (!m.material) return;
     (Array.isArray(m.material) ? m.material : [m.material]).forEach(mt => {
       if (mt.userData.baseT === undefined) mt.userData.baseT = mt.transparent;
-      mt.transparent = op < 1 || mt.userData.baseT; mt.opacity = op; mt.depthWrite = op >= 1;
+      const tr = op < 1 || mt.userData.baseT;
+      if (mt.transparent !== tr) { mt.transparent = tr; mt.needsUpdate = true; } // đổi đặc/trong suốt phải biên dịch lại shader
+      mt.opacity = op; mt.depthWrite = op >= 1;
     });
   });
 }
