@@ -327,7 +327,7 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
     assert.ok(b.inbox.find(x => x.t === "msit" && x.n === an && x.s === 0), "người khác thấy A ngồi ghế 0");
     b.send({ t: "msit", s: 0 }); await wait(400);
     assert.ok(b.inbox.find(x => x.t === "msitno" && x.s === 0), "không ngồi chồng lên người khác");
-    a.send({ t: "mpos", x: CAFE_SEATS[0].x + 200, y: CAFE_SEATS[0].y }); await wait(150);
+    a.send({ t: "mpos", x: CAFE_SEATS[0].x - 200, y: CAFE_SEATS[0].y }); await wait(150);
     assert.ok(b.inbox.find(x => x.t === "msit" && x.n === an && x.s === -1), "đi khỏi ghế thì đứng dậy");
     b.send({ t: "msit", s: 0 }); await wait(150);
     assert.ok(a.inbox.find(x => x.t === "msit" && x.s === 0 && x.n !== an), "ghế trống thì người khác ngồi được");

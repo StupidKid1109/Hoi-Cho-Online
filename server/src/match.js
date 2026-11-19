@@ -11,7 +11,7 @@
 //                  mstart · mround (mở một câu) · mreveal (đáp án câu đó)
 //                  mguess / mhint (trả lời riêng) · msolved (có người đoán đúng) · mend (kết quả) · merr
 import { shuffle, strip, tilesFor } from "./games.js";
-import { BOOTH_ROOM, CAFE_MAX, CAFE_SEATS } from "../../shared/world.js";
+import { CAFE_MAX, CAFE_SEATS, roomOf, inPoly } from "../../shared/world.js";
 import { blockReason, cleanText, normalize, CHAT_GAP_MS } from "../../shared/chatFilter.js";
 import { encodeFrame } from "./ws.js";
 
@@ -58,7 +58,9 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   /** Đưa người chơi vào không gian của phòng chờ L: gán số thứ tự, chỗ đứng gần cửa, báo cho mọi người. */
   function enterSpace(L, p) {
     p.n = L.nextN++;
-    p.x = BOOTH_ROOM.door.x + (Math.random() - 0.5) * 300; p.y = BOOTH_ROOM.door.y - Math.random() * 120;
+    const R = roomOf(L.game);
+    if (R.walk) { p.x = R.door.x - Math.random() * 200; p.y = R.door.y + 200 + Math.random() * 120; } // quán: vào từ cửa tường sau, đứng lùi vào trong
+    else { p.x = R.door.x + (Math.random() - 0.5) * 300; p.y = R.door.y - Math.random() * 120; }
     send(p.c, { t: "mspace", g: L.game, you: pub(p), peers: [...L.players.values()].filter(q => q !== p).map(pub) });
     const s = JSON.stringify({ t: "mpjoin", g: L.game, peer: pub(p) });
     for (const q of L.players.values()) if (q !== p && q.c.open) q.c.conn.send(s);
@@ -76,10 +78,12 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   posTick.unref();
   function moveInSpace(c, m) {
     const L = where.get(c.pid); if (!L || !L.lobby) return;
-    const p = L.players.get(c.pid), x = Number(m.x), y = Number(m.y), M = BOOTH_ROOM.margin;
+    const p = L.players.get(c.pid), x = Number(m.x), y = Number(m.y), R = roomOf(L.game), M = R.margin;
     if (!p || !Number.isFinite(x) || !Number.isFinite(y)) return;
     const now = Date.now(); if (now - (p.lastPos || 0) < 60) return; p.lastPos = now;
-    p.x = Math.max(M, Math.min(BOOTH_ROOM.w - M, x)); p.y = Math.max(M, Math.min(BOOTH_ROOM.h - M, y));
+    const nx = Math.max(M, Math.min(R.w - M, x)), ny = Math.max(M, Math.min(R.h - M, y));
+    if (R.walk && !inPoly(nx, ny, R.walk) && !CAFE_SEATS.some(se => Math.hypot(se.x - nx, se.y - ny) < 45)) return; // ngoài sàn quán (sau quầy, ngoài kính)
+    p.x = nx; p.y = ny;
     if (p.seat >= 0) { const se = CAFE_SEATS[p.seat]; if (Math.hypot(se.x - p.x, se.y - p.y) > 40 && freeSeat(L, p)) toAll(L, { t: "msit", g: L.game, n: p.n, s: -1 }); } // đi khỏi ghế
     L.dirty.add(p);
   }

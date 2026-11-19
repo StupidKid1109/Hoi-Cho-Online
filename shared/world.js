@@ -82,10 +82,46 @@ export const BLOCK = [
 export const BOOTH_ROOM = { w: 1200, h: 900, door: { x: 600, y: 820 }, margin: 70 };
 // Quán cà phê: tối đa bao nhiêu người một phòng (đông hơn thì mở thêm phòng)
 export const CAFE_MAX = 50;
-// Bàn ghế trong quán (px theo BOOTH_ROOM): 4 bàn tròn mỗi bàn 4 ghế đẩu, 3 ghế cao trước quầy.
-// face: hướng mặt khi ngồi (quy ước atan2(dx, dy) như SEATS ở sảnh), h: độ cao mặt ghế (đơn vị 3D).
-export const CAFE_TABLES = [{ x: 760, y: 390 }, { x: 960, y: 560 }, { x: 540, y: 620 }, { x: 260, y: 500 }];
-export const CAFE_BAR = { x: 155, y: 120, w: 260 }; // quầy dịch sang trái để không che màn hình lớn
+// Quán cà phê dùng mô hình "Low Poly Restaurant Interior Scene" (MarkoJantti, CC BY 4.0, client/public/models/cafe).
+// Phòng riêng rộng hơn phòng chờ: toạ độ mô hình (mét) đổi sang px của phòng bằng cpx(); phóng mô hình 1,25 lần.
+const CS = 1.25, COX = -8.6, COZ = -1.2;
+const cpx = (x, z) => ({ x: Math.round((x - COX) * CS * 100), y: Math.round((z - COZ) * CS * 100) });
+export const CAFE_ROOM = {
+  w: 1240, h: 2150, margin: 40,
+  door: cpx(0.0, 0.1),                                   // cửa ra vào ở tường sau, cạnh quầy bar
+  model: { url: "models/cafe/quan.gltf", scale: CS, ox: COX, oz: COZ, credit: "Mô hình quán: “Low Poly Restaurant Interior Scene” của MarkoJantti (Sketchfab), giấy phép CC BY 4.0" },
+  // vùng đi lại được (đa giác theo sàn trong nhà, chừa quầy bar và mặt kính bo cong)
+  walk: [[-1.7, -0.6], [0.75, -0.6], [0.75, 13.3], [0.2, 13.1], [-0.5, 12.75], [-1.2, 12.0], [-2.2, 11.0], [-3.2, 10.0], [-4.2, 9.0], [-4.7, 8.0], [-5.2, 7.0], [-5.7, 6.0], [-6.2, 5.0], [-6.2, 3.5], [-6.45, 3.0], [-6.45, 1.85], [-1.7, 1.85]].map(([x, z]) => cpx(x, z)),
+  // hai cột trắng giữa quán (không đi xuyên, máy quay không lọt vào)
+  posts: [[-2.25, 1.75], [-2.25, 6.4]].map(([x, z]) => ({ ...cpx(x, z), r: 45 })),
+  // bàn trong quán (không đi xuyên qua): tâm và bán kính px
+  tables: [[-0.013, 3.818], [-2.08, 5.12], [-1.798, 7.63], [-3.269, 3.452], [-5.848, 3.929], [-3.955, 5.619], [-4.18, 8.017], [0.316, 5.95], [0.316, 6.33], [0.317, 8.52], [0.317, 8.9], [-1.744, 10.767]].map(([x, z]) => ({ ...cpx(x, z), r: 50 })),
+  // màn chiếu dán trên tường gỗ dài (x = 1,11 m), quay vào trong phòng
+  screen: { ...cpx(1.07, 7.4), rot: -Math.PI / 2, w: 5.6, h: 3.15, cy: 2.35 }
+};
+/** Điểm (x, y) px có nằm trong đa giác không. */
+export function inPoly(x, y, poly) {
+  let ins = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const a = poly[i], b = poly[j];
+    if ((a.y > y) !== (b.y > y) && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) ins = !ins;
+  }
+  return ins;
+}
+// 39 chỗ ngồi đúng vị trí ghế trong mô hình (đo từ ảnh chụp từ trên xuống): ghế quanh 10 bàn và 3 ghế cao ở quầy.
+// face: hướng mặt khi ngồi (quay vào bàn / quầy, quy ước atan2(dx, dy)), h: độ cao mặt ghế (đơn vị 3D, đã phóng).
 export const CAFE_SEATS = [];
-for (const t of CAFE_TABLES) for (const [dx, dy] of [[-78, 0], [78, 0], [0, -78], [0, 78]]) CAFE_SEATS.push({ x: t.x + dx, y: t.y + dy, face: Math.atan2(-dx, -dy), h: 0.45, table: t });
-for (const dx of [-80, 0, 80]) CAFE_SEATS.push({ x: CAFE_BAR.x + dx, y: CAFE_BAR.y + 85, face: Math.PI, h: 0.62, bar: true });
+{
+  const add = (x, z, tx, tz, h = 0.49) => { const p = cpx(x, z), t = cpx(tx, tz); CAFE_SEATS.push({ x: p.x, y: p.y, face: Math.atan2(t.x - p.x, t.y - p.y), h: h * CS }); };
+  for (const [tx, tz] of [[-0.013, 3.818], [-2.08, 5.12], [-1.798, 7.63]]) for (const [dx, dz] of [[0.62, 0], [-0.62, 0], [0, 0.62], [0, -0.62]]) add(tx + dx, tz + dz, tx, tz);
+  add(-3.82, 3.45, -3.269, 3.452); add(-2.72, 3.45, -3.269, 3.452);
+  for (const [x, z] of [[-6.097, 3.064], [-5.358, 3.796], [-5.845, 4.755]]) add(x, z, -5.848, 3.929);
+  for (const [x, z] of [[-3.716, 4.996], [-4.465, 5.331], [-3.404, 5.925], [-4.17, 6.193]]) add(x, z, -3.955, 5.619);
+  for (const [x, z] of [[-4.471, 7.638], [-3.642, 7.645], [-3.855, 8.478]]) add(x, z, -4.18, 8.017);
+  for (const [x, z] of [[0.044, 5.698], [0.044, 6.613], [0.73, 5.63], [0.73, 6.61]]) add(x, z, 0.316, 6.14);
+  for (const [x, z] of [[0.044, 8.268], [0.044, 9.182], [0.73, 8.2], [0.73, 9.18]]) add(x, z, 0.317, 8.711);
+  for (const [x, z] of [[-1.83, 10.107], [-2.255, 10.673], [-1.105, 10.772], [-1.584, 11.291]]) add(x, z, -1.744, 10.767);
+  for (const x of [-5.16, -4.16, -3.16]) add(x, 2.16, x, 1.0, 0.73); // ghế cao trước quầy bar
+}
+/** Không gian (kích thước, cửa) của phòng: quán cà phê hoặc phòng chờ các gian. */
+export const roomOf = game => game === "cafe" ? CAFE_ROOM : BOOTH_ROOM;

@@ -9,7 +9,7 @@
 // Trong lúc chờ ở không gian riêng của gian, họ đi lại trong phòng và chào nhau.
 // chơi xong nghỉ vài giây rồi vào phòng mới.
 // Nhấn Ctrl+C (hoặc đóng cửa sổ) để cho tất cả rời khu.
-import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint, BOOTH_ROOM, CAFE_SEATS } from "../../shared/world.js";
+import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint, roomOf, inPoly, CAFE_SEATS } from "../../shared/world.js";
 
 const N = Number(process.argv[2]) || 60, KHU = Number(process.argv[3]) || 1;
 const BASE = (process.argv[4] || "http://localhost:8787").replace(/\/$/, "");
@@ -116,7 +116,7 @@ function onMatch(b, m) {
 /** Đang chờ trong không gian của gian: đi dạo trong phòng, thỉnh thoảng chào. */
 function stepRoom(b, now) {
   const r = b.match.room; if (!r || b.ws.readyState !== 1) return;
-  const send = o => b.ws.send(JSON.stringify(o)), M = BOOTH_ROOM.margin + 20;
+  const send = o => b.ws.send(JSON.stringify(o)), R = roomOf(b.match.g), M = R.margin + 20;
   if (now > r.emote) { send({ t: "memote", e: Math.floor(Math.random() * 4) }); r.emote = now + rnd(8000, 30000); }
   if (r.chat == null) r.chat = now + rnd(5000, 40000);
   if (now > r.chat) { send({ t: "mchat", text: pick(b.match.g === "cafe" ? CAFE_LINES : ROOM_LINES) }); r.chat = now + rnd(25000, 90000); }
@@ -125,7 +125,7 @@ function stepRoom(b, now) {
   if (r.seated) return; // đang ngồi: ngồi yên tới khi rời quán
   if (now < r.wait) return;
   const dx = r.gx - r.x, dy = r.gy - r.y, d = Math.hypot(dx, dy), stepLen = 260 * STEP_MS / 1000;
-  if (d <= stepLen) { r.x = r.gx; r.y = r.gy; r.gx = rnd(M, BOOTH_ROOM.w - M); r.gy = rnd(M + 120, BOOTH_ROOM.h - M); r.wait = now + rnd(1500, 7000); }
+  if (d <= stepLen) { r.x = r.gx; r.y = r.gy; do { r.gx = rnd(M, R.w - M); r.gy = rnd(M + 120, R.h - M); } while (R.walk && !inPoly(r.gx, r.gy, R.walk)); r.wait = now + rnd(1500, 7000); }
   else { r.x += dx / d * stepLen; r.y += dy / d * stepLen; }
   r.tick = !r.tick; if (r.tick || d <= stepLen) send({ t: "mpos", x: Math.round(r.x), y: Math.round(r.y) });
 }

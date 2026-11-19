@@ -1,15 +1,20 @@
 // Không gian riêng bên trong mỗi gian hàng (Three.js): phòng theo chủ đề của gian, màn hình lớn báo số người,
-// người chơi cùng phòng chờ đi lại, chào nhau. Toạ độ theo px của BOOTH_ROOM (shared/world.js), 100 px = 1 đơn vị.
+// người chơi cùng phòng chờ đi lại, chào nhau. Toạ độ theo px của phòng (BOOTH_ROOM, quán: CAFE_ROOM trong shared/world.js), 100 px = 1 đơn vị.
 import * as THREE from "three";
 import { CSS3DRenderer, CSS3DObject } from "three/examples/jsm/renderers/CSS3DRenderer.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { esc } from "./ui.js";
 import { initialQuality } from "./gfx/webgl.js";
 import { createRenderer, setMaxAniso, canvasTex, emojiSprite, glowTex, blobTex, rrect, fitText, disposeTree, FONT } from "./gfx/kit.js";
 import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
-import { BOOTH_ROOM, CAFE_TABLES, CAFE_SEATS, CAFE_BAR } from "../../shared/world.js";
+import { CAFE_SEATS, roomOf, inPoly } from "../../shared/world.js";
 
-const U = 100, W = BOOTH_ROOM.w / U, H = BOOTH_ROOM.h / U, M = BOOTH_ROOM.margin;
-const wx = x => (x - BOOTH_ROOM.w / 2) / U, wz = y => (y - BOOTH_ROOM.h / 2) / U;
+const U = 100;
+/** Khoảng cách từ điểm (x, y) tới đoạn thẳng a–b (px). */
+function segDist(x, y, a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy, t = l ? Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / l)) : 0;
+  return Math.hypot(x - a.x - t * dx, y - a.y - t * dy);
+}
 const SPEED = 420; // px/giây
 const NAME_MAX = 10;
 const EMO = ["👋", "🙏", "👏", "🎉"];
@@ -29,6 +34,13 @@ const THEMES = {
  */
 export async function openRoom({ container, game, title, nick, solo, send }) {
   const T = THEMES[game] || THEMES.g1;
+  // kích thước phòng: quán cà phê rộng hơn (mô hình nội thất riêng), các gian dùng phòng chờ chung
+  const R = roomOf(game), W = R.w / U, H = R.h / U, M = R.margin, CAFE = !!R.model;
+  const wx = x => (x - R.w / 2) / U, wz = y => (y - R.h / 2) / U;
+  const K = CAFE ? R.model.scale : 1; // quán: mô hình nội thất phóng to nên nhân vật, tầm mắt, tốc độ cũng phóng theo cho cân
+  const TABLES = R.tables || [], POSTS = R.posts || [];
+  /** Điểm (x, y) px có đứng được không: trong phòng; quán thì trong sàn đi lại hoặc ngay cạnh một ghế. */
+  const walkable = (x, y) => x >= M && x <= R.w - M && y >= M && y <= R.h - M && (!R.walk || inPoly(x, y, R.walk) || CAFE_SEATS.some(se => Math.hypot(se.x - x, se.y - y) < 40)) && !TABLES.some(tb => Math.hypot(tb.x - x, tb.y - y) < tb.r) && !POSTS.some(c => Math.hypot(c.x - x, c.y - y) < c.r);
   const q = initialQuality(), renderer = createRenderer(Math.min(q, 1), { alpha: game === "cafe" }); // phòng nhỏ: không cần mức cao; quán: nền trong suốt được để khoét chỗ video
   renderer.shadowMap.enabled = false; setMaxAniso(renderer);
   container.appendChild(renderer.domElement);
@@ -40,6 +52,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   const sun = new THREE.DirectionalLight(0xfff1dc, 1.5); sun.position.set(-4, 9, 6); scene.add(sun);
 
   /* ---------- Phòng ---------- */
+  const anim = [], notes = [], seatPick = [];
+  const wallMat = new THREE.MeshLambertMaterial({ color: T.wall }), trimMat = new THREE.MeshLambertMaterial({ color: T.trim });
+  if (CAFE) buildCafeModel(); else {
   const floorTex = canvasTex(256, 256, (g, w, h) => {
     if (game === "g3") { // mặt đường có vạch
       g.fillStyle = T.floorA; g.fillRect(0, 0, w, h);
@@ -52,7 +67,6 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }, { repeat: game === "g3" ? [3, 3] : [6, 4.5] });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshLambertMaterial({ map: floorTex }));
   floor.rotation.x = -Math.PI / 2; scene.add(floor);
-  const wallMat = new THREE.MeshLambertMaterial({ color: T.wall }), trimMat = new THREE.MeshLambertMaterial({ color: T.trim });
   const back = new THREE.Mesh(new THREE.BoxGeometry(W + 0.4, 5, 0.2), wallMat); back.position.set(0, 2.5, -H / 2 - 0.1); scene.add(back);
   for (const sx of [-1, 1]) {
     const side = new THREE.Mesh(new THREE.BoxGeometry(0.2, 5, H), wallMat); side.position.set(sx * (W / 2 + 0.1), 2.5, 0); scene.add(side);
@@ -60,18 +74,24 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
   const btrim = new THREE.Mesh(new THREE.BoxGeometry(W + 0.5, 0.25, 0.24), trimMat); btrim.position.set(0, 4.9, -H / 2 - 0.1); scene.add(btrim);
   // thảm lối vào ở cửa
-  const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.1), new THREE.MeshLambertMaterial({ color: T.trim })); mat.rotation.x = -Math.PI / 2; mat.position.set(wx(BOOTH_ROOM.door.x), 0.03, wz(BOOTH_ROOM.door.y) + 0.3); scene.add(mat);
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.1), new THREE.MeshLambertMaterial({ color: T.trim })); mat.rotation.x = -Math.PI / 2; mat.position.set(wx(R.door.x), 0.03, wz(R.door.y) + 0.3); scene.add(mat);
+  }
 
   // màn hình lớn trên tường sau: tên gian, số người, đếm ngược
   // Quán cà phê: màn hình lớn tỉ lệ 16:9 (video YouTube lấp đầy); các gian khác: màn hình bảng tin dài
-  const BIG = game === "cafe", SW = BIG ? 6.4 : 6.4, SH = BIG ? 3.6 : 2.4, SY = BIG ? 2.7 : 1.95;
+  // Màn hình nằm trong nhóm `sg` (gốc ở chân tường, mặt quay theo +z của nhóm): gian thường ở tường sau, quán ở tường gỗ dài
+  const BIG = CAFE, SW = CAFE ? R.screen.w : 6.4, SH = CAFE ? R.screen.h : 2.4, SY = CAFE ? R.screen.cy : 1.95;
+  const sg = new THREE.Group(); scene.add(sg);
+  if (CAFE) { sg.position.set(wx(R.screen.x), 0, wz(R.screen.y)); sg.rotation.y = R.screen.rot; } else sg.position.set(0, 0, -H / 2);
+  sg.updateMatrixWorld(true);
+  const sN = new THREE.Vector3(0, 0, 1).applyQuaternion(sg.quaternion), sC = sg.localToWorld(new THREE.Vector3(0, SY, 0)); // pháp tuyến, tâm màn hình
   const scr = document.createElement("canvas"); scr.width = 1024; scr.height = BIG ? 576 : 384;
   const scrTex = new THREE.CanvasTexture(scr); scrTex.colorSpace = THREE.SRGBColorSpace;
   const screen = new THREE.Mesh(new THREE.PlaneGeometry(SW, SH), new THREE.MeshBasicMaterial({ map: scrTex, toneMapped: false }));
-  screen.position.set(0, SY, -H / 2 + 0.1); scene.add(screen);
+  screen.position.set(0, SY, 0.1); sg.add(screen);
   // "Lỗ" trong suốt đúng chỗ màn hình: video (HTML) nằm sau khung vẽ 3D, lộ ra qua lỗ này; người, đồ vật đứng trước vẫn che được video
   const scrMat = screen.material, holeMat = new THREE.MeshBasicMaterial({ color: 0x000000, opacity: 0, blending: THREE.NoBlending }); // tách hẳn khỏi tường để không nhấp nháy vệt đen khi xoay
-  const frame = new THREE.Mesh(new THREE.BoxGeometry(SW + 0.3, SH + 0.3, 0.12), new THREE.MeshLambertMaterial({ color: 0x1d1f24 })); frame.position.set(0, SY, -H / 2 + 0.02); scene.add(frame);
+  const frame = new THREE.Mesh(new THREE.BoxGeometry(SW + 0.3, SH + 0.3, 0.12), new THREE.MeshLambertMaterial({ color: 0x1d1f24 })); frame.position.set(0, SY, 0.02); sg.add(frame);
   function drawScreen(big, line1, line2) {
     const g = scr.getContext("2d"), w = scr.width, h = scr.height;
     const gr = g.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#14182a"); gr.addColorStop(1, "#24294a"); g.fillStyle = gr; g.fillRect(0, 0, w, h);
@@ -95,6 +115,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
   drawScreen(solo ? "SẴN SÀNG" : "…", solo ? "Bấm “Bắt đầu chạy” khi đã sẵn sàng" : "Đang vào phòng chờ", "");
 
+  if (!CAFE) {
   // áp phích hai bên tường
   T.posters.forEach((text, i) => {
     const tex = canvasTex(512, 320, (g, w, h) => {
@@ -112,7 +133,6 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     p.position.set(sx * (W / 2 - 0.01), 1.8, z); p.rotation.y = -sx * Math.PI / 2; scene.add(p);
   });
   // đồ trang trí: emoji lớn trên bục ở các góc, đèn lồng treo
-  const anim = [];
   [[-W / 2 + 1.1, -H / 2 + 1.1], [W / 2 - 1.1, -H / 2 + 1.1], [W / 2 - 1.1, H / 2 - 1.6]].forEach(([x, z], i) => {
     const ped = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.6, 0.5, 20), trimMat); ped.position.set(x, 0.25, z); scene.add(ped);
     const sp = emojiSprite(T.props[i], 1.1); sp.position.set(x, 1.2, z); scene.add(sp); anim.push({ o: sp, y: 1.2, p: i });
@@ -121,37 +141,19 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     for (let i = 0; i < 4; i++) { const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 12), new THREE.MeshLambertMaterial({ color: 0xff7a00 })); cone.position.set(-W / 2 + 0.6, 0.27, -1.5 + i * 0.9); scene.add(cone); }
     for (let i = 0; i < 6; i++) { const z = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), new THREE.MeshBasicMaterial({ color: 0xf4f1e8 })); z.rotation.x = -Math.PI / 2; z.position.set(-1.5 + i * 0.6, 0.03, 2.6); scene.add(z); }
   }
-  // quán cà phê: quầy pha chế, bàn ghế, loa hai bên màn hình, nốt nhạc bay khi đang phát nhạc
-  const notes = [], seatPick = [];
-  if (game === "cafe") {
-    const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f1f }), top = new THREE.MeshLambertMaterial({ color: 0xe9d3ad }), dark = new THREE.MeshLambertMaterial({ color: 0x2b2420 });
-    const bx = wx(CAFE_BAR.x), bz = wz(CAFE_BAR.y), bw = CAFE_BAR.w / U;
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(bw, 1.0, 0.7), wood); bar.position.set(bx, 0.5, bz); scene.add(bar);
-    const btop = new THREE.Mesh(new THREE.BoxGeometry(bw + 0.1, 0.08, 0.8), top); btop.position.set(bx, 1.04, bz); scene.add(btop);
-    const mach = emojiSprite("☕", 0.55); mach.position.set(bx - 0.7, 1.4, bz); scene.add(mach);
-    const cake = emojiSprite("🍰", 0.45); cake.position.set(bx + 0.6, 1.33, bz); scene.add(cake);
-    for (const tb of CAFE_TABLES) {
-      const x = wx(tb.x), z = wz(tb.y);
-      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.06, 20), top); t.position.set(x, 0.72, z); scene.add(t);
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, 0.7, 8), dark); leg.position.set(x, 0.35, z); scene.add(leg);
-      const cup = emojiSprite(Math.random() < 0.5 ? "☕" : "🧋", 0.32); cup.position.set(x, 0.92, z); scene.add(cup);
-    }
-    // ghế ngồi được (bấm vào ghế hoặc lại gần rồi bấm "Ngồi")
-    const cushion = new THREE.MeshLambertMaterial({ color: 0xc8553d });
-    CAFE_SEATS.forEach((se, i) => {
-      const g = new THREE.Group(); g.position.set(wx(se.x), 0, wz(se.y));
-      const legM = new THREE.Mesh(new THREE.CylinderGeometry(se.bar ? 0.05 : 0.14, se.bar ? 0.16 : 0.18, se.h - 0.06, 10), se.bar ? dark : wood); legM.position.y = (se.h - 0.06) / 2; g.add(legM);
-      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 16), cushion); seat.position.y = se.h - 0.02; g.add(seat);
-      g.traverse(o => { if (o.isMesh) { o.userData.seat = i; seatPick.push(o); } });
-      scene.add(g);
-    });
+  }
+  // quán cà phê: loa hai bên màn hình, nốt nhạc bay khi đang phát nhạc
+  const SPX = SW / 2 + 0.75;
+  if (CAFE) {
+    const dark = new THREE.MeshLambertMaterial({ color: 0x2b2420 });
     for (const sx of [-1, 1]) {
-      const spk = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.45), dark); spk.position.set(sx * 4.65, 2.2, -H / 2 + 0.3); scene.add(spk);
-      for (const [y, r] of [[2.45, 0.17], [2.0, 0.1]]) { const cone = new THREE.Mesh(new THREE.CircleGeometry(r, 16), new THREE.MeshLambertMaterial({ color: 0x777777 })); cone.position.set(sx * 4.65, y, -H / 2 + 0.53); scene.add(cone); }
-      for (let i = 0; i < 3; i++) { const n = emojiSprite(i % 2 ? "🎵" : "🎶", 0.4); n.position.set(sx * 4.65, 2.8, -H / 2 + 0.5); n.visible = false; scene.add(n); notes.push({ o: n, sx, p: i / 3 + (sx > 0 ? 0.15 : 0) }); }
+      const spk = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.45), dark); spk.position.set(sx * SPX, SY - 0.3, 0.25); sg.add(spk);
+      for (const [y, r] of [[SY - 0.05, 0.17], [SY - 0.5, 0.1]]) { const cone = new THREE.Mesh(new THREE.CircleGeometry(r, 16), new THREE.MeshLambertMaterial({ color: 0x777777 })); cone.position.set(sx * SPX, y, 0.48); sg.add(cone); }
+      for (let i = 0; i < 3; i++) { const n = emojiSprite(i % 2 ? "🎵" : "🎶", 0.4); n.visible = false; sg.add(n); notes.push({ o: n, sx, p: i / 3 + (sx > 0 ? 0.15 : 0) }); }
     }
   }
   let musicOn = false;
+  if (!CAFE) {
   // đèn lồng treo dọc hai tường bên (không che màn hình lớn)
   const lanGeo = new THREE.SphereGeometry(0.2, 12, 10), lanMat = game === "cafe" ? new THREE.MeshLambertMaterial({ color: 0xffd58a, emissive: 0xffb347, emissiveIntensity: 0.9 }) : new THREE.MeshLambertMaterial({ color: 0xe01b3c, emissive: 0xff3a1a, emissiveIntensity: 0.6 });
   const lanPos = [];
@@ -162,6 +164,32 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   // nền ngoài cửa (để không thấy khoảng trống khi máy quay lùi ra)
   const outside = new THREE.Mesh(new THREE.PlaneGeometry(60, 40), new THREE.MeshLambertMaterial({ color: new THREE.Color(T.trim).lerp(new THREE.Color(0x2a2230), 0.6) }));
   outside.rotation.x = -Math.PI / 2; outside.position.set(0, -0.02, 10); scene.add(outside);
+  }
+
+  /** Quán cà phê: nội thất là mô hình "Low Poly Restaurant Interior Scene" (MarkoJantti, CC BY 4.0), ghế bấm được để ngồi. */
+  function buildCafeModel() {
+    // sàn tạm (thấy ngay khi mô hình còn đang tải; nạp lỗi thì vẫn đi lại được)
+    const tmp = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshLambertMaterial({ color: 0x9b6a3c })); tmp.rotation.x = -Math.PI / 2; tmp.position.y = -0.01; scene.add(tmp);
+    const md = R.model, url = new URL(md.url, document.baseURI).href;
+    new GLTFLoader().load(url, g => {
+      if (closed) { disposeTree(g.scene); return; }
+      const o = g.scene, mats = new Map();
+      o.traverse(m => {
+        if (!m.isMesh) return;
+        if (m.material && m.material.name === "material") { m.visible = false; return; } // phông nền xanh khổng lồ bao quanh: bỏ
+        const src = m.material;
+        if (!mats.has(src)) mats.set(src, new THREE.MeshLambertMaterial({ map: src.map, color: src.color, transparent: src.transparent, opacity: src.opacity, alphaTest: src.map && src.transparent ? 0.3 : 0, depthWrite: !(src.transparent && !src.map), side: src.side }));
+        m.material = mats.get(src); src.dispose();
+      });
+      o.scale.setScalar(md.scale); o.position.set(-md.ox * md.scale - W / 2, 0, -md.oz * md.scale - H / 2);
+      scene.add(o); scene.remove(tmp); tmp.geometry.dispose();
+    }, undefined, e => console.warn("Không nạp được mô hình quán", e));
+    // đèn ấm trong quán
+    const warm = new THREE.PointLight(0xffc98a, 1.2, 14, 1.2); warm.position.set(0, 3.4, 0); scene.add(warm);
+    // ghế ngồi được: hình trụ ẩn đặt đúng chỗ ghế trong mô hình để bấm chọn
+    const pickGeo = new THREE.CylinderGeometry(0.32, 0.32, 1, 10), pickMat = new THREE.MeshBasicMaterial();
+    CAFE_SEATS.forEach((se, i) => { const c = new THREE.Mesh(pickGeo, pickMat); c.scale.y = se.h + 0.3; c.position.set(wx(se.x), (se.h + 0.3) / 2, wz(se.y)); c.visible = false; c.userData.seat = i; scene.add(c); seatPick.push(c); });
+  }
 
   /* ---------- Nhân vật ---------- */
   const shadowGeo = new THREE.PlaneGeometry(0.9, 0.9); shadowGeo.rotateX(-Math.PI / 2);
@@ -170,7 +198,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   function addPerson(key, name, x, y, mine) {
     if (people.has(key)) removePerson(key);
     const root = new THREE.Group(), m = characterMaterial(), body = new THREE.Mesh(characterGeometry(mine ? 7 : hash(name), mine), m), sh = new THREE.Mesh(shadowGeo, shadowMat);
-    sh.position.y = 0.05; root.add(sh, body); scene.add(root);
+    sh.position.y = 0.05; root.add(sh, body); root.scale.setScalar(K); scene.add(root);
     const el = document.createElement("div"); el.className = "l3 av";
     el.innerHTML = '<div class="avt' + (mine ? " mine" : "") + '"><span class="bub"></span><span class="nm">' + esc(name) + (mine ? " (bạn)" : "") + "</span></div>";
     labels.appendChild(el);
@@ -188,16 +216,16 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     b.classList.add("on"); clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("on"), 5000); a.talk = 5;
   }
 
-  const me = addPerson("me", nick, BOOTH_ROOM.door.x, BOOTH_ROOM.door.y, true);
-  me.face = Math.PI; // quay mặt vào phòng (về phía màn hình lớn)
+  const me = addPerson("me", nick, R.door.x, R.door.y, true);
+  me.face = CAFE ? 0 : Math.PI; // quay mặt vào phòng (gian: về phía màn hình lớn; quán: từ cửa nhìn vào trong)
   let target = null, sentAt = 0, sentX = -1, sentY = -1, mySeat = -1, pendingSeat = -1;
   const keys = {}, joy = { x: 0, y: 0 };
   const seatOcc = new Map(); // ghế -> khoá người ngồi ("me" hoặc n)
 
   /* ---------- Góc nhìn giống sảnh: thứ ba sát sau vai / thứ nhất; kéo để nhìn quanh ---------- */
-  const VIEW = { eye: 0.98, dist: 3.6, side: 0.5, height: 1.6 };
+  const VIEW = { eye: 0.98 * K, dist: 3.6 * (1 + (K - 1) / 2), side: 0.5 * K, height: 1.6 * K };
   let view = (() => { try { return localStorage.getItem("hc_view") === "first" ? "first" : "third"; } catch (e) { return "third"; } })();
-  let yaw = 0, lookPitch = -8, viewBlend = view === "third" ? 1 : 0; // yaw 0: nhìn về tường có màn hình lớn
+  let yaw = CAFE ? 180 : 0, lookPitch = -8, viewBlend = view === "third" ? 1 : 0; // yaw 0: nhìn về tường có màn hình lớn
 
   // nút trên màn hình: đổi góc nhìn, cần điều khiển, Ngồi / Đứng dậy
   const ui = document.createElement("div"); ui.className = "room-ui";
@@ -236,7 +264,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (canSit) { const h = ray.intersectObjects(seatPick, false)[0]; if (h) return sitAt(h.object.userData.seat); }
-    if (ray.ray.intersectPlane(plane, hit)) { standUp(); pendingSeat = -1; target = { x: Math.max(M, Math.min(BOOTH_ROOM.w - M, hit.x * U + BOOTH_ROOM.w / 2)), y: Math.max(M, Math.min(BOOTH_ROOM.h - M, hit.z * U + BOOTH_ROOM.h / 2)) }; }
+    if (ray.ray.intersectPlane(plane, hit)) { standUp(); pendingSeat = -1; target = { x: Math.max(M, Math.min(R.w - M, hit.x * U + R.w / 2)), y: Math.max(M, Math.min(R.h - M, hit.z * U + R.h / 2)) }; }
   };
   const onKey = e => {
     if (!active || e.target.tagName === "INPUT") return;
@@ -261,14 +289,14 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   resize();
 
   /* ---------- Vòng vẽ ---------- */
-  let raf = 0, last = null, t = 0, active = true;
+  let raf = 0, last = null, t = 0, active = true, closed = false;
   const v3 = new THREE.Vector3(), look = new THREE.Vector3();
   let onCinema = null;
   function setCinemaInt(on) { cinema = on; ui.classList.toggle("cine", on); if (onCinema) onCinema(on); }
   function poseSeat(a, seat, dt) {
     const se = seat >= 0 ? CAFE_SEATS[seat] : null;
     a.sitAmt = (a.sitAmt || 0) + ((se ? 1 : 0) - (a.sitAmt || 0)) * Math.min(1, dt * 8);
-    if (se) { a.lastSitH = se.h - 0.36; const dd = ((se.face - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += dd * Math.min(1, dt * 12); }
+    if (se) { a.lastSitH = se.h / K - 0.36; const dd = ((se.face - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += dd * Math.min(1, dt * 12); }
     return (a.lastSitH || 0) * a.sitAmt;
   }
   function loop(ts) {
@@ -279,14 +307,18 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     const ox = me.x, oy = me.y, n = Math.hypot(kx, ky);
     if (n > 0.15) {
       target = null; pendingSeat = -1; standUp(); if (cinema) setCinemaInt(false);
-      const sp = SPEED * (keys.shift ? 1.6 : 1) * Math.min(1, n);
+      const sp = SPEED * K * (keys.shift ? 1.6 : 1) * Math.min(1, n);
       me.x += (rx * kx - fx * ky) / n * sp * dt; me.y += (ry * kx - fy * ky) / n * sp * dt;
     } else if (target) {
       const dx = target.x - me.x, dy = target.y - me.y, d = Math.hypot(dx, dy);
       if (d < 4) { if (target.seat != null && pendingSeat === target.seat && !seatOcc.has(target.seat)) { mySeat = target.seat; seatOcc.set(mySeat, "me"); send({ t: "msit", s: mySeat }); } target = null; pendingSeat = -1; }
-      else { const k = Math.min(d, SPEED * dt) / d; me.x += dx * k; me.y += dy * k; }
+      else { const k = Math.min(d, SPEED * K * dt) / d; me.x += dx * k; me.y += dy * k; }
     }
-    me.x = Math.max(M, Math.min(BOOTH_ROOM.w - M, me.x)); me.y = Math.max(M, Math.min(BOOTH_ROOM.h - M, me.y));
+    me.x = Math.max(M, Math.min(R.w - M, me.x)); me.y = Math.max(M, Math.min(R.h - M, me.y));
+    if (!walkable(me.x, me.y)) { // chạm tường / quầy: trượt dọc theo một trục, không được thì đứng lại
+      if (walkable(me.x, oy)) me.y = oy; else if (walkable(ox, me.y)) me.x = ox; else { me.x = ox; me.y = oy; }
+      if (target && target.seat == null && Math.hypot(me.x - ox, me.y - oy) < 0.5) target = null;
+    }
     if (!solo && (Math.abs(me.x - sentX) > 2 || Math.abs(me.y - sentY) > 2) && ts - sentAt > 110) { sentAt = ts; sentX = me.x; sentY = me.y; send({ t: "mpos", x: Math.round(me.x), y: Math.round(me.y) }); }
     // nút Ngồi / Đứng dậy
     if (canSit) {
@@ -313,19 +345,25 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     const LP = lookPitch * Math.PI / 180, px = wx(me.x), pz = wz(me.y), eyeY = mySeat >= 0 ? CAFE_SEATS[mySeat].h + VIEW.eye * 0.62 : VIEW.eye;
     const back = VIEW.dist * Math.cos(LP * 0.6), up3 = VIEW.height - Math.sin(LP) * VIEW.dist * 0.55;
     let cx = px - fx * back * viewBlend + rx * VIEW.side * viewBlend, cy = eyeY + (Math.max(0.35, eyeY - VIEW.eye + up3) - eyeY) * viewBlend, cz = pz - fy * back * viewBlend + ry * VIEW.side * viewBlend;
-    cx = Math.max(-W / 2 + 0.25, Math.min(W / 2 - 0.25, cx)); cz = Math.max(-H / 2 + 0.25, Math.min(H / 2 + 6, cz)); cy = Math.min(4.6, cy);
+    cx = Math.max(-W / 2 + 0.25, Math.min(W / 2 - 0.25, cx)); cz = Math.max(-H / 2 + 0.25, Math.min(H / 2 + (CAFE ? -0.25 : 6), cz)); cy = Math.min(CAFE ? 3.7 : 4.6, cy);
+    if (R.walk && viewBlend > 0.01) { // quán: máy quay không lọt ra sau tường / ngoài kính — kéo lại gần nhân vật cho tới khi vào trong sàn
+      const P = (k) => [(px + (cx - px) * k) * U + R.w / 2, (pz + (cz - pz) * k) * U + R.h / 2];
+      const ok = k => { const [x, y] = P(k); if (!inPoly(x, y, R.walk)) return false; for (let i = 0, j = R.walk.length - 1; i < R.walk.length; j = i++) if (segDist(x, y, R.walk[i], R.walk[j]) < 35) return false; return !POSTS.some(c => Math.hypot(c.x - x, c.y - y) < c.r + 20); }; // chừa khoảng cách với tường, cột sát kính
+      if (!ok(1)) { let lo = 0, hi = 1; for (let i = 0; i < 8; i++) { const mid = (lo + hi) / 2; if (ok(mid)) lo = mid; else hi = mid; } cx = px + (cx - px) * lo; cz = pz + (cz - pz) * lo; }
+    }
     const ahead = 3.6;
     look.set(px + fx * Math.cos(LP) * ahead + rx * VIEW.side * viewBlend * 0.5, eyeY + Math.sin(LP) * ahead + 0.15 * viewBlend, pz + fy * Math.cos(LP) * ahead + ry * VIEW.side * viewBlend * 0.5);
-    if (cinema) { // xem to: đứng giữa phòng nhìn thẳng màn hình, lùi vừa đủ để màn hình lấp kín bề ngang khung nhìn
-      const hf = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), d = (SW / 2 + 0.15) / Math.tan(hf);
-      cx = 0; cy = SY; cz = -H / 2 + 0.1 + Math.min(d, H + 5); look.set(0, SY, -H / 2);
+    if (cinema) { // xem to: đứng trước màn hình nhìn thẳng, lùi vừa đủ để màn hình lấp kín bề ngang khung nhìn
+      const hf = Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect), d = Math.min((SW / 2 + 0.15) / Math.tan(hf), CAFE ? W - 1 : H + 5) + 0.1;
+      cx = sC.x + sN.x * d; cy = SY; cz = sC.z + sN.z * d; look.copy(sC);
     }
     camera.position.set(cx, cy, cz);
     camera.lookAt(look);
-    me.root.visible = !(viewBlend < 0.25); me.el.style.display = viewBlend < 0.25 ? "none" : "";
+    const tooClose = Math.hypot(cx - px, cz - pz) < 0.9 * K && !cinema; // máy quay bị tường đẩy sát người: ẩn nhân vật mình cho khỏi che hết
+    me.root.visible = !(viewBlend < 0.25 || tooClose); me.el.style.display = viewBlend < 0.25 || tooClose ? "none" : "";
     for (const nt of notes) {
       nt.o.visible = musicOn;
-      if (musicOn) { const k = (t * 0.45 + nt.p) % 1; nt.o.position.set(nt.sx * (4.65 + Math.sin(k * 6 + nt.p * 9) * 0.3), 2.8 + k * 1.6, -H / 2 + 0.6 + k * 0.6); nt.o.material.opacity = 1 - k; }
+      if (musicOn) { const k = (t * 0.45 + nt.p) % 1; nt.o.position.set(nt.sx * (SPX + Math.sin(k * 6 + nt.p * 9) * 0.3), SY + 0.3 + k * 1.2, 0.6 + k * 0.6); nt.o.material.opacity = 1 - k; }
     }
     for (const o of anim) { if (o.swing) o.o.rotation.z = Math.sin(t * 2.3 + o.p) * 0.12; else o.o.position.y = o.y + Math.sin(t * 2.4 + o.p) * 0.1; }
     const vidOn = !!(cssObj && cssObj.element.isConnected && !cssObj.element.hidden);
@@ -336,7 +374,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
     const near = [...people.values()].sort((p1, p2) => Math.hypot(p1.x - me.x, p1.y - me.y) - Math.hypot(p2.x - me.x, p2.y - me.y));
     near.forEach((a, i) => {
-      v3.set(a.root.position.x, 1.45 + (a.lastSitH || 0) * (a.sitAmt || 0), a.root.position.z).project(camera);
+      v3.set(a.root.position.x, (1.45 + (a.lastSitH || 0) * (a.sitAmt || 0)) * K, a.root.position.z).project(camera);
       a.talk = Math.max(0, (a.talk || 0) - dt);
       const on = (i <= NAME_MAX || a.wave > 0 || a.talk > 0) && v3.z < 1 && Math.abs(v3.x) < 1.2 && Math.abs(v3.y) < 1.2;
       a.el.style.visibility = on ? "visible" : "hidden";
@@ -345,6 +383,8 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     if (active) raf = requestAnimationFrame(loop);
   }
   raf = requestAnimationFrame(loop);
+  // hỗ trợ chụp thử: đặt chỗ đứng, hướng nhìn, góc nhìn (giống window.__hubView ở sảnh)
+  window.__roomView = (x, y, yw, v, p) => { me.x = x; me.y = y; target = null; if (yw != null) yaw = yw; if (v) { view = v; viewBlend = v === "third" ? 1 : 0; drawView(); } if (p != null) lookPitch = p; };
 
   return {
     /** Tin "mspace": mình và những người đang ở trong gian. */
@@ -378,9 +418,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     /** Đặt phần tử el (khung video 640×360) lên màn hình lớn trên tường. */
     attachScreen(el) {
       if (!css) { css = new CSS3DRenderer(); css.domElement.className = "css3"; container.insertBefore(css.domElement, renderer.domElement); /* nằm SAU khung vẽ 3D */ css.setSize(container.clientWidth || 1, container.clientHeight || 1); }
-      if (cssObj) { scene.remove(cssObj); }
+      if (cssObj) { sg.remove(cssObj); }
       el.style.width = VID_W + "px"; el.style.height = VID_H + "px";
-      cssObj = new CSS3DObject(el); cssObj.scale.setScalar(VID_WORLD / VID_W); cssObj.position.set(0, SY, -H / 2 + 0.12); scene.add(cssObj);
+      cssObj = new CSS3DObject(el); cssObj.scale.setScalar(VID_WORLD / VID_W); cssObj.position.set(0, SY, 0.12); sg.add(cssObj);
       el.style.pointerEvents = "none"; // CSS3DObject tự bật pointer-events: tắt đi để người chơi không bấm dừng / phát video
       return true;
     },
@@ -392,7 +432,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       document.removeEventListener("keydown", onKey); document.removeEventListener("keyup", onKey);
       window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); ui.remove();
       for (const k of [...people.keys()]) removePerson(k);
-      if (cssObj) scene.remove(cssObj); if (css) css.domElement.remove();
+      closed = true; if (cssObj) sg.remove(cssObj); if (css) css.domElement.remove();
       disposeTree(scene); renderer.dispose(); renderer.domElement.remove(); labels.remove();
     }
   };
