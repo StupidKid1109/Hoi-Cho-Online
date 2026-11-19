@@ -62,6 +62,13 @@ function enterFair() {
   if (!$("conn")) { const c = document.createElement("div"); c.id = "conn"; c.className = "conn"; $("viewport").appendChild(c); }
   S.conn = connectKhu(S.khu, onRealtime, ok => { const c = $("conn"); c.textContent = ok ? "● Trực tuyến" : "● Mất kết nối, đang nối lại…"; c.classList.toggle("off", !ok); });
   renderHud(); hub.startHub();
+  const note = hub.fallbackNotice();
+  if (note && !$("gfxNote")) {
+    const n = document.createElement("div"); n.id = "gfxNote"; n.className = "gfxnote";
+    n.innerHTML = "<span>" + esc(note) + '</span><button aria-label="Đóng">✕</button>';
+    n.querySelector("button").onclick = () => n.remove();
+    $("viewport").appendChild(n);
+  }
 }
 function onRealtime(m) {
   if (m.t === "welcome") { S.myId = m.you.id; hub.resetPeers(m.peers); chat.setHistory(m.history); renderWho(); }

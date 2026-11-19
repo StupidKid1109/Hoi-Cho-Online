@@ -8,16 +8,20 @@ import { hasWebGL } from "./gfx/webgl.js";
 export const EMOTES = css.EMOTES;
 let impl = css;
 export let mode = "css";
+/** Lý do dùng bản CSS 3D (để báo cho người chơi): "forced" | "nowebgl" | "unbuilt" | "loadfail" | "buildfail" | null */
+export let reason = null;
 
 /** Gọi một lần lúc đang tải: thử nạp bản 3D. Trả về "3d" hoặc "css". */
 export async function prepareHub() {
-  if (!hasWebGL()) return mode;
+  if (!hasWebGL()) { reason = /[?&]gfx=css/.test(location.search) ? "forced" : "nowebgl"; return mode; }
   try {
     const m = await import("./hub3d.js");
     await m.preload();
-    impl = m; mode = "3d";
+    impl = m; mode = "3d"; reason = null;
   } catch (e) {
     console.warn("Không nạp được đồ họa Three.js, dùng bản CSS 3D:", e);
+    // chạy thẳng mã nguồn chưa build thì không tìm được thư viện "three"
+    reason = /specifier|resolve module/i.test(String(e && e.message)) ? "unbuilt" : "loadfail";
   }
   return mode;
 }
@@ -27,12 +31,18 @@ export function buildHub(ctx) {
     try { return impl.buildHub(ctx); }
     catch (e) {
       console.warn("Không dựng được cảnh WebGL, dùng bản CSS 3D:", e);
-      impl = css; mode = "css";
+      impl = css; mode = "css"; reason = "buildfail";
       const vp = document.getElementById("viewport"); vp.classList.remove("gl");
       vp.querySelectorAll(".gl3,.lbl3").forEach(el => el.remove());
     }
   }
   return css.buildHub(ctx);
+}
+/** Câu báo cho người chơi khi đang dùng đồ họa đơn giản (null nếu đang dùng 3D hoặc tự chọn bản CSS). */
+export function fallbackNotice() {
+  if (mode === "3d" || !reason || reason === "forced") return null;
+  if (reason === "unbuilt") return "Đang dùng đồ họa đơn giản: máy chủ đang chạy mã nguồn chưa build. Cán bộ kỹ thuật chạy \"npm run build\" trong thư mục client để có đồ họa 3D.";
+  return "Đang dùng đồ họa đơn giản vì trình duyệt chưa bật WebGL. Thử bật \"Sử dụng tăng tốc phần cứng\" trong Cài đặt của trình duyệt, khởi động lại trình duyệt, hoặc mở bằng Chrome, Edge.";
 }
 export const startHub = () => impl.startHub();
 export const zoomOut = () => impl.zoomOut();
