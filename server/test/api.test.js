@@ -327,5 +327,15 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
     assert.equal((await fetch(base + "/api/music/file/..%2Fdata.db")).status, 404);
     await call("/api/admin/music", { method: "PUT", body: { file: null }, admin: "admin-test" }); await wait(100);
     assert.equal(b.inbox.filter(x => x.t === "cmusic").at(-1).file, null, "tắt nhạc");
+    // link YouTube: phát bằng trình phát nhúng, cả quán cùng một đoạn
+    assert.equal((await call("/api/admin/music/youtube", { method: "POST", body: { url: "https://evil.com/watch?v=dQw4w9WgXcQ" }, admin: "admin-test" })).status, 400, "chỉ nhận link YouTube");
+    const add = await call("/api/admin/music/youtube", { method: "POST", body: { url: "https://youtu.be/dQw4w9WgXcQ?t=5", title: "Bài thử" }, admin: "admin-test" });
+    assert.equal(add.data.id, "dQw4w9WgXcQ"); assert.equal(add.data.youtube[0].title, "Bài thử");
+    assert.equal((await call("/api/admin/music", { method: "PUT", body: { yt: "aaaaaaaaaaa" }, admin: "admin-test" })).status, 404, "chỉ phát video trong danh sách");
+    await call("/api/admin/music", { method: "PUT", body: { yt: "dQw4w9WgXcQ" }, admin: "admin-test" }); await wait(100);
+    const ym = a.inbox.filter(x => x.t === "cmusic").at(-1);
+    assert.ok(ym.yt === "dQw4w9WgXcQ" && ym.file === null && ym.title === "Bài thử" && ym.startedAt > 0, "người trong quán nhận lệnh phát YouTube");
+    await call("/api/admin/music/youtube/delete", { method: "POST", body: { id: "dQw4w9WgXcQ" }, admin: "admin-test" }); await wait(100);
+    assert.equal(a.inbox.filter(x => x.t === "cmusic").at(-1).yt, null, "xóa video đang phát thì tắt");
   } finally { for (const x of [a, b]) x.ws.close(); }
 });

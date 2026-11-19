@@ -24,7 +24,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   const COUNTDOWN = config.matchCountdown ?? 15000, SPEED = config.matchSpeed || 1;
   const ms = v => Math.round(v * SPEED);
   const lobbies = new Map();   // game -> phòng chờ hiện tại ("cafe": phòng quán cà phê đang nhận khách)
-  let music = { file: null, title: "", startedAt: 0, loop: true, volume: 0.8 }; // nhạc trong quán, quản trị viên bật
+  let music = { file: null, yt: null, title: "", startedAt: 0, loop: true, volume: 0.8 }; // nhạc trong quán, quản trị viên bật
   const where = new Map();     // pid -> phòng chờ hoặc phòng đang chơi
   let nextRoom = 1;
 
@@ -269,7 +269,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     const rooms = new Set([...where.values()].filter(r => !r.lobby));
     const wait = g => { const L = lobbies.get(g); return L ? { n: L.players.size, startIn: L.startAt ? Math.max(0, L.startAt - Date.now()) : null } : { n: 0, startIn: null }; };
     const cafe = [...live].filter(L => L.cafe).reduce((n, L) => n + L.players.size, 0);
-    return { min: MIN, max: MAX, g1: wait("g1"), g2: wait("g2"), cafe: { n: cafe, music: music.file ? music.title : null }, rooms: rooms.size, playing: [...rooms].reduce((n, r) => n + [...r.players.values()].filter(p => !p.left).length, 0) };
+    return { min: MIN, max: MAX, g1: wait("g1"), g2: wait("g2"), cafe: { n: cafe, music: music.file || music.yt ? music.title : null }, rooms: rooms.size, playing: [...rooms].reduce((n, r) => n + [...r.players.values()].filter(p => !p.left).length, 0) };
   }
 
   return { onMessage, onClose, status, setMusic, music: () => music, MIN, MAX };

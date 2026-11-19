@@ -7,7 +7,7 @@ import { makeAuth } from "./auth.js";
 import { makeStore, GAMES } from "./store.js";
 import { makeRealtime } from "./realtime.js";
 import { makeMatches } from "./match.js";
-import { makeMusic, MUSIC_MAX_BYTES } from "./music.js";
+import { makeMusic, MUSIC_MAX_BYTES, youtubeId } from "./music.js";
 import { attachWebSocket } from "./ws.js";
 import { swipe, rebus, runner, GameError } from "./games.js";
 import { ROOT_DIR, SERVER_DIR } from "./config.js";
@@ -36,7 +36,16 @@ export function createApp(config) {
   const rt = makeRealtime({ db, store, auth, config, matches });
   // Nhạc trong quán cà phê: nhớ bài đang phát qua các lần khởi động lại
   const music = makeMusic(config);
-  { const st = music.loadState(); if (st && st.file && music.has(st.file)) matches.setMusic(st); }
+  { const st = music.loadState(); if (st && ((st.file && music.has(st.file)) || st.yt)) matches.setMusic(st); }
+  /** Tên video YouTube qua oEmbed công khai của YouTube (không cần khóa API); lỗi mạng thì trả null. */
+  async function ytTitle(id) {
+    try {
+      const r = await fetch("https://www.youtube.com/oembed?format=json&url=" + encodeURIComponent("https://www.youtube.com/watch?v=" + id), { signal: AbortSignal.timeout(4000) });
+      if (r.status === 401 || r.status === 403) return { blocked: true }; // chủ video không cho nhúng
+      if (!r.ok) return null;
+      const j = await r.json(); return { title: j.title };
+    } catch (e) { return null; }
+  }
   const setMusic = next => { const st = matches.setMusic(next); music.saveState(st); return st; };
   const authHits = new Map();
 
@@ -181,12 +190,26 @@ export function createApp(config) {
         return send(res, 200, "﻿" + lines.join("\n"), { "content-type": "text/csv; charset=utf-8", "content-disposition": 'attachment; filename="bang-vang.csv"' });
       }
       // Nhạc quán cà phê
-      if (path === "/api/admin/music" && method === "GET") return send(res, 200, { tracks: music.list(), state: matches.music(), listeners: matches.status().cafe.n });
+      if (path === "/api/admin/music" && method === "GET") return send(res, 200, { tracks: music.list(), youtube: music.ytList(), state: matches.music(), listeners: matches.status().cafe.n });
+      if (path === "/api/admin/music/youtube" && method === "POST") { // { url, title? }: thêm link YouTube vào danh sách
+        const b = await readBody(req), id = youtubeId(b.url);
+        if (!id) return send(res, 400, { error: "Link YouTube không hợp lệ" });
+        let title = String(b.title || "").trim();
+        if (!title) { const t = await ytTitle(id); if (t && t.blocked) return send(res, 400, { error: "Video này không cho phép phát nhúng ngoài YouTube, chọn video khác" }); title = (t && t.title) || "Video YouTube " + id; }
+        return send(res, 200, { id, youtube: music.ytAdd({ id, title }) });
+      }
+      if (path === "/api/admin/music/youtube/delete" && method === "POST") {
+        const { id } = await readBody(req);
+        if (matches.music().yt === id) setMusic({ file: null, yt: null, title: "", startedAt: 0 });
+        return send(res, 200, { youtube: music.ytRemove(id) });
+      }
       if (path === "/api/admin/music" && method === "PUT") { // { file } để phát (null để tắt), { loop, volume }
         const b = await readBody(req);
         if (b.file && !music.has(b.file)) return send(res, 404, { error: "Không có bài này" });
+        if (b.yt && !music.ytGet(b.yt)) return send(res, 404, { error: "Không có video này trong danh sách" });
         const next = { loop: b.loop !== false, volume: Math.max(0, Math.min(1, Number(b.volume ?? 0.8))) };
-        if ("file" in b) Object.assign(next, b.file ? { file: b.file, title: music.title(b.file), startedAt: Date.now() } : { file: null, title: "", startedAt: 0 });
+        if (b.yt) Object.assign(next, { file: null, yt: b.yt, title: music.ytGet(b.yt).title, startedAt: Date.now() }); // phát video YouTube
+        else if ("file" in b) Object.assign(next, b.file ? { file: b.file, yt: null, title: music.title(b.file), startedAt: Date.now() } : { file: null, yt: null, title: "", startedAt: 0 });
         return send(res, 200, { state: setMusic(next) });
       }
       if (path === "/api/admin/music/upload" && method === "POST") { // thân yêu cầu là file nhạc; tên file ở ?name=
@@ -201,7 +224,7 @@ export function createApp(config) {
       }
       if (path === "/api/admin/music/delete" && method === "POST") {
         const { file } = await readBody(req);
-        if (matches.music().file === file) setMusic({ file: null, title: "", startedAt: 0 });
+        if (matches.music().file === file) setMusic({ file: null, yt: null, title: "", startedAt: 0 });
         music.remove(file); return send(res, 200, { tracks: music.list() });
       }
       if (path === "/api/admin/reload-content" && method === "POST") { content = loadContent(); return send(res, 200, { ok: true }); }

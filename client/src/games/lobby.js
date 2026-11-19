@@ -56,7 +56,7 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   const el = document.createElement("div"); el.className = "space on" + (use3d ? "" : " flat"); el.style.setProperty("--c", color);
   el.innerHTML = '<div class="sp-view"></div>' +
     '<div class="sp-top"><div class="sp-t"><small>' + esc(tag) + '</small>' + esc(title) + '</div><div class="sp-st"></div></div>' +
-    (cafe ? '<div class="sp-music"><span class="mt">🎵 Chưa bật nhạc</span><button class="mute" aria-label="Tắt tiếng">🔊</button></div><button class="btn sp-unlock" hidden>🔊 Bấm để nghe nhạc</button>' : "") +
+    (cafe ? '<div class="sp-music"><span class="mt">🎵 Chưa bật nhạc</span><button class="tv" aria-label="Ẩn, hiện video" hidden>📺</button><button class="mute" aria-label="Tắt tiếng">🔊</button></div><button class="btn sp-unlock" hidden>🔊 Bấm để nghe nhạc</button><div class="sp-yt" hidden><div></div></div>' : "") +
     '<div class="sp-log" aria-live="polite"></div>' +
     '<form class="sp-chat" autocomplete="off"><input maxlength="80" placeholder="' + (cafe ? "Trò chuyện trong quán…" : "Nhắn cho cả phòng chờ…") + '" enterkeyhint="send"><button>Gửi</button></form>' +
     '<div class="sp-bar">' +
@@ -103,11 +103,11 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   let audio = null, muted = false, mstate = null, skew = 0;
   function musicUi() {
     if (!cafe) return;
-    const on = !!(mstate && mstate.file);
+    const on = !!(mstate && (mstate.file || mstate.yt));
     $q(".sp-music .mt").textContent = on ? "🎵 " + mstate.title : "🎵 Chưa bật nhạc";
     $q(".sp-music .mute").textContent = muted ? "🔇" : "🔊";
     $q(".sp-music").classList.toggle("on", on);
-    if (room) room.setMusicOn(on && !muted);
+    if (room) room.setMusicOn(on && !muted && !(mstate.yt && ytHidden));
     drawLobby();
   }
   function seek() {
@@ -120,8 +120,61 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     if (!audio || !mstate || !mstate.file) return;
     const p = audio.play(); if (p && p.then) p.then(() => { $q(".sp-unlock").hidden = true; }).catch(e => { if (e && e.name === "AbortError") return; console.warn("Chưa phát được nhạc:", e && e.name); $q(".sp-unlock").hidden = false; });
   }
+  /* ---------- Video YouTube: trình phát nhúng chính thức của YouTube (hiện trên màn hình, không tải nhạc về) ---------- */
+  let yt = null, ytId = null, ytHidden = false, ytCheck = 0;
+  const ytBox = cafe ? $q(".sp-yt") : null;
+  function loadYT() {
+    if (window.YT && window.YT.Player) return Promise.resolve();
+    if (!loadYT.p) loadYT.p = new Promise((res, rej) => {
+      const prev = window.onYouTubeIframeAPIReady; window.onYouTubeIframeAPIReady = () => { if (prev) prev(); res(); };
+      const sc = document.createElement("script"); sc.src = "https://www.youtube.com/iframe_api"; sc.onerror = () => { loadYT.p = null; rej(new Error("yt")); }; document.head.appendChild(sc);
+      setTimeout(() => rej(new Error("timeout")), 15000);
+    });
+    return loadYT.p;
+  }
+  /** Giây đang phát chung của cả quán (âm: video đã hết, không lặp). */
+  function ytTarget() {
+    let t = (Date.now() - skew - mstate.startedAt) / 1000; const d = yt && yt.getDuration ? yt.getDuration() : 0;
+    if (d > 0) { if (mstate.loop !== false) t %= d; else if (t >= d) return -1; }
+    return Math.max(0, t);
+  }
+  function syncYT() {
+    if (!yt || !yt.seekTo || !mstate || !mstate.yt) return;
+    yt.setVolume(Math.round((mstate.volume ?? 0.8) * 100)); if (muted) yt.mute(); else yt.unMute();
+    if (ytHidden) return yt.pauseVideo();
+    const t = ytTarget(); if (t < 0) return yt.pauseVideo();
+    if (Math.abs((yt.getCurrentTime() || 0) - t) > 2) yt.seekTo(t, true);
+    yt.playVideo();
+    clearTimeout(ytCheck); ytCheck = setTimeout(() => { // trình duyệt chặn tự phát có tiếng: hiện nút bấm để nghe
+      const st = yt && yt.getPlayerState ? yt.getPlayerState() : -1;
+      if (mstate && mstate.yt && !ytHidden && st !== 1 && st !== 3) $q(".sp-unlock").hidden = false;
+    }, 2500);
+  }
+  async function applyYT(m) {
+    ytBox.hidden = ytHidden; $q(".sp-music .tv").hidden = false;
+    try { await loadYT(); } catch (e) { ytBox.hidden = true; addLog("Không tải được trình phát YouTube (kiểm tra mạng Internet).", "sys"); return; }
+    if (closed || mstate !== m) return;
+    const start = Math.floor(Math.max(0, (Date.now() - skew - m.startedAt) / 1000));
+    if (!yt) {
+      ytId = m.yt;
+      yt = new window.YT.Player(ytBox.firstElementChild, {
+        width: 220, height: 200, videoId: m.yt,
+        playerVars: { autoplay: 1, controls: 0, disablekb: 1, playsinline: 1, rel: 0, iv_load_policy: 3, start },
+        events: {
+          onReady: () => syncYT(),
+          onStateChange: e => { if (e.data === 1) $q(".sp-unlock").hidden = true; if (e.data === 0 && mstate && mstate.loop !== false) syncYT(); },
+          onError: e => addLog("Video YouTube này không phát được ở đây" + (e.data === 101 || e.data === 150 ? " (chủ video không cho phát nhúng)" : "") + ".", "sys")
+        }
+      });
+    } else if (ytId !== m.yt) { ytId = m.yt; yt.loadVideoById({ videoId: m.yt, startSeconds: start }); setTimeout(syncYT, 1200); }
+    else syncYT();
+  }
+  function stopYT() { clearTimeout(ytCheck); if (yt && yt.stopVideo) yt.stopVideo(); if (ytBox) ytBox.hidden = true; if (cafe) $q(".sp-music .tv").hidden = true; }
+
   function applyMusic(m) {
     mstate = m; skew = Date.now() - (m.now || Date.now());
+    if (m.yt) { if (audio) audio.pause(); $q(".sp-unlock").hidden = true; applyYT(m); return musicUi(); }
+    stopYT();
     if (!m.file) { if (audio) audio.pause(); $q(".sp-unlock").hidden = true; return musicUi(); }
     if (!audio) { audio = new Audio(); audio.preload = "auto"; audio.addEventListener("loadedmetadata", seek); window.__cafeAudio = audio; }
     const src = apiBase + "/api/music/file/" + encodeURIComponent(m.file);
@@ -131,15 +184,17 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     playNow(); musicUi();
   }
   if (cafe) {
-    $q(".sp-music .mute").onclick = () => { muted = !muted; if (audio) { audio.muted = muted; if (!muted) { seek(); playNow(); } } musicUi(); };
-    $q(".sp-unlock").onclick = () => { seek(); playNow(); };
+    $q(".sp-music .mute").onclick = () => { muted = !muted; if (mstate && mstate.yt) syncYT(); else if (audio) { audio.muted = muted; if (!muted) { seek(); playNow(); } } musicUi(); };
+    $q(".sp-unlock").onclick = () => { if (mstate && mstate.yt) { if (yt && yt.unMute) { yt.unMute(); yt.playVideo(); } syncYT(); } else { seek(); playNow(); } };
+    // ẩn video thì dừng phát cho riêng mình (YouTube yêu cầu trình phát phải hiện khi đang phát)
+    $q(".sp-music .tv").onclick = () => { ytHidden = !ytHidden; ytBox.hidden = ytHidden; $q(".sp-music .tv").classList.toggle("off", ytHidden); syncYT(); musicUi(); };
   }
 
   function drawLobby() {
     const m = lastLobby; if (!m && !cafe) return;
     clearInterval(cd);
     if (cafe) {
-      const n = m ? m.n : 1, on = mstate && mstate.file;
+      const n = m ? m.n : 1, on = mstate && (mstate.file || mstate.yt);
       if (room) room.setScreen(on ? "♪ " + mstate.title : "☕ Mời bạn ngồi chơi", n + " người đang trong quán", on ? "Nhạc do ban tổ chức bật" : "Ban tổ chức sẽ bật nhạc sớm thôi");
       st.innerHTML = "☕ <b>" + n + "</b> người trong quán";
     } else if (m.startIn != null) {
@@ -181,7 +236,7 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     /** Ẩn khi ván bắt đầu, hiện lại khi chơi lại. */
     hide() { clearInterval(cd); el.classList.remove("on"); form.classList.remove("on"); if (room) room.setActive(false); },
     show() { el.classList.add("on"); if (room) { room.setActive(true); drawLobby(); } if (!solo && !cafe) st.textContent = "Đang vào phòng chờ…"; },
-    close() { closed = true; clearInterval(cd); if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); } if (room) room.close(); el.remove(); }
+    close() { closed = true; clearInterval(cd); clearTimeout(ytCheck); if (yt && yt.destroy) yt.destroy(); if (audio) { audio.pause(); audio.removeAttribute("src"); audio.load(); } if (room) room.close(); el.remove(); }
   };
   st.textContent = cafe ? "☕ Đang vào quán…" : solo ? "Sẵn sàng thì bấm Bắt đầu" : "Đang vào phòng chờ…";
   if (!use3d) { setTimeout(() => $q(".sp-fade").classList.add("off"), 300); return ctl; }

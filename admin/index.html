@@ -50,6 +50,11 @@
     <div class="row" id="mNow"><span class="muted">Nhập mã quản trị để xem.</span></div>
     <div class="row" style="margin:10px 0"><label style="margin:0">Âm lượng</label><input id="mVol" type="range" min="0" max="100" value="80" style="max-width:180px"><label style="margin:0"><input id="mLoop" type="checkbox" checked style="width:auto"> Lặp lại bài</label></div>
     <table><thead><tr><th>Bài</th><th>Dung lượng</th><th></th></tr></thead><tbody id="tracks"><tr><td colspan="3" class="muted">Chưa tải.</td></tr></tbody></table>
+    <h3 style="font-size:14px;margin:16px 0 6px">▶️ Video YouTube</h3>
+    <div class="row"><input id="ytUrl" placeholder="Dán link YouTube, ví dụ https://youtu.be/…" style="max-width:420px"><button class="ghost" id="ytAdd">Thêm</button></div>
+    <table style="margin-top:8px"><tbody id="ytList"><tr><td class="muted">Chưa có video nào.</td></tr></tbody></table>
+    <p class="muted">Video YouTube phát bằng trình phát nhúng chính thức của YouTube: trong quán hiện một khung video nhỏ, cả quán xem và nghe cùng một đoạn. Không tải nhạc từ YouTube về máy chủ (YouTube không cho phép). Một số video bị chủ kênh chặn phát nhúng, khi đó chọn video khác. Có thể có quảng cáo của YouTube.</p>
+    <h3 style="font-size:14px;margin:16px 0 6px">🎵 File nhạc</h3>
     <div class="row" style="margin-top:10px"><input id="mFile" type="file" accept=".mp3,.m4a,.aac,.ogg,.wav,audio/*" style="max-width:320px"><button class="ghost" id="mUp">Tải bài lên</button></div>
     <p class="muted">Bấm “Phát” là mọi người đang trong quán nghe ngay, cả quán nghe cùng một đoạn; người vào sau nghe tiếp đúng đoạn đang phát. Chỉ dùng nhạc được phép phát công khai (nhạc của đơn vị, nhạc không bản quyền, nhạc đã mua quyền). File tối đa 40 MB.</p>
   </section>
@@ -92,7 +97,10 @@ async function load() {
 async function loadMusic() {
   try {
     const d = await call("/api/admin/music"), st = d.state;
-    $("mNow").innerHTML = st.file ? "🎵 Đang phát: <b>" + esc(st.title) + "</b> · " + d.listeners + " người trong quán <button class=\"ghost\" id=\"mStop\">⏹ Tắt nhạc</button>" : "Chưa bật nhạc · " + d.listeners + " người trong quán";
+    $("ytList").innerHTML = d.youtube.length ? d.youtube.map(v => "<tr><td>" + (st.yt === v.id ? "▶️ " : "") + esc(v.title) + '<div class="muted">youtu.be/' + esc(v.id) + '</div></td><td class="row"><button data-yp="' + esc(v.id) + '">▶ Phát</button><button class="ghost" data-yd="' + esc(v.id) + '">Xóa</button></td></tr>').join("") : '<tr><td class="muted">Chưa có video nào.</td></tr>';
+    document.querySelectorAll("#ytList [data-yp]").forEach(b => b.onclick = () => setMusic({ yt: b.dataset.yp }));
+    document.querySelectorAll("#ytList [data-yd]").forEach(b => b.onclick = async () => { await call("/api/admin/music/youtube/delete", { method: "POST", body: JSON.stringify({ id: b.dataset.yd }) }); note("Đã xóa"); loadMusic(); });
+    $("mNow").innerHTML = st.file || st.yt ? "🎵 Đang phát: <b>" + esc(st.title) + "</b> · " + d.listeners + " người trong quán <button class=\"ghost\" id=\"mStop\">⏹ Tắt nhạc</button>" : "Chưa bật nhạc · " + d.listeners + " người trong quán";
     $("mVol").value = Math.round((st.volume ?? 0.8) * 100); $("mLoop").checked = st.loop !== false;
     if ($("mStop")) $("mStop").onclick = () => setMusic({ file: null });
     $("tracks").innerHTML = d.tracks.length ? d.tracks.map(t => "<tr><td>" + (st.file === t.file ? "▶️ " : "") + esc(t.title) + '<div class="muted">' + esc(t.file) + "</div></td><td>" + (t.size / 1048576).toFixed(1) + ' MB</td><td class="row"><button data-p="' + esc(t.file) + '">▶ Phát</button><button class="ghost" data-d="' + esc(t.file) + '">Xóa</button></td></tr>').join("") : '<tr><td colspan="3" class="muted">Chưa có bài nào.</td></tr>';
@@ -101,8 +109,12 @@ async function loadMusic() {
   } catch (e) { note(e.message); }
 }
 async function setMusic(extra) {
-  try { await call("/api/admin/music", { method: "PUT", body: JSON.stringify({ volume: $("mVol").value / 100, loop: $("mLoop").checked, ...extra }) }); note(extra.file ? "Đã bật nhạc trong quán" : extra.file === null ? "Đã tắt nhạc" : "Đã lưu"); loadMusic(); } catch (e) { note(e.message); }
+  try { await call("/api/admin/music", { method: "PUT", body: JSON.stringify({ volume: $("mVol").value / 100, loop: $("mLoop").checked, ...extra }) }); note(extra.file || extra.yt ? "Đã bật nhạc trong quán" : extra.file === null ? "Đã tắt nhạc" : "Đã lưu"); loadMusic(); } catch (e) { note(e.message); }
 }
+$("ytAdd").onclick = async () => {
+  const url = $("ytUrl").value.trim(); if (!url) return note("Dán link YouTube trước");
+  try { note("Đang kiểm tra video…"); await call("/api/admin/music/youtube", { method: "POST", body: JSON.stringify({ url }) }); $("ytUrl").value = ""; note("Đã thêm video, bấm ▶ Phát để phát trong quán"); loadMusic(); } catch (e) { note(e.message); }
+};
 $("mVol").onchange = $("mLoop").onchange = () => setMusic({});
 $("mUp").onclick = async () => {
   const f = $("mFile").files[0]; if (!f) return note("Chọn file nhạc trước");

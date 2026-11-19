@@ -9,11 +9,28 @@ const EXT = { ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".
 export const MUSIC_MAX_BYTES = 40 * 1024 * 1024;
 const SAMPLE = "nhac-mau-thu-gian.wav";
 
+/** Lấy mã video từ link YouTube (youtu.be/…, watch?v=…, shorts/…, embed/…, music.youtube.com), không hợp lệ thì null. */
+export function youtubeId(url) {
+  const s = String(url || "").trim();
+  if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
+  let u; try { u = new URL(s); } catch (e) { return null; }
+  const host = u.hostname.replace(/^(www\.|m\.|music\.)/, "");
+  let id = null;
+  if (host === "youtu.be") id = u.pathname.slice(1).split("/")[0];
+  else if (host === "youtube.com" || host === "youtube-nocookie.com") {
+    id = u.searchParams.get("v");
+    const m = u.pathname.match(/^\/(shorts|embed|live|v)\/([^/?#]+)/); if (!id && m) id = m[2];
+  }
+  return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
+}
+
 export function makeMusic(config) {
   // cơ sở dữ liệu trong bộ nhớ (kiểm thử): dùng thư mục tạm
   const dir = config.musicDir || (config.dbFile === ":memory:" ? mkdtempSync(join(tmpdir(), "hoicho-music-")) : join(dirname(config.dbFile), "music"));
   mkdirSync(dir, { recursive: true });
-  const stateFile = join(dir, "dang-phat.json"), namesFile = join(dir, "ten-bai.json");
+  const stateFile = join(dir, "dang-phat.json"), namesFile = join(dir, "ten-bai.json"), ytFile = join(dir, "youtube.json");
+  let yt = []; try { yt = JSON.parse(readFileSync(ytFile, "utf8")); } catch (e) { /* chưa có */ }
+  const saveYt = () => { try { writeFileSync(ytFile, JSON.stringify(yt, null, 1)); } catch (e) { /* bỏ qua */ } };
   // tên bài có dấu (tên file trên đĩa bỏ dấu cho an toàn)
   let names = {}; try { names = JSON.parse(readFileSync(namesFile, "utf8")); } catch (e) { /* chưa có */ }
   const saveNames = () => { try { writeFileSync(namesFile, JSON.stringify(names, null, 1)); } catch (e) { /* bỏ qua */ } };
@@ -40,6 +57,11 @@ export function makeMusic(config) {
       return f;
     },
     remove(f) { if (has(f)) { unlinkSync(join(dir, f)); delete names[f]; saveNames(); } },
+    /* ---------- Danh sách link YouTube (phát bằng trình phát nhúng của YouTube, không tải về máy chủ) ---------- */
+    ytList: () => yt.slice(),
+    ytGet: id => yt.find(v => v.id === id) || null,
+    ytAdd(v) { yt = yt.filter(x => x.id !== v.id); yt.unshift({ id: v.id, title: String(v.title || "Video YouTube").slice(0, 120) }); if (yt.length > 100) yt.length = 100; saveYt(); return yt.slice(); },
+    ytRemove(id) { yt = yt.filter(x => x.id !== id); saveYt(); return yt.slice(); },
     loadState() { try { return JSON.parse(readFileSync(stateFile, "utf8")); } catch (e) { return null; } },
     saveState(s) { try { writeFileSync(stateFile, JSON.stringify(s)); } catch (e) { /* bỏ qua */ } },
     /** Gửi file nhạc, hỗ trợ Range để trình duyệt tua tới đúng đoạn đang phát. */
