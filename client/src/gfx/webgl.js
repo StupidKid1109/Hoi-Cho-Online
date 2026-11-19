@@ -1,7 +1,7 @@
 // Phát hiện WebGL và chọn mức chất lượng đồ họa. File này KHÔNG nạp Three.js,
 // để máy không có WebGL (hoặc bản chưa build) vẫn chạy được bản CSS 3D.
 
-const KEY = "hc_gfx";
+const KEY = "hc_gfx2"; // đổi tên để máy đã bị hạ chất lượng ở bản cũ được đoán lại
 let probe = null;
 
 /** Máy có WebGL dùng được không (kiểm tra một lần). */
@@ -25,7 +25,7 @@ export function initialQuality() {
   try { const q = new URLSearchParams(location.search).get("q"); if (q !== null && /^[012]$/.test(q)) return +q; } catch (e) { /* bỏ qua */ }
   try { const s = localStorage.getItem(KEY); if (s !== null && /^[012]$/.test(s)) return +s; } catch (e) { /* bỏ qua */ }
   const mem = navigator.deviceMemory || 4, cores = navigator.hardwareConcurrency || 4;
-  if (mem <= 2 || cores <= 4) return 0;
+  if (mem <= 2 && cores <= 4) return 0;
   if (mem <= 4 || cores <= 6) return 1;
   return 2;
 }

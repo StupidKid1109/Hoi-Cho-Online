@@ -14,11 +14,12 @@ export function waitFonts() {
 }
 
 /* ---------- Bộ dựng hình và chất lượng ---------- */
-const PR_CAP = [1, 1.5, 2];
+// Giới hạn độ phân giải theo mức chất lượng. Mức thấp vẫn để 1,5 để chữ và cạnh không bị vỡ hạt trên màn hình điện thoại.
+const PR_CAP = [1.5, 2, 2.5];
 
 /** Tạo WebGLRenderer theo mức chất lượng q (0, 1, 2). Ném lỗi nếu máy không tạo được WebGL. */
 export function createRenderer(q) {
-  const r = new THREE.WebGLRenderer({ antialias: q >= 1, powerPreference: q >= 2 ? "high-performance" : "default", alpha: false, stencil: false });
+  const r = new THREE.WebGLRenderer({ antialias: true, powerPreference: q >= 2 ? "high-performance" : "default", alpha: false, stencil: false });
   r.outputColorSpace = THREE.SRGBColorSpace;
   r.toneMapping = THREE.ACESFilmicToneMapping;
   r.toneMappingExposure = 1.05;
@@ -46,7 +47,7 @@ export class QualityWatch {
     this.t += dt; this.n++;
     if (this.t < 2.5) return;
     const fps = this.n / this.t; this.t = 0; this.n = 0;
-    if (fps < 40 && this.q > 0) { this.q--; saveQuality(this.q); this.warm = 1; this.onDrop(this.q, fps); }
+    if ((fps < 40 && this.q > 1) || (fps < 26 && this.q === 1)) { this.q--; saveQuality(this.q); this.warm = 1; this.onDrop(this.q, fps); } // xuống mức thấp nhất chỉ khi thật sự giật
   }
 }
 

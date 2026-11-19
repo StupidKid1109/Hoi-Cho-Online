@@ -22,6 +22,8 @@ const SPEED = 500; // px/giây (sân rộng nên đi nhanh hơn)
 const RF = FAIR_R / U; // bán kính khu lát gạch (đơn vị 3D)
 const wx = x => (x - CX) / U, wz = y => (y - CY) / U;
 const DEG = Math.PI / 180;
+/** Các lớp phẳng chồng lên mặt đất (sân gạch, lối đi, thảm): đẩy dần về phía máy quay để không nhấp nháy (z-fighting) trên điện thoại. */
+function layer(mat, k) { mat.polygonOffset = true; mat.polygonOffsetFactor = -k; mat.polygonOffsetUnits = -k * 4; return mat; }
 
 // Máy quay: khoảng cách và góc ngẩng (độ) cho 3 trạng thái
 const CAM_NORMAL = { dist: 8.6, pitch: 33 }, CAM_BOOTH = { dist: 9.5, pitch: 14 }, CAM_INTRO = { dist: 34, pitch: 58 };
@@ -53,7 +55,7 @@ export function buildHub(context) {
 
   const scene = new THREE.Scene();
   scene.fog = new THREE.Fog(0xe9967a, 30, 90);
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 220);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.4, 220);
   const hiddenBox = document.createElement("div"); hiddenBox.hidden = true; hiddenBox.className = "hid3"; labels.appendChild(hiddenBox);
   G = { renderer, scene, camera, labels, hiddenBox, observers: [], q, occ: [], pick: [], anim: [], lanterns: null, fw: null, marker: null, avatars: new Map(), sun: null, watch: null, ro: null, t: 0 };
   G.watch = new QualityWatch(q, nq => { G.q = nq; applyQuality(renderer, nq); setShadows(nq >= 1); resize(); });
@@ -187,16 +189,16 @@ function buildGround(scene) {
     for (let y = 0; y < h; y += 32) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 32) % 2 * 32; x < w; x += 64) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 32); g.stroke(); } }
     for (let i = 0; i < 900; i++) { g.fillStyle = Math.random() < .5 ? "rgba(255,255,255,.05)" : "rgba(80,40,10,.07)"; g.fillRect(Math.random() * w, Math.random() * h, 3, 3); }
   }, { repeat: [44, 44] });
-  const fair = new THREE.Mesh(new THREE.CircleGeometry(RF, 120), new THREE.MeshLambertMaterial({ map: brick }));
-  fair.rotation.x = -Math.PI / 2; fair.position.y = 0.005; fair.receiveShadow = true; scene.add(fair);
+  const fair = new THREE.Mesh(new THREE.CircleGeometry(RF, 120), layer(new THREE.MeshLambertMaterial({ map: brick }), 1));
+  fair.rotation.x = -Math.PI / 2; fair.position.y = 0.01; fair.receiveShadow = true; scene.add(fair);
   const fcurb = new THREE.Mesh(new THREE.TorusGeometry(RF, 0.12, 6, 160), new THREE.MeshLambertMaterial({ color: 0x9a6034 }));
   fcurb.rotation.x = -Math.PI / 2; fcurb.position.y = 0.02; scene.add(fcurb);
   // lối gạch đỏ từ sân trống ra 3 gian và cổng
-  const lane = new THREE.MeshLambertMaterial({ color: 0xb8643f });
+  const lane = layer(new THREE.MeshLambertMaterial({ color: 0xb8643f }), 2);
   for (const [x, y] of [[SPOTS.g1.x, SPOTS.g1.y], [SPOTS.g2.x, SPOTS.g2.y], [SPOTS.g3.x, SPOTS.g3.y], [GATE.x, GATE.y]]) {
     const dx = wx(x), dz = wz(y), len = Math.hypot(dx, dz) - R, mid = R + len / 2, a = Math.atan2(dx, dz);
     const strip = new THREE.Mesh(new THREE.PlaneGeometry(2.4, len), lane);
-    strip.rotation.set(-Math.PI / 2, 0, a); strip.position.set(Math.sin(a) * mid, 0.008, Math.cos(a) * mid); strip.receiveShadow = true; scene.add(strip);
+    strip.rotation.set(-Math.PI / 2, 0, a); strip.position.set(Math.sin(a) * mid, 0.02, Math.cos(a) * mid); strip.receiveShadow = true; scene.add(strip);
   }
   const plazaTex = canvasTex(1024, 1024, (g, w) => {
     const c = w / 2;
@@ -218,18 +220,18 @@ function buildGround(scene) {
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 22 : 54; g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r); }
     g.closePath(); g.fill();
   });
-  const plaza = new THREE.Mesh(new THREE.CircleGeometry(R, 96), new THREE.MeshLambertMaterial({ map: plazaTex }));
-  plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.01; plaza.receiveShadow = true; scene.add(plaza);
+  const plaza = new THREE.Mesh(new THREE.CircleGeometry(R, 96), layer(new THREE.MeshLambertMaterial({ map: plazaTex }), 3));
+  plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.03; plaza.receiveShadow = true; scene.add(plaza);
   // lối đi từ cổng vào
   const path = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 9), new THREE.MeshLambertMaterial({ map: canvasTex(128, 256, (g, w, h) => {
     g.fillStyle = "#cf9b66"; g.fillRect(0, 0, w, h);
     g.strokeStyle = "rgba(110,60,25,.3)"; g.lineWidth = 2;
     for (let y = 0; y < h; y += 24) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 24) % 2 * 21; x < w; x += 42) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 24); g.stroke(); } }
   }) }));
-  path.rotation.x = -Math.PI / 2; path.position.set(0, 0.008, wz(GATE.y) + 4.4); path.receiveShadow = true; scene.add(path);
+  layer(path.material, 2); path.rotation.x = -Math.PI / 2; path.position.set(0, 0.02, wz(GATE.y) + 4.4); path.receiveShadow = true; scene.add(path);
   // bờ đá quanh sân
   const curb = new THREE.Mesh(new THREE.TorusGeometry(R, 0.1, 6, 128), new THREE.MeshLambertMaterial({ color: 0xa96a3a }));
-  curb.rotation.x = -Math.PI / 2; curb.position.y = 0.02; curb.receiveShadow = true; scene.add(curb);
+  curb.rotation.x = -Math.PI / 2; curb.position.y = 0.035; curb.receiveShadow = true; scene.add(curb);
 }
 
 /* ---------- Cây: mai vàng, đào hồng, cây xanh (vẽ theo lô, ít lệnh vẽ) ---------- */
@@ -432,7 +434,7 @@ function buildPavilion(scene, b, kit) {
   const W = 6.4, D = 3.4, PH = 0.36, CH = 2.9; // bề ngang, bề sâu, cao nền, cao cột
   const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
   const accent = new THREE.MeshStandardMaterial({ color: col, roughness: 0.55 });
-  const carpet = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.75), roughness: 0.95 });
+  const carpet = layer(new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.75), roughness: 0.95 }), 4);
 
   // nền đá, viền, sàn gỗ
   add(new THREE.BoxGeometry(W + 0.4, PH, D + 0.4), M.stone, 0, PH / 2, 0);
@@ -441,7 +443,7 @@ function buildPavilion(scene, b, kit) {
   // hai bậc thềm, thảm đỏ chạy ra sân
   add(new THREE.BoxGeometry(3.0, PH * 0.66, 0.4), M.stone, 0, PH * 0.33, D / 2 + 0.4);
   add(new THREE.BoxGeometry(3.0, PH * 0.33, 0.4), M.stone, 0, PH * 0.165, D / 2 + 0.8);
-  const cp = add(new THREE.PlaneGeometry(1.5, 2.6), carpet, 0, 0.012, D / 2 + 2.1); cp.rotation.x = -Math.PI / 2;
+  const cp = add(new THREE.PlaneGeometry(1.5, 2.6), carpet, 0, 0.03, D / 2 + 2.1); cp.rotation.x = -Math.PI / 2;
   const cp2 = add(new THREE.PlaneGeometry(1.5, D * 0.9), carpet, 0, PH + 0.105, 0.1); cp2.rotation.x = -Math.PI / 2;
 
   // vách sau và hai vách bên thấp, dải màu của gian, tranh cổ động trên vách sau
@@ -737,7 +739,7 @@ const NEAR_BOOTH = 300; // px quanh chỗ đứng trước gian: nút to lên, p
 function buildEnterButtons(scene) {
   G.enter = BOOTHS.map(b => {
     const sp = SPOTS[b.id], r = sp.r * DEG, d = PAVILION.hd + 110;
-    const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 0.05, wz(sp.y + Math.cos(r) * d)); // trên thảm, nút treo xuống dưới điểm này scene.add(anchor);
+    const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 0.05, wz(sp.y + Math.cos(r) * d)); scene.add(anchor); // trên thảm, nút treo xuống dưới điểm này
     const solo = b.id === "g3";
     const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (solo ? " · chơi một mình" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
     const btn = el.querySelector("button");
@@ -789,7 +791,7 @@ function updateSeatPrompt() {
 
 function buildMarker(scene) {
   const m = new THREE.Mesh(new THREE.RingGeometry(0.22, 0.32, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0, depthWrite: false }));
-  m.rotation.x = -Math.PI / 2; m.position.y = 0.03; scene.add(m); G.marker = { m, t: 0 };
+  m.rotation.x = -Math.PI / 2; m.position.y = 0.06; scene.add(m); G.marker = { m, t: 0 };
 }
 
 /* =====================================================================
@@ -844,7 +846,7 @@ function updateBlobs() {
   let n = 0;
   for (const a of G.avatars.values()) {
     if (!a.root.visible || n >= BLOB_MAX) continue;
-    BLOB_M.makeTranslation(a.root.position.x, 0.02, a.root.position.z); m.setMatrixAt(n++, BLOB_M);
+    BLOB_M.makeTranslation(a.root.position.x, 0.05, a.root.position.z); m.setMatrixAt(n++, BLOB_M);
   }
   m.count = n; m.instanceMatrix.needsUpdate = true;
 }

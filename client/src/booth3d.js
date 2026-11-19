@@ -32,7 +32,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   container.appendChild(renderer.domElement);
   const labels = document.createElement("div"); labels.className = "lbl3"; container.appendChild(labels);
   const scene = new THREE.Scene(); scene.background = new THREE.Color(T.wall).multiplyScalar(0.55);
-  const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 80);
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 80);
   scene.add(new THREE.HemisphereLight(0xffffff, 0x9a8a7a, 1.6));
   const sun = new THREE.DirectionalLight(0xfff1dc, 1.5); sun.position.set(-4, 9, 6); scene.add(sun);
 
@@ -54,7 +54,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
   const btrim = new THREE.Mesh(new THREE.BoxGeometry(W + 0.5, 0.25, 0.24), trimMat); btrim.position.set(0, 4.9, -H / 2 - 0.1); scene.add(btrim);
   // thảm lối vào ở cửa
-  const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.1), new THREE.MeshLambertMaterial({ color: T.trim })); mat.rotation.x = -Math.PI / 2; mat.position.set(wx(BOOTH_ROOM.door.x), 0.01, wz(BOOTH_ROOM.door.y) + 0.3); scene.add(mat);
+  const mat = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 1.1), new THREE.MeshLambertMaterial({ color: T.trim })); mat.rotation.x = -Math.PI / 2; mat.position.set(wx(BOOTH_ROOM.door.x), 0.03, wz(BOOTH_ROOM.door.y) + 0.3); scene.add(mat);
 
   // màn hình lớn trên tường sau: tên gian, số người, đếm ngược
   const scr = document.createElement("canvas"); scr.width = 1024; scr.height = 384;
@@ -99,7 +99,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   });
   if (game === "g3") { // cọc tiêu và vạch qua đường
     for (let i = 0; i < 4; i++) { const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 12), new THREE.MeshLambertMaterial({ color: 0xff7a00 })); cone.position.set(-W / 2 + 0.6, 0.27, -1.5 + i * 0.9); scene.add(cone); }
-    for (let i = 0; i < 6; i++) { const z = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), new THREE.MeshBasicMaterial({ color: 0xf4f1e8 })); z.rotation.x = -Math.PI / 2; z.position.set(-1.5 + i * 0.6, 0.012, 2.6); scene.add(z); }
+    for (let i = 0; i < 6; i++) { const z = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), new THREE.MeshBasicMaterial({ color: 0xf4f1e8 })); z.rotation.x = -Math.PI / 2; z.position.set(-1.5 + i * 0.6, 0.03, 2.6); scene.add(z); }
   }
   // đèn lồng treo dọc hai tường bên (không che màn hình lớn)
   const lanGeo = new THREE.SphereGeometry(0.2, 12, 10), lanMat = new THREE.MeshLambertMaterial({ color: 0xe01b3c, emissive: 0xff3a1a, emissiveIntensity: 0.6 });
@@ -119,7 +119,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   function addPerson(key, name, x, y, mine) {
     if (people.has(key)) removePerson(key);
     const root = new THREE.Group(), m = characterMaterial(), body = new THREE.Mesh(characterGeometry(mine ? 7 : hash(name), mine), m), sh = new THREE.Mesh(shadowGeo, shadowMat);
-    sh.position.y = 0.02; root.add(sh, body); scene.add(root);
+    sh.position.y = 0.05; root.add(sh, body); scene.add(root);
     const el = document.createElement("div"); el.className = "l3 av";
     el.innerHTML = '<div class="avt' + (mine ? " mine" : "") + '"><span class="bub"></span><span class="nm">' + esc(name) + (mine ? " (bạn)" : "") + "</span></div>";
     labels.appendChild(el);

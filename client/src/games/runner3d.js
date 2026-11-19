@@ -25,7 +25,7 @@ function setup() {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0xbfe4ff);
   scene.fog = new THREE.Fog(0xd6eeff, 15, 30);
-  const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 120);
+  const camera = new THREE.PerspectiveCamera(55, 1, 0.3, 120);
   R = { renderer, scene, camera, q, scroll: [], scenery: [], tpl: {}, labelTex: {}, ro: null, watch: null, t: 0 };
   R.watch = new QualityWatch(q, nq => { R.q = nq; applyQuality(renderer, nq); R.sun.castShadow = nq >= 1; scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); }); resize(); });
 
