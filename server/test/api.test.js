@@ -4,7 +4,7 @@ import { SPAWN, SEATS, WORLD } from "../../shared/world.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
-import { createSim, step, steer, replay, ROAD } from "../../shared/runnerSim.js";
+import { createSim, step, steer, replay, act, validInputs, ROAD, OBSTACLES, ACT } from "../../shared/runnerSim.js";
 import { blockReason, cleanText } from "../../shared/chatFilter.js";
 
 const cfg = { port: 0, host: "127.0.0.1", sessionSecret: "test-secret", sessionDays: 1, devLogin: true, zaloAppSecret: "", adminKey: "admin-test", dbFile: ":memory:", corsOrigin: "*", khuCount: 2, khuCapacity: 5, serveClient: true };
@@ -95,6 +95,44 @@ test("Gian 3: máy chủ chạy lại mô phỏng, không tin điểm gửi lên
   const bad = await call(`/api/runs/${r2.runId}/finish`, { token: t, method: "POST", body: { inputs: [], frames: 60 * 120 } });
   assert.equal(bad.status, 422);
   assert.equal((await call(`/api/runs/${r2.runId}/finish`, { token: t, method: "POST", body: { inputs: [[5, 3]], frames: 10 } })).status, 400);
+});
+
+test("Gian 3: nhảy qua rào thấp, cúi qua biển treo; máy chủ chạy lại khớp điểm", () => {
+  // Đặt một vật cản ngay trước xe rồi chạy tới khi vật cản đi qua
+  const trial = (ob, action) => {
+    const s = createSim(1); s.objs = []; s.since = -1e9; // không sinh thêm vật cản
+    s.objs.push({ id: 999, kind: "obs", ob, lane: s.lane, y: ROAD.PY - 260 });
+    let frames = 0; const lives = s.lives;
+    while (s.objs.some(o => o.id === 999) && frames < 120) {
+      const o = s.objs.find(x => x.id === 999);
+      if (action && o.y > ROAD.PY - 140 && s.air === 0 && s.duck === 0) act(s, action);
+      step(s); s.events.length = 0; frames++;
+    }
+    return s.lives - lives; // số mạng bị mất
+  };
+  const low = OBSTACLES.findIndex(o => o[3] === "low"), high = OBSTACLES.findIndex(o => o[3] === "high"), full = OBSTACLES.findIndex(o => o[3] === "full");
+  assert.equal(trial(low, 0), -1, "đứng yên thì tông rào thấp");
+  assert.equal(trial(low, ACT.JUMP), 0, "nhảy qua rào thấp");
+  assert.equal(trial(high, ACT.DUCK), 0, "cúi qua biển treo");
+  assert.equal(trial(high, ACT.JUMP), -1, "nhảy thì vẫn tông biển treo");
+  assert.equal(trial(full, ACT.JUMP), -1, "vật cao thì phải đổi làn");
+  // đang nhảy thì không nhảy thêm được; đang nhảy vuốt xuống thì rơi nhanh để cúi
+  const s = createSim(2);
+  assert.equal(act(s, ACT.JUMP), true); assert.equal(act(s, ACT.JUMP), false);
+  assert.equal(act(s, ACT.DUCK), true); assert.equal(s.air, 0); assert.ok(s.duck > 0);
+  // hàng chắn kín 3 làn luôn có ít nhất một vật nhảy hoặc cúi qua được
+  for (let seed = 1; seed < 60; seed++) {
+    const r = createSim(seed); r.t = 20;
+    for (let k = 0; k < 40; k++) {
+      r.objs = []; r.events.length = 0; r.since = ROAD.GAP; step(r);
+      const row = r.objs.filter(o => o.kind === "obs");
+      if (row.length === 3) assert.ok(row.some(o => OBSTACLES[o.ob][3] !== "full"), "hàng 3 làn phải chừa đường nhảy/cúi");
+    }
+  }
+  // chạy lại từ seed + thao tác (có nhảy, cúi) cho cùng kết quả
+  const inputs = [[30, ACT.JUMP], [90, ACT.LEFT], [150, ACT.DUCK], [200, ACT.RIGHT], [260, ACT.JUMP]];
+  assert.deepEqual(replay(77, inputs, 400), replay(77, inputs, 400));
+  assert.ok(validInputs(inputs)); assert.ok(!validInputs([[5, 3]])); assert.ok(!validInputs([[5, -3]]));
 });
 
 test("Bảng vàng: tổng điểm cao nhất 3 gian, có thứ hạng của tôi", async () => {

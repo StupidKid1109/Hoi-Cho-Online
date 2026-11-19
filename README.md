@@ -6,7 +6,7 @@ Hội chợ 3D có 3 gian trò chơi tuyên truyền, Bảng vàng chung để t
 | --- | --- | --- |
 | Gian 1 | Thật hay giả? (vuốt trái/phải) | Phòng chống lừa đảo |
 | Gian 2 | Đuổi hình bắt chữ | Địa danh, văn hóa |
-| Gian 3 | Đường về an toàn (chạy vô tận 3D) | An toàn giao thông |
+| Gian 3 | Đường về an toàn (chạy vô tận 3D: đổi làn, nhảy, cúi) | An toàn giao thông |
 
 ## Cấu trúc thư mục
 
@@ -92,6 +92,12 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Cổng chào ở phía nam. Ba gian ở ba phía còn lại, mặt quay vào giữa: Gian 1 phía tây, Gian 2 phía bắc, Gian 3 phía đông. Bảng vàng ở góc tây nam, Gian 4 và 5 (sắp mở) ở hai góc phía bắc.
 - Giữa là sân trống để trò chuyện, có **80 chỗ ngồi**: 16 ghế băng (mỗi ghế 3 chỗ) quay vào giữa và 8 bàn tròn (mỗi bàn 4 ghế đẩu). Sân rộng 7200×7200 (gấp 3 lần mỗi chiều so với bản đầu), có đèn lồng dọc các lối đi. Đi lại gần một ghế trống thì chỗ ngồi sáng viền vàng và hiện nút **🪑 Ngồi** ngay trên ghế (trên máy tính nhấn phím **E**); bấm là nhân vật ngồi vào đúng chỗ đó. Khi đang ngồi, trên đầu hiện nút **🚶 Đứng dậy** (hoặc nhấn E). Cũng có thể chạm thẳng vào ghế, hoặc bấm nút **🪑 Ngồi** ở dưới để đi tới ghế trống gần nhất; đi tiếp thì tự đứng dậy. Người khác trong khu thấy mình ngồi; mỗi ghế chỉ một người.
 - Bố cục nằm trong `shared/world.js`, dùng chung cho máy chủ và giao diện.
+
+## Gian 3: vượt chướng ngại vật
+
+- Vuốt trái, phải (hoặc chạm hai bên xe) để đổi làn; **vuốt lên** hoặc nút **⬆ Nhảy** (phím ↑, W, Space) để nhảy; **vuốt xuống** hoặc nút **⬇ Cúi** (phím ↓, S) để cúi. Đang nhảy mà cúi thì rơi nhanh xuống.
+- Ba loại vật cản: **rào thấp nhảy qua được** (két bia, rào thi công, biển có ⬆), **biển treo cúi qua được** (cấm ngược chiều, cờ đua, biển có ⬇), **vật cao phải đổi làn** (cột đèn đỏ, điện thoại). Từ giây 14 có hàng chắn kín 3 làn, luôn chừa một vật nhảy hoặc cúi qua được.
+- Luật nằm trong `shared/runnerSim.js` (máy chủ chạy lại đúng file này để chấm điểm). Thao tác gửi lên: `[khung hình, d]` với d = -1/1 đổi làn, 2 nhảy, -2 cúi.
 
 ## Sức chịu tải (100 người cùng lúc)
 

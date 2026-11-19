@@ -5,10 +5,10 @@ import { $, msg, beep } from "../ui.js";
 import { post } from "../api.js";
 import { vibrate } from "../platform.js";
 import { hasWebGL } from "../gfx/webgl.js";
-import { createSim, step, steer, score, ROAD, OBSTACLES, FPS, DT } from "../../../shared/runnerSim.js";
+import { createSim, step, act, score, ROAD, OBSTACLES, FPS, DT, ACT } from "../../../shared/runnerSim.js";
 import * as cssView from "./runnerCss.js";
 
-export const pre = ["🛵", "Đường về an toàn", [["👆", "Vuốt hoặc chạm trái, phải để đổi làn"], ["🚫", "Né các lỗi vi phạm: rượu bia, đèn đỏ, điện thoại…"], ["⛑️", "Nhặt mũ bảo hiểm để được bảo vệ 1 lần"], ["❤️", "Có 3 mạng, chạy càng xa càng nhiều điểm"]]];
+export const pre = ["🛵", "Đường về an toàn", [["👆", "Vuốt hoặc chạm trái, phải để đổi làn"], ["⬆️", "Vuốt lên (hoặc nút Nhảy) để nhảy qua rào thấp: két bia, rào thi công"], ["⬇️", "Vuốt xuống (hoặc nút Cúi) để cúi qua biển treo: cấm ngược chiều, cờ đua"], ["🚦", "Cột đèn đỏ, điện thoại: phải đổi làn"], ["⛑️", "Nhặt mũ bảo hiểm để được bảo vệ 1 lần · có 3 mạng"]]];
 let g = null, view3d = null, tried3d = false;
 
 /** Chọn phần vẽ: Three.js nếu được, không thì CSS 3D. */
@@ -36,8 +36,10 @@ export async function start(ctx) {
   hud(); g.raf = requestAnimationFrame(loop);
 }
 export function stop() { if (g) { g.running = false; cancelAnimationFrame(g.raf); g.view.stop(); } }
-/** Đổi làn. Thao tác được ghi theo số khung hình để máy chủ chạy lại đúng như vậy. */
+/** Thao tác: -1 / 1 đổi làn, 2 nhảy, -2 cúi (ACT). Được ghi theo số khung hình để máy chủ chạy lại đúng như vậy. */
 export function move(d) { if (!g || !g.running || g.sim.over) return; g.pending.push(d); }
+export const jump = () => move(ACT.JUMP);
+export const duck = () => move(ACT.DUCK);
 
 function hud() { const s = g.sim; $("g3sc").textContent = score(s).toLocaleString("vi-VN"); $("g3m").textContent = Math.floor(s.dist) + " m" + (s.shield ? " · ⛑️" : ""); $("g3hp").textContent = "❤️".repeat(Math.max(0, s.lives)) + "🤍".repeat(3 - Math.max(0, s.lives)); }
 
@@ -56,7 +58,7 @@ function loop(ts) {
   const s = g.sim;
   while (g.acc >= DT && !s.over) {
     g.acc -= DT;
-    while (g.pending.length) { const d = g.pending.shift(), before = s.lane; steer(s, d); if (s.lane !== before) { g.inputs.push([s.frame, d]); g.tilt = d * 18; } }
+    while (g.pending.length) { const d = g.pending.shift(); if (act(s, d)) { g.inputs.push([s.frame, d]); if (d === ACT.LEFT || d === ACT.RIGHT) g.tilt = d * 18; } }
     step(s); s.events.forEach(handle); s.events.length = 0;
   }
   const mv = Math.min(1500, 620 + 22 * s.t) * dt;

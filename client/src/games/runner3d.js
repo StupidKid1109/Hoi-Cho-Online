@@ -2,7 +2,7 @@
 // vị trí, va chạm, điểm đều do shared/runnerSim.js quyết định (máy chủ chạy lại đúng file đó).
 import * as THREE from "three";
 import { $ } from "../ui.js";
-import { ROAD, OBSTACLES } from "../../../shared/runnerSim.js";
+import { ROAD, OBSTACLES, JUMP_FRAMES, DT } from "../../../shared/runnerSim.js";
 import { initialQuality } from "../gfx/webgl.js";
 import { createRenderer, applyQuality, QualityWatch, setMaxAniso, canvasTex, glowTex, blobTex, rrect, fitText, mergeParts, waitFonts, FONT, EMOJI_FONT } from "../gfx/kit.js";
 
@@ -176,7 +176,7 @@ function buildScenery(scene) {
 function buildTemplates() {
   const P = mergeParts, B = (w, h, d) => new THREE.BoxGeometry(w, h, d), C = (rt, rb, h, n = 12) => new THREE.CylinderGeometry(rt, rb, h, n), Sp = (r, n = 10) => new THREE.SphereGeometry(r, n, n - 2);
   const stripes = (n, w, h, y, a, b) => Array.from({ length: n }, (_, i) => [B(w / n, h, 0.08), i % 2 ? a : b, -w / 2 + (i + 0.5) * w / n, y, 0]);
-  const flag = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 4; c++) flag.push([B(0.16, 0.16, 0.03), (r + c) % 2 ? "#111111" : "#ffffff", 0.12 + c * 0.16, 1.1 + r * 0.16, 0]);
+  const banner = []; for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) banner.push([B(0.155, 0.14, 0.04), (r + c) % 2 ? "#111111" : "#ffffff", -0.54 + c * 0.155, 1.18 + r * 0.14, 0]);
   const obs = [
     // 0 Rượu bia: két bia và chai
     P([[B(0.9, 0.35, 0.6), "#c8102e", 0, 0.18, 0], [C(0.09, 0.11, 0.55), "#2d6a1f", -0.22, 0.62, 0], [C(0.035, 0.07, 0.22), "#2d6a1f", -0.22, 1.0, 0], [C(0.09, 0.11, 0.55), "#8a4b08", 0.05, 0.62, 0.05], [C(0.035, 0.07, 0.22), "#8a4b08", 0.05, 1.0, 0.05], [C(0.09, 0.11, 0.55), "#2d6a1f", 0.3, 0.62, -0.05], [C(0.035, 0.07, 0.22), "#2d6a1f", 0.3, 1.0, -0.05], [B(0.6, 0.12, 0.62), "#ffcc33", 0, 0.2, 0.01]]),
@@ -186,10 +186,10 @@ function buildTemplates() {
     P([[B(0.62, 1.15, 0.1), "#1d1f24", 0, 0.75, 0], [B(0.54, 1.0, 0.02), "#3a86ff", 0, 0.76, 0.06], [B(0.2, 0.04, 0.02), "#111111", 0, 1.22, 0.07], [B(0.4, 0.12, 0.02), "#06d6a0", 0, 0.95, 0.075], [B(0.4, 0.12, 0.02), "#ffffff", 0, 0.75, 0.075], [B(0.12, 0.35, 0.3), "#555", 0, 0.17, -0.12, -0.4]]),
     // 3 Thi công: rào chắn sọc và cọc tiêu
     P([...stripes(6, 1.1, 0.2, 0.75, "#ffffff", "#ff7a00"), [B(0.06, 0.8, 0.06), "#666", -0.45, 0.4, 0], [B(0.06, 0.8, 0.06), "#666", 0.45, 0.4, 0], [C(0.02, 0.17, 0.5), "#ff7a00", -0.55, 0.25, 0.35], [C(0.09, 0.12, 0.08), "#ffffff", -0.55, 0.25, 0.35], [C(0.02, 0.17, 0.5), "#ff7a00", 0.55, 0.25, 0.35], [C(0.09, 0.12, 0.08), "#ffffff", 0.55, 0.25, 0.35]]),
-    // 4 Ngược chiều: biển cấm đi ngược chiều
-    P([[C(0.04, 0.04, 1.3, 8), "#9aa0a8", 0, 0.65, 0], [C(0.42, 0.42, 0.06, 24), "#d62828", 0, 1.5, 0, Math.PI / 2], [B(0.55, 0.12, 0.08), "#ffffff", 0, 1.5, 0.02], [C(0.45, 0.45, 0.04, 24), "#ffffff", 0, 1.5, -0.03, Math.PI / 2]]),
-    // 5 Đua xe: cờ ca-rô và chồng lốp
-    P([[C(0.025, 0.025, 1.7, 6), "#cccccc", 0, 0.85, 0], ...flag, [new THREE.TorusGeometry(0.22, 0.09, 6, 14), "#1b1b1b", -0.4, 0.09, 0.1, Math.PI / 2], [new THREE.TorusGeometry(0.22, 0.09, 6, 14), "#1b1b1b", -0.4, 0.27, 0.1, Math.PI / 2], [new THREE.TorusGeometry(0.22, 0.09, 6, 14), "#e63946", -0.4, 0.45, 0.1, Math.PI / 2]])
+    // 4 Ngược chiều: cổng treo ngang làn, biển cấm ở giữa — phải CÚI qua
+    P([[C(0.05, 0.05, 1.75, 8), "#9aa0a8", -0.62, 0.875, 0], [C(0.05, 0.05, 1.75, 8), "#9aa0a8", 0.62, 0.875, 0], [B(1.34, 0.42, 0.1), "#d62828", 0, 1.32, 0], [B(1.2, 0.08, 0.11), "#ffffff", 0, 1.32, 0.005], [C(0.3, 0.3, 0.05, 24), "#ffffff", 0, 1.32, 0.07, Math.PI / 2], [C(0.26, 0.26, 0.06, 24), "#d62828", 0, 1.32, 0.08, Math.PI / 2], [B(0.36, 0.08, 0.07), "#ffffff", 0, 1.32, 0.12]]),
+    // 5 Đua xe: băng rôn ca-rô treo ngang làn — phải CÚI qua
+    P([[C(0.04, 0.04, 1.8, 6), "#cccccc", -0.62, 0.9, 0], [C(0.04, 0.04, 1.8, 6), "#cccccc", 0.62, 0.9, 0], ...banner]),
   ];
   const vmat = new THREE.MeshLambertMaterial({ vertexColors: true });
   R.tpl.obs = obs.map(geo => ({ geo, mat: vmat }));
@@ -208,13 +208,18 @@ function buildTemplates() {
 /** Biển chữ đỏ trên vật cản, ví dụ "🍺 Rượu bia". */
 function labelTex(ob) {
   if (R.labelTex[ob]) return R.labelTex[ob];
-  const [e, name] = OBSTACLES[ob];
-  return (R.labelTex[ob] = canvasTex(512, 144, (g, w, h) => {
+  const [e, name, , how] = OBSTACLES[ob];
+  const hint = how === "low" ? "⬆" : how === "high" ? "⬇" : "";
+  return (R.labelTex[ob] = canvasTex(640, 144, (g, w, h) => {
     g.fillStyle = "#dc2626"; rrect(g, 6, 12, w - 12, h - 24, 54); g.fill();
     g.strokeStyle = "#ffffff"; g.lineWidth = 8; rrect(g, 12, 18, w - 24, h - 36, 48); g.stroke();
     g.textBaseline = "middle"; g.textAlign = "left";
     g.font = "72px " + EMOJI_FONT; g.fillText(e, 34, h / 2 + 5);
-    g.fillStyle = "#ffffff"; g.textAlign = "center"; fitText(g, name, 300, h / 2 + 3, 300, 64, 900);
+    g.fillStyle = "#ffffff"; g.textAlign = "center"; fitText(g, name, hint ? 300 : 360, h / 2 + 3, hint ? 300 : 400, 64, 900);
+    if (hint) { // ô vàng có mũi tên: nhảy qua (⬆) hoặc cúi qua (⬇)
+      g.fillStyle = "#ffc533"; rrect(g, w - 150, 28, 118, h - 56, 26); g.fill();
+      g.fillStyle = "#5a3a00"; g.font = "900 70px " + FONT; g.fillText(hint, w - 91, h / 2 + 4);
+    }
   }, { keep: true }));
 }
 
@@ -242,11 +247,11 @@ function buildPlayer(scene) {
   ]);
   const body = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ vertexColors: true }));
   body.castShadow = true;
-  const sh = new THREE.Mesh(R.tpl.shadowGeo, R.tpl.shadow); sh.scale.set(0.8, 1, 1.5); sh.position.y = 0.02;
+  const sh = new THREE.Mesh(R.tpl.shadowGeo, R.tpl.shadow.clone()); sh.scale.set(0.8, 1, 1.5); sh.position.y = 0.02; // bóng riêng (mờ đi khi nhảy)
   const bubble = new THREE.Mesh(new THREE.SphereGeometry(0.95, 20, 14), new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }));
   bubble.position.y = 0.8; bubble.visible = false;
   const root = new THREE.Group(); root.add(sh, body, bubble); scene.add(root);
-  R.player = { root, body, bubble };
+  R.player = { root, body, bubble, shadow: sh };
 }
 
 /* ---------------------------------------------------------------------
@@ -268,14 +273,14 @@ export function init() {
 }
 export function stop() { /* vòng vẽ do runner.js điều khiển: không vẽ thêm khi đã dừng */ }
 
-const LABEL_Y = [1.65, 2.55, 1.75, 1.45, 2.3, 2.05]; // độ cao biển chữ theo từng loại vật cản
+const LABEL_Y = [1.65, 2.55, 1.75, 1.45, 2.05, 2.05]; // độ cao biển chữ theo từng loại vật cản
 export function spawn(o) {
   const root = new THREE.Group();
-  let mesh;
+  let mesh, label = null;
   if (o.kind === "obs") {
     const t = R.tpl.obs[o.ob]; mesh = new THREE.Mesh(t.geo, t.mat); mesh.castShadow = true;
-    const lab = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(o.ob), transparent: true, depthWrite: false }));
-    lab.scale.set(1.9, 0.53, 1); lab.position.y = LABEL_Y[o.ob]; root.add(lab);
+    const lab = label = new THREE.Sprite(new THREE.SpriteMaterial({ map: labelTex(o.ob), transparent: true, depthWrite: false }));
+    lab.scale.set(2.2, 0.5, 1); lab.position.y = LABEL_Y[o.ob]; root.add(lab);
   } else {
     const t = R.tpl[o.kind]; mesh = new THREE.Mesh(t.geo, t.mat); mesh.castShadow = true; mesh.position.y = 0.55;
     if (o.kind === "helmet") mesh.position.y = 0.45;
@@ -284,7 +289,7 @@ export function spawn(o) {
   root.add(sh, mesh);
   root.position.set(X(ROAD.LANES[o.lane]), 0, Z(o.y));
   R.scene.add(root);
-  v.objs.set(o.id, { root, mesh, kind: o.kind, spin: Math.random() * 6 });
+  v.objs.set(o.id, { root, mesh, label, kind: o.kind, spin: Math.random() * 6 });
 }
 
 export function remove(o, type) {
@@ -320,6 +325,7 @@ export function frame(g, dt, mv) {
   for (const o of s.objs) {
     const it = v.objs.get(o.id); if (!it) continue;
     it.root.position.set(X(ROAD.LANES[o.lane]), 0, Z(o.y));
+    if (it.label) it.label.material.opacity = Math.min(1, Math.max(0, (-Z(o.y) - 2) / 3)); // tới gần xe thì biển chữ mờ dần, không che tầm nhìn
     const grow = Math.min(1, 0.3 + (o.y - ROAD.SPAWN) / 260); it.root.scale.setScalar(grow);
     if (it.kind !== "obs") { it.spin += dt * 3.2; it.mesh.rotation.y = it.spin; it.mesh.position.y = 0.55 + Math.sin(it.spin * 1.3) * 0.08; }
   }
@@ -333,8 +339,16 @@ export function frame(g, dt, mv) {
   // xe
   const P = R.player, px = X(g.px);
   P.root.position.x = px;
+  // nhảy: bật lên theo đường cong (đỉnh 1,5 đơn vị); cúi: người lái rạp xuống
+  const jumpT = s.air > 0 ? 1 - (s.air - g.acc / DT) / JUMP_FRAMES : 0;
+  const hJump = s.air > 0 ? Math.sin(Math.min(1, Math.max(0, jumpT)) * Math.PI) * 1.5 : 0;
+  v.duckAmt = (v.duckAmt || 0) + ((s.duck > 0 ? 1 : 0) - (v.duckAmt || 0)) * Math.min(1, dt * 18);
+  P.body.position.y = hJump + Math.sin(R.t * 18) * 0.012 * (hJump ? 0 : 1);
   P.body.rotation.z = -g.tilt * Math.PI / 180 * 0.9;
-  P.body.position.y = Math.sin(R.t * 18) * 0.012;
+  P.body.rotation.x = (hJump ? -0.18 * Math.cos(jumpT * Math.PI) : 0) + 0.22 * v.duckAmt; // ngóc lên khi bật, chúi khi đáp; cúi thì rạp người về trước
+  P.body.scale.set(1, 1 - 0.32 * v.duckAmt, 1 + 0.1 * v.duckAmt);
+  P.bubble.position.y = 0.8 + hJump;
+  P.shadow.scale.set(0.8 * (1 - hJump * 0.25), 1, 1.5 * (1 - hJump * 0.25)); P.shadow.material.opacity = 1 - hJump * 0.35;
   P.bubble.visible = !!s.shield; if (s.shield) P.bubble.scale.setScalar(1 + Math.sin(R.t * 6) * 0.04);
   P.body.visible = !(s.inv > 0 && Math.floor(R.t * 12) % 2);
   // hạt lấp lánh

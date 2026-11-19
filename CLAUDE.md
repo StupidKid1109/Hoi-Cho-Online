@@ -15,7 +15,7 @@ Mini game tuyên truyền cho Zalo Mini App của một UBND phường. Đối t
   - `gfx/webgl.js` (không nạp Three.js): phát hiện WebGL, mức chất lượng (`?q=0|1|2`, `?gfx=css`). `gfx/kit.js`: renderer, tự hạ chất lượng, kết cấu canvas, nhân vật gộp 1 mesh.
   - `games/swipe.js` (Gian 1), `games/rebus.js` (Gian 2), `games/runner.js` (Gian 3: vòng mô phỏng bước cố định + ghi `inputs`), phần vẽ Gian 3 ở `games/runner3d.js` (Three.js) hoặc `games/runnerCss.js`.
   - `platform.js`: kết nối `zmp-sdk` (import động, ngoài Zalo tự chuyển sang chế độ thử).
-- `shared/runnerSim.js`: mô phỏng tất định Gian 3, máy chủ chạy lại để chấm điểm. **Không được đổi luật mô phỏng ở một phía mà không đổi phía kia.**
+- `shared/runnerSim.js`: mô phỏng tất định Gian 3, máy chủ chạy lại để chấm điểm. **Không được đổi luật mô phỏng ở một phía mà không đổi phía kia.** Có đổi làn, nhảy, cúi (`act(s, d)`, d = -1/1/2/-2, `ACT`); vật cản có cách vượt `low` (nhảy), `high` (cúi), `full` (đổi làn); từ giây 14 có hàng kín 3 làn luôn chừa một vật vượt được.
 - `shared/world.js`: **bố cục khu hội chợ dùng chung** cho máy chủ, bản Three.js và bản CSS 3D: sân 7200×7200 px (`SCALE = 3` so với bố cục gốc 2400: khoảng cách nhân 3, kích thước đồ vật giữ nguyên), cổng phía nam, 3 gian ở tây/bắc/đông quay vào giữa, Bảng vàng góc tây nam, Gian 4–5 góc bắc, sân trống giữa và 80 chỗ ngồi (`SEATS`: 16 ghế băng × 3, 8 bàn × 4 ghế đẩu). Máy chủ dùng `WORLD`, `SPAWN`, `SEATS` (tin nhắn `sit`/`sitno`, mỗi ghế một người, rời ghế >40 px hoặc thoát thì nhả ghế). Đổi bố cục chỉ sửa file này.
 - `shared/chatFilter.js`: bộ lọc chat dùng chung.
 - `admin/index.html`: trang quản trị (đợt thưởng, báo cáo chat, xuất CSV trúng giải, nạp lại nội dung).

@@ -155,14 +155,21 @@ document.querySelectorAll("[data-back]").forEach(b => b.onclick = leaveGame);
 $("lbBtn").onclick = () => board("all");
 $("g1no").onclick = () => swipe.decide(true); $("g1yes").onclick = () => swipe.decide(false);
 $("g2hint").onclick = () => rebus.hint(); $("g2skip").onclick = () => rebus.skip();
+$("g3jump").onpointerdown = e => { e.preventDefault(); runner.jump(); }; $("g3duck").onpointerdown = e => { e.preventDefault(); runner.duck(); };
 const road = $("road"); let rx = null;
-road.onpointerdown = e => { rx = e.clientX; };
-road.onpointerup = e => { if (rx == null) return; const dx = e.clientX - rx; rx = null;
+let ry = null;
+road.onpointerdown = e => { rx = e.clientX; ry = e.clientY; };
+road.onpointerup = e => { if (rx == null) return; const dx = e.clientX - rx, dy = e.clientY - ry; rx = null;
+  if (Math.abs(dy) > 30 && Math.abs(dy) > Math.abs(dx)) { if (dy < 0) runner.jump(); else runner.duck(); return; } // vuốt lên: nhảy, vuốt xuống: cúi
   if (Math.abs(dx) > 30) runner.move(dx > 0 ? 1 : -1); else { const p = $("g3p"), r = p ? p.querySelector(".e").getBoundingClientRect() : road.getBoundingClientRect(); runner.move(e.clientX < r.left + r.width / 2 ? -1 : 1); } };
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT") return;
   if (S.cur === "g1") { if (e.key === "ArrowLeft") swipe.decide(true); if (e.key === "ArrowRight") swipe.decide(false); }
-  if (S.cur === "g3") { if (e.key === "ArrowLeft" || e.key === "a") runner.move(-1); if (e.key === "ArrowRight" || e.key === "d") runner.move(1); }
+  if (S.cur === "g3") {
+    if (e.key === "ArrowLeft" || e.key === "a") runner.move(-1); if (e.key === "ArrowRight" || e.key === "d") runner.move(1);
+    if (e.key === "ArrowUp" || e.key === "w" || e.key === " ") { e.preventDefault(); runner.jump(); }
+    if (e.key === "ArrowDown" || e.key === "s") { e.preventDefault(); runner.duck(); }
+  }
 });
 window.__hoicho = { S, inZalo }; // hỗ trợ kiểm thử
 boot();
