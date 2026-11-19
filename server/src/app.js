@@ -46,6 +46,11 @@ export function createApp(config) {
       const j = await r.json(); return { title: j.title };
     } catch (e) { return null; }
   }
+  // Nhạc nền cả game (trừ trong quán cà phê): file tải lên hoặc link YouTube; mặc định bài anh chọn
+  // Nhạc nền cả game (trừ trong quán cà phê): file nhạc tải lên; mặc định bài nhạc mẫu không lời
+  const BGM_DEFAULT = { on: true, file: "nhac-mau-thu-gian.wav", title: "Nhạc mẫu thư giãn (không lời)", volume: 0.5 };
+  let bgm = { ...BGM_DEFAULT, ...(music.loadBgm() || {}) };
+  if (bgm.file && !music.has(bgm.file)) bgm = { ...bgm, file: null, title: "" };
   const setMusic = next => { const st = matches.setMusic(next); music.saveState(st); return st; };
   const authHits = new Map();
 
@@ -103,7 +108,7 @@ export function createApp(config) {
 
     if (path === "/api/event" && method === "GET") return send(res, 200, publicEvent());
     if (path === "/api/khu" && method === "GET") return send(res, 200, { khu: rt.khuList() });
-    if (path === "/api/match" && method === "GET") return send(res, 200, matches.status()); // số người đang chờ ở phòng đấu Gian 1, Gian 2
+    if (path === "/api/match" && method === "GET") return send(res, 200, { ...matches.status(), bgm }); // số người đang chờ ở phòng đấu Gian 1, Gian 2; nhạc nền hiện tại
 
     // Các API dưới đây cần đăng nhập
     if (path.startsWith("/api/") && !path.startsWith("/api/admin/")) {
@@ -191,6 +196,14 @@ export function createApp(config) {
       }
       // Nhạc quán cà phê
       if (path === "/api/admin/music" && method === "GET") return send(res, 200, { tracks: music.list(), youtube: music.ytList(), state: matches.music(), listeners: matches.status().cafe.n });
+      if (path === "/api/admin/bgm" && method === "GET") return send(res, 200, { bgm, tracks: music.list() });
+      if (path === "/api/admin/bgm" && method === "PUT") { // { on, volume, file }
+        const b = await readBody(req), next = { ...bgm };
+        if ("on" in b) next.on = !!b.on;
+        if ("volume" in b) next.volume = Math.max(0, Math.min(1, Number(b.volume) || 0));
+        if (b.file) { if (!music.has(b.file)) return send(res, 404, { error: "Không có bài này" }); Object.assign(next, { file: b.file, title: music.title(b.file) }); }
+        bgm = next; music.saveBgm(bgm); return send(res, 200, { bgm });
+      }
       if (path === "/api/admin/music/youtube" && method === "POST") { // { url, title? }: thêm link YouTube vào danh sách
         const b = await readBody(req), id = youtubeId(b.url);
         if (!id) return send(res, 400, { error: "Link YouTube không hợp lệ" });
@@ -225,6 +238,7 @@ export function createApp(config) {
       if (path === "/api/admin/music/delete" && method === "POST") {
         const { file } = await readBody(req);
         if (matches.music().file === file) setMusic({ file: null, yt: null, title: "", startedAt: 0 });
+        if (bgm.file === file) { bgm = { ...bgm, file: null, title: "" }; music.saveBgm(bgm); }
         music.remove(file); return send(res, 200, { tracks: music.list() });
       }
       if (path === "/api/admin/reload-content" && method === "POST") { content = loadContent(); return send(res, 200, { ok: true }); }

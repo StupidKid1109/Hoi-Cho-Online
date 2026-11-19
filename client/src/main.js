@@ -4,6 +4,7 @@ import { api, post, setToken, connectKhu } from "./api.js";
 import { initPlatform, loginPayload, share, inZalo } from "./platform.js";
 import { BOOTHS, BOOTH, PLACE_NAME, CAFE, API_BASE } from "./config.js";
 import * as hub from "./hub.js";
+import * as bgm from "./bgm.js";
 import { createSpace } from "./games/lobby.js";
 import * as chat from "./chat.js";
 import * as swipe from "./games/swipe.js";
@@ -62,7 +63,7 @@ function enterFair() {
   chat.initChat({ khu: S.khu, send, nick: () => S.me.nick, get myId() { return S.myId; }, onPeerSay: hub.peerSay, onSelfSay: hub.selfSay, onHide: hub.hidePeer });
   if (!$("conn")) { const c = document.createElement("div"); c.id = "conn"; c.className = "conn"; $("viewport").appendChild(c); }
   S.conn = connectKhu(S.khu, onRealtime, ok => { const c = $("conn"); c.textContent = ok ? "● Trực tuyến" : "● Mất kết nối, đang nối lại…"; c.classList.toggle("off", !ok); });
-  renderHud(); hub.startHub(); pollMatch();
+  renderHud(); hub.startHub(); pollMatch(); bgm.setPlace("fair");
   const note = hub.fallbackNotice();
   if (note && !$("gfxNote")) {
     const n = document.createElement("div"); n.id = "gfxNote"; n.className = "gfxnote";
@@ -106,6 +107,7 @@ function pollMatch() {
   const tick = () => {
     if (!$("fair").classList.contains("on") || document.hidden) return;
     api("/api/match").then(s => {
+      bgm.setState(s.bgm); // nhạc nền do quản trị viên chọn
       for (const id of ["g1", "g2"]) {
         const w = s[id];
         hub.setBoothInfo(id, w.startIn != null ? "👥 " + w.n + " người · sắp bắt đầu!" : w.n ? "👥 " + w.n + "/" + s.min + " người đang chờ" : "Chưa có ai chờ · cần " + s.min + " người");
@@ -123,6 +125,7 @@ function pollMatch() {
 // Gian 3: chơi một mình, bấm "Bắt đầu chạy". Không có WebGL: dùng thẻ luật chơi và phòng chờ 2D như cũ.
 function enterBooth(id) {
   if (id === "cafe") return enterCafe();
+  bgm.setPlace("game");
   closeSpace();
   S.cur = id; show(id);
   const b = BOOTH(id), solo = id === "g3";
@@ -136,7 +139,7 @@ function enterBooth(id) {
 // Quán cà phê: không gian riêng có nhạc ban tổ chức bật, chat và chào nhau; máy không có WebGL vẫn vào được (dạng phẳng)
 function enterCafe() {
   closeSpace();
-  S.cur = "cafe"; show("cafe");
+  S.cur = "cafe"; show("cafe"); bgm.setPlace("cafe"); // trong quán chỉ nghe nhạc của quán
   S.space = createSpace({
     game: "cafe", title: CAFE.name, tag: CAFE.tag, color: CAFE.c, nick: S.me.nick, cafe: true, rules: CAFE.intro, use3d: hub.mode === "3d",
     apiBase: API_BASE, toast, send: o => S.conn && S.conn.send(o), onLeave: leaveGame
@@ -156,7 +159,7 @@ const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.s
 function play(id) { GAMES[id].start(gameCtx).catch(e => { toast(e.message); leaveGame(); }); }
 // Chơi lại: Gian 1, Gian 2 quay về phòng chờ trong không gian của gian; Gian 3 chạy lại ngay
 function again(id) { if (S.space && id === "g3") S.space.hide(); play(id); }
-function leaveGame() { if (S.cur === "cafe") { if (S.conn) S.conn.send({ t: "mleave" }); } else if (S.cur) GAMES[S.cur].stop(); closeSpace(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); }
+function leaveGame() { if (S.cur === "cafe") { if (S.conn) S.conn.send({ t: "mleave" }); } else if (S.cur) GAMES[S.cur].stop(); closeSpace(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); bgm.setPlace("fair"); }
 function result(id, r, stats, review) {
   const b = BOOTH(id);
   S.me.bests = r.bests; S.me.total = r.total; S.me.rank = r.rank;

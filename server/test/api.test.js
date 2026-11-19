@@ -348,5 +348,14 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
     assert.ok(ym.yt === "dQw4w9WgXcQ" && ym.file === null && ym.title === "Bài thử" && ym.startedAt > 0, "người trong quán nhận lệnh phát YouTube");
     await call("/api/admin/music/youtube/delete", { method: "POST", body: { id: "dQw4w9WgXcQ" }, admin: "admin-test" }); await wait(100);
     assert.equal(a.inbox.filter(x => x.t === "cmusic").at(-1).yt, null, "xóa video đang phát thì tắt");
+    // nhạc nền cả game: mặc định bài YouTube đã chọn, quản trị viên đổi được
+    const bg0 = (await call("/api/match")).data.bgm;
+    assert.ok(bg0.on && bg0.file === "nhac-mau-thu-gian.wav", "nhạc nền mặc định: bài mẫu");
+    assert.equal((await call("/api/admin/bgm", { method: "PUT", body: { file: "../x.mp3" }, admin: "admin-test" })).status, 404);
+    await call("/api/admin/bgm", { method: "PUT", body: { file: tracks[0].file, volume: 0.3 }, admin: "admin-test" });
+    const bg1 = (await call("/api/match")).data.bgm;
+    assert.ok(bg1.file === tracks[0].file && bg1.volume === 0.3, "đổi nhạc nền sang file tải lên");
+    await call("/api/admin/bgm", { method: "PUT", body: { on: false }, admin: "admin-test" });
+    assert.equal((await call("/api/match")).data.bgm.on, false, "tắt nhạc nền");
   } finally { for (const x of [a, b]) x.ws.close(); }
 });

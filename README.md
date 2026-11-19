@@ -123,6 +123,12 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - **Nhạc trong quán do quản trị viên bật**: vào `/admin` → mục *☕ Nhạc quán cà phê*: tải bài lên (mp3, m4a, ogg, wav, tối đa 40 MB), bấm **▶ Phát** hoặc **⏹ Tắt nhạc**, chỉnh âm lượng, lặp lại. Cả quán nghe cùng một đoạn; người vào sau nghe tiếp đúng đoạn đang phát. Có sẵn một bài nhạc mẫu không lời để thử. Người chơi tắt/bật tiếng bằng nút loa góc trên. Điện thoại chặn tự phát có tiếng thì nhạc vẫn chạy không tiếng, chạm màn hình lần đầu là có tiếng. Chỉ dùng nhạc được phép phát công khai.
 - **Phát video YouTube**: cùng mục đó, dán link YouTube rồi bấm **Thêm**, sau đó **▶ Phát**. Video phát bằng trình phát nhúng chính thức của YouTube, **chiếu trên màn hình lớn trên tường quán** (cả quán xem cùng một đoạn; người chơi không bấm dừng hay phát được, chỉ tắt tiếng riêng và bấm **⛶** để xem to; máy không có 3D thì hiện khung nhỏ góc phải); không tải nhạc từ YouTube về máy chủ vì YouTube không cho phép. Video bị chủ kênh chặn nhúng thì không phát được; có thể có quảng cáo. Người chơi bấm 📺 để ẩn video (khi ẩn thì dừng phát cho riêng mình). Khi đưa lên Zalo Mini App cần khai báo thêm tên miền `www.youtube.com` trong danh sách tên miền được phép của Mini App.
 
+## Nhạc nền game
+
+- Nhạc nền phát ở sảnh, phòng chờ và các gian (vào quán cà phê thì tắt để nghe nhạc của quán, ra khỏi quán thì phát lại).
+- Quản trị viên chọn bài ở `/admin` → mục **🎶 Nhạc nền game**: chọn bài trong danh sách file nhạc (tải bài lên ở mục Nhạc quán cà phê), chỉnh âm lượng, bật/tắt, bấm **Lưu nhạc nền**. Mặc định là bài nhạc mẫu không lời. Chỉ dùng nhạc được phép phát công khai.
+- Điện thoại chặn tự phát có tiếng thì nhạc vẫn chạy không tiếng, chạm màn hình lần đầu là có tiếng.
+
 ## Chơi thử trên điện thoại (cùng Wi-Fi)
 
 1. Bấm đúp `chay-thu.cmd` trên máy tính. Lần đầu Windows hỏi tường lửa cho Node.js: tick **Private networks** rồi bấm **Allow access**.

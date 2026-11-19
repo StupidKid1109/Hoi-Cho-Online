@@ -62,6 +62,9 @@ export function makeMusic(config) {
     ytGet: id => yt.find(v => v.id === id) || null,
     ytAdd(v) { yt = yt.filter(x => x.id !== v.id); yt.unshift({ id: v.id, title: String(v.title || "Video YouTube").slice(0, 120) }); if (yt.length > 100) yt.length = 100; saveYt(); return yt.slice(); },
     ytRemove(id) { yt = yt.filter(x => x.id !== id); saveYt(); return yt.slice(); },
+    /* ---------- Nhạc nền của game (ngoài quán cà phê) ---------- */
+    loadBgm() { try { return JSON.parse(readFileSync(join(dir, "nhac-nen.json"), "utf8")); } catch (e) { return null; } },
+    saveBgm(b) { try { writeFileSync(join(dir, "nhac-nen.json"), JSON.stringify(b)); } catch (e) { /* bỏ qua */ } },
     loadState() { try { return JSON.parse(readFileSync(stateFile, "utf8")); } catch (e) { return null; } },
     saveState(s) { try { writeFileSync(stateFile, JSON.stringify(s)); } catch (e) { /* bỏ qua */ } },
     /** Gửi file nhạc, hỗ trợ Range để trình duyệt tua tới đúng đoạn đang phát. */
