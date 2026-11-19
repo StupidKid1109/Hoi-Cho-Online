@@ -1,10 +1,10 @@
 // Sảnh hội chợ 3D (CSS 3D): đi lại tự do, máy quay xoay quanh nhân vật, thấy người chơi khác trong cùng khu.
 import { $, esc, beep } from "./ui.js";
 import { BOOTHS, PLACE_NAME } from "./config.js";
-import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK, standPoint } from "../../shared/world.js";
+import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK, FAIR_R, standPoint } from "../../shared/world.js";
 
 // Bố cục lấy từ shared/world.js (dùng chung với bản Three.js và máy chủ).
-const FW = WORLD, CX = CENTER.x, CY = CENTER.y;
+const FW = WORLD, CX = CENTER.x, CY = CENTER.y, FLOOR_R = FAIR_R + 300;
 export const EMOTES = [["👋", "Chào"], ["🙏", "Cảm ơn"], ["👏", "Vỗ tay"], ["🎉", "Chúc mừng"]];
 const PEOPLE = ["👩", "👨", "🧒", "👧", "🧓", "👵", "👦", "🧑‍🦱", "👱"];
 const WOOD = "--fr:linear-gradient(180deg,#a8692f,#7a4a1f);--sd:#6b3d1a;--tp:#5e3816";
@@ -40,9 +40,11 @@ function avHTML(id, name, emo, mine) {
 
 export function buildHub(context) {
   ctx = context; OCC = []; peers = new Map(); hidden = new Set(ctx.hidden || []);
-  let h = '<div class="grass" style="left:-1200px;top:-1200px;width:' + (FW + 2400) + "px;height:" + (FW + 2400) + 'px"></div><div class="floor" id="floor" style="left:0;top:0;width:' + FW + "px;height:" + FW + 'px"></div>';
-  for (let i = 0; i < 20; i++) { const a = i / 20 * 6.283; if (Math.abs(a - Math.PI / 2) < .75) continue; h += bill(CX + Math.cos(a) * 1080, CY + Math.sin(a) * 1080, '<div class="bi3"><span class="tree3">' + ["🌳", "🌸", "🌳", "🌴"][i % 4] + "</span></div>"); }
-  for (let i = 0; i < 10; i++) { const a = i / 10 * 6.283 + .3; if (Math.abs(a - Math.PI / 2) < .45) continue; const x = CX + Math.cos(a) * 925, y = CY + Math.sin(a) * 925;
+  // Nền chỉ phủ khu hội chợ (không phủ cả sân) để máy yếu không phải vẽ một lớp hình quá lớn
+  const F0 = CX - FLOOR_R, FS = FLOOR_R * 2, G0 = F0 - 800, GS = FS + 1600;
+  let h = '<div class="grass" style="left:' + G0 + "px;top:" + G0 + "px;width:" + GS + "px;height:" + GS + 'px"></div><div class="floor" id="floor" style="left:' + F0 + "px;top:" + F0 + "px;width:" + FS + "px;height:" + FS + 'px"></div>';
+  for (let i = 0; i < 48; i++) { const a = i / 48 * 6.283; if (Math.abs(a - Math.PI / 2) < .25) continue; h += bill(CX + Math.cos(a) * (FAIR_R + 120), CY + Math.sin(a) * (FAIR_R + 120), '<div class="bi3"><span class="tree3">' + ["🌳", "🌸", "🌳", "🌴"][i % 4] + "</span></div>"); }
+  for (let i = 0; i < 28; i++) { const a = i / 28 * 6.283 + .1; if (Math.abs(a - Math.PI / 2) < .15) continue; const x = CX + Math.cos(a) * (FAIR_R - 35), y = CY + Math.sin(a) * (FAIR_R - 35);
     h += at(x, y, up(cub(10, 220, 10, "--fr:#6b3d1a;--sd:#4a2a10;--tp:#6b3d1a"))) + bill(x, y, '<div class="bi3" style="bottom:192px"><span class="lanp" style="animation-delay:' + (-i * .37) + 's">🏮</span></div>'); }
   const red = "--fr:linear-gradient(90deg,#a50e27,#e01b3c,#a50e27);--sd:#8f0b20;--tp:#c8102e";
   h += at(GATE.x, GATE.y, shadowAt(320, 60) + up(cub(24, 250, 24, red, "", 0, -125) + cub(24, 250, 24, red, "", 0, 125) +
@@ -103,7 +105,7 @@ function bindInput() {
     if (!d) return; const wasDrag = d.drag; d = null; if (wasDrag || !$("fair").classList.contains("on")) return;
     const t = e.target.closest ? e.target.closest("[data-id]") : null;
     if (t) return goTo(t.dataset.id);
-    if (e.target.id === "floor") { const r = vp.getBoundingClientRect(); tapDot(e.clientX - r.left, e.clientY - r.top); walkTo(e.offsetX, e.offsetY, null); }
+    if (e.target.id === "floor") { const r = vp.getBoundingClientRect(); tapDot(e.clientX - r.left, e.clientY - r.top); walkTo(e.offsetX + CX - FLOOR_R, e.offsetY + CY - FLOOR_R, null); }
   });
   document.addEventListener("keydown", e => { if (e.target.tagName === "INPUT") return; keys[e.key.toLowerCase()] = true; });
   document.addEventListener("keyup", e => { keys[e.key.toLowerCase()] = false; });
@@ -137,9 +139,9 @@ function loop(ts) {
   const kx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), ky = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
   if (kx || ky) {
     target = null; onArrive = null; const fx = -Math.sin(Y), fy = -Math.cos(Y), rx = Math.cos(Y), ry = -Math.sin(Y), n = Math.hypot(kx, ky);
-    me.x += (rx * kx - fx * ky) / n * 300 * dt; me.y += (ry * kx - fy * ky) / n * 300 * dt; blockPush(me); walking = true;
+    me.x += (rx * kx - fx * ky) / n * 500 * dt; me.y += (ry * kx - fy * ky) / n * 500 * dt; blockPush(me); walking = true;
   } else if (target) {
-    const px = me.x, py = me.y, done = stepToward(me, target.x, target.y, 300, dt);
+    const px = me.x, py = me.y, done = stepToward(me, target.x, target.y, 500, dt);
     stuck = Math.hypot(me.x - px, me.y - py) < .2 && dt > 0 ? stuck + 1 : 0;
     if (done || stuck > 20) { target = null; stuck = 0; const f = onArrive; onArrive = null; if (f) f(); } else walking = true;
   }

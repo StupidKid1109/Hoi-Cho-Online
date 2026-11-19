@@ -18,12 +18,13 @@ export { EMOTES };
 
 const FW = WORLD, CX = CENTER.x, CY = CENTER.y, U = 100; // 100 px = 1 đơn vị Three.js
 const BLOCK = WORLD_BLOCK.map(b => b.slice()); // thêm vật cản trang trí khi dựng cảnh
-const SPEED = 360; // px/giây
+const SPEED = 500; // px/giây (sân rộng nên đi nhanh hơn)
+const RF = FAIR_R / U; // bán kính khu lát gạch (đơn vị 3D)
 const wx = x => (x - CX) / U, wz = y => (y - CY) / U;
 const DEG = Math.PI / 180;
 
 // Máy quay: khoảng cách và góc ngẩng (độ) cho 3 trạng thái
-const CAM_NORMAL = { dist: 8.2, pitch: 33 }, CAM_BOOTH = { dist: 4.4, pitch: 17 }, CAM_INTRO = { dist: 26, pitch: 62 };
+const CAM_NORMAL = { dist: 8.6, pitch: 33 }, CAM_BOOTH = { dist: 4.4, pitch: 17 }, CAM_INTRO = { dist: 34, pitch: 58 };
 
 const me = { x: SPAWN.x, y: SPAWN.y };
 const cam = { x: SPAWN.x, y: SPAWN.y, yaw: 0, dist: CAM_INTRO.dist, pitch: CAM_INTRO.pitch, look: 0 };
@@ -51,8 +52,8 @@ export function buildHub(context) {
   const labels = document.createElement("div"); labels.id = "lbl3"; labels.className = "lbl3"; vp.insertBefore(labels, renderer.domElement.nextSibling);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0xe9967a, 24, 62);
-  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 160);
+  scene.fog = new THREE.Fog(0xe9967a, 30, 90);
+  const camera = new THREE.PerspectiveCamera(50, 1, 0.1, 220);
   const hiddenBox = document.createElement("div"); hiddenBox.hidden = true; hiddenBox.className = "hid3"; labels.appendChild(hiddenBox);
   G = { renderer, scene, camera, labels, hiddenBox, observers: [], q, occ: [], pick: [], anim: [], lanterns: null, fw: null, marker: null, avatars: new Map(), sun: null, watch: null, ro: null, t: 0 };
   G.watch = new QualityWatch(q, nq => { G.q = nq; applyQuality(renderer, nq); setShadows(nq >= 1); resize(); });
@@ -158,9 +159,9 @@ function buildLights(scene, q) {
   sun.position.set(-12, 18, 10);
   sun.target.position.set(0, 0, 0);
   sun.shadow.mapSize.set(q >= 2 ? 2048 : 1024, q >= 2 ? 2048 : 1024);
-  const s = sun.shadow.camera; s.left = -13; s.right = 13; s.top = 13; s.bottom = -13; s.near = 1; s.far = 60;
+  const s = sun.shadow.camera; s.left = -16; s.right = 16; s.top = 16; s.bottom = -16; s.near = 1; s.far = 70;
   sun.shadow.bias = -0.0008; sun.shadow.normalBias = 0.03;
-  scene.add(sun, sun.target); G.sun = sun;
+  scene.add(sun, sun.target); G.sun = sun; G.sunAt = new THREE.Vector2(1e9, 0);
   // ánh đèn ấm từ phía cổng để mặt trước gian hàng không bị tối
   const fill = new THREE.DirectionalLight(0xff9a6a, 0.6); fill.position.set(6, 5, 12); scene.add(fill);
   const back = new THREE.DirectionalLight(0xb48cff, 0.35); back.position.set(4, 6, -12); scene.add(back); // ánh tím từ phía bắc cho mặt gian quay về cổng
@@ -171,27 +172,28 @@ function buildGround(scene) {
     g.fillStyle = "#5a9a45"; g.fillRect(0, 0, w, h);
     for (let i = 0; i < 1600; i++) { g.fillStyle = Math.random() < .5 ? "rgba(40,90,35,.35)" : "rgba(140,200,90,.25)"; g.fillRect(Math.random() * w, Math.random() * h, 2, 3 + Math.random() * 4); }
   }, { repeat: [18, 18] });
-  const grass = new THREE.Mesh(new THREE.CircleGeometry(60, 48), new THREE.MeshLambertMaterial({ map: grassTex }));
+  grassTex.repeat.set(54, 54);
+  const grass = new THREE.Mesh(new THREE.CircleGeometry(100, 64), new THREE.MeshLambertMaterial({ map: grassTex }));
   grass.rotation.x = -Math.PI / 2; grass.receiveShadow = true; scene.add(grass); G.ground = grass;
 
   // sân lát gạch hình tròn, có vòng và tia như bản CSS
-  const R = PLAZA_R / U, RF = FAIR_R / U;
+  const R = PLAZA_R / U;
   // khu lát gạch lớn của hội chợ
   const brick = canvasTex(256, 256, (g, w, h) => {
     g.fillStyle = "#c99a68"; g.fillRect(0, 0, w, h);
     g.strokeStyle = "rgba(100,55,20,.28)"; g.lineWidth = 2;
     for (let y = 0; y < h; y += 32) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 32) % 2 * 32; x < w; x += 64) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 32); g.stroke(); } }
     for (let i = 0; i < 900; i++) { g.fillStyle = Math.random() < .5 ? "rgba(255,255,255,.05)" : "rgba(80,40,10,.07)"; g.fillRect(Math.random() * w, Math.random() * h, 3, 3); }
-  }, { repeat: [14, 14] });
-  const fair = new THREE.Mesh(new THREE.CircleGeometry(RF, 72), new THREE.MeshLambertMaterial({ map: brick }));
+  }, { repeat: [44, 44] });
+  const fair = new THREE.Mesh(new THREE.CircleGeometry(RF, 120), new THREE.MeshLambertMaterial({ map: brick }));
   fair.rotation.x = -Math.PI / 2; fair.position.y = 0.005; fair.receiveShadow = true; scene.add(fair);
-  const fcurb = new THREE.Mesh(new THREE.TorusGeometry(RF, 0.1, 6, 96), new THREE.MeshLambertMaterial({ color: 0x9a6034 }));
+  const fcurb = new THREE.Mesh(new THREE.TorusGeometry(RF, 0.12, 6, 160), new THREE.MeshLambertMaterial({ color: 0x9a6034 }));
   fcurb.rotation.x = -Math.PI / 2; fcurb.position.y = 0.02; scene.add(fcurb);
   // lối gạch đỏ từ sân trống ra 3 gian và cổng
   const lane = new THREE.MeshLambertMaterial({ color: 0xb8643f });
   for (const [x, y] of [[SPOTS.g1.x, SPOTS.g1.y], [SPOTS.g2.x, SPOTS.g2.y], [SPOTS.g3.x, SPOTS.g3.y], [GATE.x, GATE.y]]) {
     const dx = wx(x), dz = wz(y), len = Math.hypot(dx, dz) - R, mid = R + len / 2, a = Math.atan2(dx, dz);
-    const strip = new THREE.Mesh(new THREE.PlaneGeometry(1.5, len), lane);
+    const strip = new THREE.Mesh(new THREE.PlaneGeometry(2.4, len), lane);
     strip.rotation.set(-Math.PI / 2, 0, a); strip.position.set(Math.sin(a) * mid, 0.008, Math.cos(a) * mid); strip.receiveShadow = true; scene.add(strip);
   }
   const plazaTex = canvasTex(1024, 1024, (g, w) => {
@@ -214,25 +216,37 @@ function buildGround(scene) {
     for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, r = i % 2 ? 22 : 54; g.lineTo(c + Math.cos(a) * r, c + Math.sin(a) * r); }
     g.closePath(); g.fill();
   });
-  const plaza = new THREE.Mesh(new THREE.CircleGeometry(R, 64), new THREE.MeshLambertMaterial({ map: plazaTex }));
+  const plaza = new THREE.Mesh(new THREE.CircleGeometry(R, 96), new THREE.MeshLambertMaterial({ map: plazaTex }));
   plaza.rotation.x = -Math.PI / 2; plaza.position.y = 0.01; plaza.receiveShadow = true; scene.add(plaza);
   // lối đi từ cổng vào
-  const path = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 5), new THREE.MeshLambertMaterial({ map: canvasTex(128, 256, (g, w, h) => {
+  const path = new THREE.Mesh(new THREE.PlaneGeometry(2.4, 9), new THREE.MeshLambertMaterial({ map: canvasTex(128, 256, (g, w, h) => {
     g.fillStyle = "#cf9b66"; g.fillRect(0, 0, w, h);
     g.strokeStyle = "rgba(110,60,25,.3)"; g.lineWidth = 2;
     for (let y = 0; y < h; y += 24) { g.beginPath(); g.moveTo(0, y); g.lineTo(w, y); g.stroke(); for (let x = (y / 24) % 2 * 21; x < w; x += 42) { g.beginPath(); g.moveTo(x, y); g.lineTo(x, y + 24); g.stroke(); } }
   }) }));
-  path.rotation.x = -Math.PI / 2; path.position.set(0, 0.008, wz(GATE.y) + 2.4); path.receiveShadow = true; scene.add(path);
+  path.rotation.x = -Math.PI / 2; path.position.set(0, 0.008, wz(GATE.y) + 4.4); path.receiveShadow = true; scene.add(path);
   // bờ đá quanh sân
-  const curb = new THREE.Mesh(new THREE.TorusGeometry(R, 0.09, 6, 72), new THREE.MeshLambertMaterial({ color: 0xa96a3a }));
+  const curb = new THREE.Mesh(new THREE.TorusGeometry(R, 0.1, 6, 128), new THREE.MeshLambertMaterial({ color: 0xa96a3a }));
   curb.rotation.x = -Math.PI / 2; curb.position.y = 0.02; curb.receiveShadow = true; scene.add(curb);
 }
 
 /* ---------- Cây: mai vàng, đào hồng, cây xanh (vẽ theo lô, ít lệnh vẽ) ---------- */
 function buildTrees(scene) {
   const spots = [];
-  for (let i = 0; i < 30; i++) { const a = i / 30 * Math.PI * 2; if (Math.abs(a - Math.PI / 2) < .3) continue; spots.push([Math.cos(a) * 10.8, Math.sin(a) * 10.8, i]); }
-  for (let i = 0; i < 36; i++) { const a = i / 36 * Math.PI * 2 + .08; if (Math.abs(a - Math.PI / 2) < .2) continue; spots.push([Math.cos(a) * 13.6, Math.sin(a) * 13.6, i + 3]); }
+  for (let i = 0; i < 90; i++) { const a = i / 90 * Math.PI * 2; if (Math.abs(a - Math.PI / 2) < .1) continue; spots.push([Math.cos(a) * (RF + 1.5), Math.sin(a) * (RF + 1.5), i]); }
+  for (let i = 0; i < 110; i++) { const a = i / 110 * Math.PI * 2 + .03; if (Math.abs(a - Math.PI / 2) < .07) continue; spots.push([Math.cos(a) * (RF + 5), Math.sin(a) * (RF + 5), i + 3]); }
+  // cụm cây trong sân, ở các khoảng trống giữa các lối đi (cố định, giống nhau trên mọi máy)
+  const clear = (x, z) => {
+    const r = Math.hypot(x, z), a = Math.atan2(z, x);
+    if (r < PLAZA_R / U + 8 || r > RF - 2.5) return false;
+    if ([0, Math.PI / 2, Math.PI, -Math.PI / 2].some(l => Math.abs(Math.atan2(Math.sin(a - l), Math.cos(a - l))) * r < 3)) return false; // lối đi
+    return ![...Object.values(SPOTS), ...LOCKED, ...TABLES].some(o => Math.hypot(wx(o.x) - x, wz(o.y) - z) < 4.5);
+  };
+  for (let i = 0; spots.length < 260 && i < 2000; i++) {
+    const a = (i * 2.399963) % (Math.PI * 2), r = PLAZA_R / U + 8 + ((i * 0.618034) % 1) * (RF - PLAZA_R / U - 10);
+    const x = Math.cos(a) * r, z = Math.sin(a) * r;
+    if (clear(x, z)) spots.push([x, z, i + 7]);
+  }
   if (hasKit()) for (let i = spots.length - 1; i >= 0; i--) if (DECOR.some(d => Math.hypot(d.x - spots[i][0], d.z - spots[i][1]) < 1.4)) spots.splice(i, 1);
   const trunkGeo = new THREE.CylinderGeometry(0.1, 0.16, 1.2, 6); trunkGeo.translate(0, 0.6, 0);
   const crownGeo = new THREE.IcosahedronGeometry(0.85, 0);
@@ -254,7 +268,12 @@ function buildTrees(scene) {
 /* ---------- Cột đèn lồng và dây đèn ---------- */
 function buildLanterns(scene) {
   const pts = [];
-  for (let i = 0; i < 18; i++) { const a = i / 18 * Math.PI * 2 + Math.PI / 18; if (Math.abs(a - Math.PI / 2) < .3) continue; pts.push([Math.cos(a) * 9.25, Math.sin(a) * 9.25, i]); }
+  for (let i = 0; i < 56; i++) { const a = i / 56 * Math.PI * 2 + Math.PI / 56; if (Math.abs(a - Math.PI / 2) < .08) continue; pts.push([Math.cos(a) * (RF - 0.4), Math.sin(a) * (RF - 0.4), i]); }
+  // hai hàng đèn dọc các lối từ sân trống ra 3 gian và ra cổng
+  for (const [ex, ez] of [[wx(SPOTS.g1.x), wz(SPOTS.g1.y)], [wx(SPOTS.g2.x), wz(SPOTS.g2.y)], [wx(SPOTS.g3.x), wz(SPOTS.g3.y)], [wx(GATE.x), wz(GATE.y)]]) {
+    const len = Math.hypot(ex, ez), ux = ex / len, uz = ez / len;
+    for (let d = PLAZA_R / U + 1.5; d < len - 3; d += 3.6) for (const side of [-1, 1]) pts.push([ux * d - uz * side * 1.9, uz * d + ux * side * 1.9, pts.length]);
+  }
   const n = pts.length;
   const poleGeo = new THREE.CylinderGeometry(0.05, 0.07, 2.4, 6); poleGeo.translate(0, 1.2, 0);
   const poles = new THREE.InstancedMesh(poleGeo, new THREE.MeshLambertMaterial({ color: 0x5a3415 }), n);
@@ -279,7 +298,7 @@ function buildLanterns(scene) {
   const bulbs = [];
   for (let k = 0; k < n; k++) {
     const a = pts[k], b = pts[(k + 1) % n];
-    if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 4) continue; // bỏ đoạn qua cổng
+    if (Math.hypot(a[0] - b[0], a[1] - b[1]) > 4.2) continue; // chỉ nối hai cột liền nhau (bỏ đoạn qua cổng)
     for (let i = 1; i < 10; i++) { const t = i / 10, sag = Math.sin(t * Math.PI) * 0.45; bulbs.push(a[0] + (b[0] - a[0]) * t, 2.3 - sag, a[1] + (b[1] - a[1]) * t); }
   }
   const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(bulbs), 3));
@@ -460,8 +479,15 @@ function buildLockedKit(scene, x, y, r, name, id) {
 }
 
 /* ---------- Đồ trang trí quanh sân: sạp chợ nhỏ, xe đẩy, ghế băng, đèn đường, hàng rào cây ---------- */
-const DECOR = [[-157, "stall-green"], [-113, "cart-high"], [-67, "cart"], [-23, "stall-red"], [23, "stall-green"], [40, "cart-high"], [58, "stall-red"], [112, "cart"], [157, "stall-red"]]
-  .map(([deg, k]) => ({ k, x: Math.cos(deg * DEG) * 8.3, z: Math.sin(deg * DEG) * 8.3, s: k.startsWith("stall") ? 1.5 : 1.4 }));
+const DECOR_KINDS = ["stall-green", "cart-high", "stall-red", "cart"];
+const DECOR = [];
+for (let i = 0; i < 40; i++) {
+  const deg = i * 9 + 4.5, a = deg * DEG;
+  // chừa lối đi (0°, 90°, 180°, 270°) và chỗ Bảng vàng, Gian 4, Gian 5 (các góc chéo)
+  if ([0, 90, 180, 270, 360].some(l => Math.abs(deg - l) < 8) || [45, 135, 225, 315].some(l => Math.abs(deg - l) < 10)) continue;
+  const k = DECOR_KINDS[i % 4], r = (FAIR_R / U) - 2.4;
+  DECOR.push({ k, x: Math.cos(a) * r, z: Math.sin(a) * r, s: k.startsWith("stall") ? 1.5 : 1.4 });
+}
 function buildDecor(scene) {
   for (const d of DECOR) {
     const o = model(d.k, d.s, { own: true }); o.position.set(d.x, 0, d.z); o.rotation.y = Math.atan2(-d.x, -d.z) + (d.k.startsWith("stall") ? Math.PI / 2 : 0); scene.add(o);
@@ -819,7 +845,7 @@ function bindInput() {
     const h = pickAt(e.clientX, e.clientY); if (!h) return;
     if (h.id) return goTo(h.id);
     if (h.seats) return sitFrom(h.seats, h.p);
-    if (Math.hypot(h.x - CX, h.y - CY) > FAIR_R + 300) return; // chạm ra quá xa khu hội chợ
+    if (Math.hypot(h.x - CX, h.y - CY) > FAIR_R + 400) return; // chạm ra quá xa khu hội chợ
     standUp();
     const r = vp.getBoundingClientRect(); tapDot(e.clientX - r.left, e.clientY - r.top);
     G.marker.m.position.set(h.p.x, 0.03, h.p.z); G.marker.t = 1;
@@ -899,6 +925,12 @@ function loop(ts) {
   G.camera.position.set(look.x - fx * cam.dist * Math.cos(P), look.y + cam.dist * Math.sin(P), look.z - fz * cam.dist * Math.cos(P));
   G.camera.lookAt(look);
   G.sky.position.copy(G.camera.position); G.stars.position.copy(G.camera.position);
+  // Sân rộng: vùng bóng đổ đi theo người chơi, vẽ lại bản đồ bóng khi đi xa hơn 6 đơn vị
+  if (G.renderer.shadowMap.enabled && Math.hypot(wx(me.x) - G.sunAt.x, wz(me.y) - G.sunAt.y) > 6) {
+    G.sunAt.set(wx(me.x), wz(me.y));
+    G.sun.target.position.set(G.sunAt.x, 0, G.sunAt.y); G.sun.position.set(G.sunAt.x - 12, 18, G.sunAt.y + 10);
+    G.sun.target.updateMatrixWorld(); G.renderer.shadowMap.needsUpdate = true;
+  }
 
   // làm mờ vật che giữa máy quay và nhân vật
   const bx = Math.sin(Yc), by = Math.cos(Yc);
