@@ -56,15 +56,22 @@ for (let k = 0; k < TABLE_N; k++) {
   TABLES.push({ id: "t" + k, x: cx, y: cy, th, seats });
 }
 
+// Gian hàng lớn (nhà triển lãm mái ngói): nửa bề ngang, nửa bề sâu (px), tính cả bậc thềm phía trước
+export const PAVILION = { hw: 510, hd: 345, scale: 1.5 };
+
 /** Chỗ người chơi đứng trước một gian (hoặc Bảng vàng) để mở gian đó. */
 export function standPoint(id) {
-  const sp = SPOTS[id], r = sp.r * Math.PI / 180, dist = id === "board" ? 140 : 190;
+  const sp = SPOTS[id], r = sp.r * Math.PI / 180, dist = id === "board" ? 140 : PAVILION.hd + 150;
   return { x: sp.x - Math.sin(r) * dist, y: sp.y + Math.cos(r) * dist };
 }
 
 /** Vật cản khi đi lại: [x, y, bán kính] (px). Ghế không chặn đường để đi tới ngồi được. */
+// Gian hàng: một vòng giữa và hai vòng ở hai cánh để phủ hết bề ngang
+const pavBlock = s => { const r = s.r * Math.PI / 180, lx = Math.cos(r), ly = Math.sin(r), o = PAVILION.hw - 220;
+  return [[s.x, s.y, PAVILION.hd + 10], [s.x + lx * o, s.y + ly * o, 230], [s.x - lx * o, s.y - ly * o, 230]]; };
 export const BLOCK = [
-  ...Object.values(SPOTS).map(s => [s.x, s.y, s === SPOTS.board ? 110 : 140]),
+  [SPOTS.board.x, SPOTS.board.y, 110],
+  ...["g1", "g2", "g3"].flatMap(id => pavBlock(SPOTS[id])),
   ...LOCKED.map(s => [s.x, s.y, 110]),
   ...TABLES.map(t => [t.x, t.y, 45])
 ];
