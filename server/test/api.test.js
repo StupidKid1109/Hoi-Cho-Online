@@ -281,3 +281,51 @@ test("Quản trị: đổi đợt thưởng và xuất danh sách Bảng vàng",
   const csv = await call("/api/admin/winners.csv", { admin: "admin-test" });
   assert.match(csv.data, /hang,biet_danh/);
 });
+
+test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng, nghe nhạc quản trị viên bật", async () => {
+  const tok = async id => (await call("/api/auth", { method: "POST", body: { devId: id } })).data.token;
+  const open = async id => {
+    const ws = new WebSocket(base.replace("http", "ws") + "/ws?khu=2&token=" + encodeURIComponent(await tok(id))), inbox = [];
+    ws.onmessage = e => inbox.push(JSON.parse(e.data));
+    await new Promise((res, rej) => { ws.onopen = res; ws.onerror = rej; });
+    return { ws, inbox, send: o => ws.send(JSON.stringify(o)) };
+  };
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  const [a, b] = [await open("cafe-a"), await open("cafe-b")];
+  try {
+    // chat trong phòng chờ Gian 1
+    a.send({ t: "mjoin", g: "g1" }); b.send({ t: "mjoin", g: "g1" }); await wait(200);
+    a.send({ t: "mchat", text: "Chào cả phòng" }); await wait(150);
+    const m = b.inbox.find(x => x.t === "mchat");
+    assert.ok(m && m.g === "g1" && m.text === "Chào cả phòng" && m.n === a.inbox.find(x => x.t === "mspace").you.n, "người cùng phòng chờ nhận được tin");
+    b.send({ t: "mchat", text: "gọi 0912345678 nhé" }); await wait(150);
+    assert.ok(b.inbox.find(x => x.t === "msys"), "số điện thoại bị chặn");
+    assert.ok(!a.inbox.find(x => x.t === "mchat" && /0912/.test(x.text)), "tin bị chặn không tới người khác");
+    a.send({ t: "mchat", text: "nhanh quá" }); await wait(120);
+    assert.ok(a.inbox.find(x => x.t === "msys" && /nhanh/.test(x.text)), "chống gửi liên tục");
+
+    // quán cà phê: chưa bật nhạc
+    const tracks = (await call("/api/admin/music", { admin: "admin-test" })).data.tracks;
+    assert.ok(tracks.length >= 1, "có sẵn nhạc mẫu");
+    a.send({ t: "mjoin", g: "cafe" }); await wait(200);
+    assert.ok(a.inbox.find(x => x.t === "mspace" && x.g === "cafe"), "vào không gian quán");
+    assert.equal(a.inbox.filter(x => x.t === "cmusic").at(-1).file, null, "chưa có nhạc");
+    assert.ok(b.inbox.find(x => x.t === "mpleave" && x.g === "g1"), "rời phòng chờ Gian 1 khi vào quán");
+    // quản trị viên bật nhạc: người trong quán nhận được ngay, người vào sau cũng nhận
+    assert.equal((await call("/api/admin/music", { method: "PUT", body: { file: "../x.mp3" }, admin: "admin-test" })).status, 404, "không cho đường dẫn lạ");
+    assert.equal((await call("/api/admin/music", { method: "PUT", body: { file: tracks[0].file } })).status, 403, "phải là quản trị viên");
+    await call("/api/admin/music", { method: "PUT", body: { file: tracks[0].file, volume: 0.6 }, admin: "admin-test" }); await wait(100);
+    const cm = a.inbox.filter(x => x.t === "cmusic").at(-1);
+    assert.ok(cm.file === tracks[0].file && cm.startedAt > 0 && cm.volume === 0.6, "đang trong quán thì nhận lệnh bật nhạc");
+    b.send({ t: "mjoin", g: "cafe" }); await wait(200);
+    assert.equal(b.inbox.filter(x => x.t === "cmusic").at(-1).file, tracks[0].file, "vào sau vẫn nghe đúng bài");
+    b.send({ t: "mchat", text: "Cà phê ngon quá" }); await wait(120);
+    assert.ok(a.inbox.find(x => x.t === "mchat" && x.g === "cafe"), "chat trong quán");
+    assert.equal((await call("/api/match")).data.cafe.n, 2, "đếm số người trong quán");
+    const st = (await fetch(base + "/api/music/file/" + tracks[0].file, { headers: { range: "bytes=0-99" } }));
+    assert.equal(st.status, 206); assert.equal((await st.arrayBuffer()).byteLength, 100, "phát nhạc có hỗ trợ tua (Range)");
+    assert.equal((await fetch(base + "/api/music/file/..%2Fdata.db")).status, 404);
+    await call("/api/admin/music", { method: "PUT", body: { file: null }, admin: "admin-test" }); await wait(100);
+    assert.equal(b.inbox.filter(x => x.t === "cmusic").at(-1).file, null, "tắt nhạc");
+  } finally { for (const x of [a, b]) x.ws.close(); }
+});

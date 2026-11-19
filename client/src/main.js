@@ -2,7 +2,7 @@
 import { $, show, toast, openSheet, closeSheet, initSheet, fmt, esc } from "./ui.js";
 import { api, post, setToken, connectKhu } from "./api.js";
 import { initPlatform, loginPayload, share, inZalo } from "./platform.js";
-import { BOOTHS, BOOTH, PLACE_NAME } from "./config.js";
+import { BOOTHS, BOOTH, PLACE_NAME, CAFE, API_BASE } from "./config.js";
 import * as hub from "./hub.js";
 import { createSpace } from "./games/lobby.js";
 import * as chat from "./chat.js";
@@ -86,7 +86,7 @@ function onRealtime(m) {
   else if (m.t === "sys") chat.onSys(m.text, m.ok);
   else if (m.t === "feed") feed(m.text);
   else if (m.t === "full" || m.t === "error") toast(m.text);
-  else if (m.g && m.t[0] === "m" && S.cur === m.g) { if (S.space && S.space.msg(m)) return; if (GAMES[m.g].onMsg) GAMES[m.g].onMsg(m); } // không gian gian hàng, đấu phòng
+  else if (m.g && (m.t[0] === "m" || m.t[0] === "c") && S.cur === m.g) { if (S.space && S.space.msg(m)) return; if (GAMES[m.g] && GAMES[m.g].onMsg) GAMES[m.g].onMsg(m); } // không gian gian hàng, đấu phòng, quán cà phê
 }
 function renderWho() { $("who").innerHTML = "🧑 <b>" + esc(S.me.nick) + "</b> · Khu " + S.khu + " · " + (hub.peerCount() + 1) + " người đang dạo"; }
 function feed(text) { const row = document.createElement("div"); row.textContent = text; const f = $("feed"); f.appendChild(row); while (f.children.length > 2) f.firstChild.remove(); setTimeout(() => row.remove(), 6000); }
@@ -110,6 +110,8 @@ function pollMatch() {
         const w = s[id];
         hub.setBoothInfo(id, w.startIn != null ? "👥 " + w.n + " người · sắp bắt đầu!" : w.n ? "👥 " + w.n + "/" + s.min + " người đang chờ" : "Chưa có ai chờ · cần " + s.min + " người");
       }
+      if (s.cafe) hub.setCafeMusic(!!s.cafe.music);
+      if (s.cafe) hub.setBoothInfo("cafe", (s.cafe.music ? "🎵 " + s.cafe.music : "Chưa bật nhạc") + " · " + s.cafe.n + " người");
     }).catch(() => {});
   };
   tick(); matchPoll = setInterval(tick, 5000);
@@ -120,15 +122,26 @@ function pollMatch() {
 // Gian 1, Gian 2: vào thẳng phòng chờ (gửi mjoin), thấy những người cùng chờ; đủ người thì ván bắt đầu.
 // Gian 3: chơi một mình, bấm "Bắt đầu chạy". Không có WebGL: dùng thẻ luật chơi và phòng chờ 2D như cũ.
 function enterBooth(id) {
+  if (id === "cafe") return enterCafe();
   closeSpace();
   S.cur = id; show(id);
   const b = BOOTH(id), solo = id === "g3";
   S.space = createSpace({
-    game: id, title: b.name, tag: b.tag, color: b.c, nick: S.me.nick, solo, rules: GAMES[id].pre, use3d: hub.mode === "3d",
+    game: id, title: b.name, tag: b.tag, color: b.c, nick: S.me.nick, solo, rules: GAMES[id].pre, use3d: hub.mode === "3d", toast,
     send: o => S.conn && S.conn.send(o), onLeave: leaveGame, onStart: () => { S.space.hide(); play(id); }
   });
   if (!S.space) return openGame(id);
   if (!solo) play(id);
+}
+// Quán cà phê: không gian riêng có nhạc ban tổ chức bật, chat và chào nhau; máy không có WebGL vẫn vào được (dạng phẳng)
+function enterCafe() {
+  closeSpace();
+  S.cur = "cafe"; show("cafe");
+  S.space = createSpace({
+    game: "cafe", title: CAFE.name, tag: CAFE.tag, color: CAFE.c, nick: S.me.nick, cafe: true, rules: CAFE.intro, use3d: hub.mode === "3d",
+    apiBase: API_BASE, toast, send: o => S.conn && S.conn.send(o), onLeave: leaveGame
+  });
+  if (S.conn) S.conn.send({ t: "mjoin", g: "cafe" });
 }
 function closeSpace() { if (S.space) { S.space.close(); S.space = null; } }
 function openGame(id) {
@@ -143,7 +156,7 @@ const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.s
 function play(id) { GAMES[id].start(gameCtx).catch(e => { toast(e.message); leaveGame(); }); }
 // Chơi lại: Gian 1, Gian 2 quay về phòng chờ trong không gian của gian; Gian 3 chạy lại ngay
 function again(id) { if (S.space && id === "g3") S.space.hide(); play(id); }
-function leaveGame() { if (S.cur) GAMES[S.cur].stop(); closeSpace(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); }
+function leaveGame() { if (S.cur === "cafe") { if (S.conn) S.conn.send({ t: "mleave" }); } else if (S.cur) GAMES[S.cur].stop(); closeSpace(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); }
 function result(id, r, stats, review) {
   const b = BOOTH(id);
   S.me.bests = r.bests; S.me.total = r.total; S.me.rank = r.rank;

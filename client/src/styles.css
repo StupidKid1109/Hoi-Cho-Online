@@ -459,3 +459,28 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 @media (hover:hover){.entb.near kbd{display:inline-block}}
 .entb:active{transform:translateX(-50%) translateY(3px)}
 @keyframes entPulse{50%{box-shadow:0 4px 0 rgba(0,0,0,.35),0 0 0 8px rgba(255,197,51,.35)}}
+
+/* Chat trong phòng chờ, quán cà phê */
+.sp-b.on{background:var(--gold);color:#5a3a00}
+.sp-log{position:absolute;left:10px;right:30%;bottom:calc(84px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:4px;pointer-events:none;z-index:3}
+.sp-log .ln{align-self:flex-start;max-width:100%;background:rgba(20,18,28,.66);color:#fff;font-size:12.5px;line-height:1.3;border-radius:12px;padding:5px 10px;backdrop-filter:blur(3px);animation:sl .2s ease-out;transition:opacity 1s;word-break:break-word}
+.sp-log .ln b{color:var(--gold)}
+.sp-log .ln.me b{color:#9fe3b8}
+.sp-log .ln.sys{background:rgba(160,20,30,.85)}
+.sp-log .ln.old{opacity:.45}
+.sp-chat{position:absolute;left:10px;right:10px;bottom:calc(80px + env(safe-area-inset-bottom));display:none;gap:6px;z-index:4}
+.sp-chat.on{display:flex}
+.sp-chat input{flex:1;min-width:0;border:2px solid var(--c);border-radius:99px;padding:10px 14px;font:inherit;font-size:15px;background:#fff;color:var(--ink)}
+.sp-chat button{background:var(--c);color:#fff;border-radius:99px;padding:0 18px;font-weight:800}
+.space:has(.sp-chat.on) .sp-log{bottom:calc(134px + env(safe-area-inset-bottom))}
+.bub .txt{display:block;font-size:12.5px;font-weight:700;line-height:1.25;max-width:170px;white-space:normal;color:var(--ink)}
+/* Nhạc trong quán */
+.sp-music{position:absolute;right:10px;top:58px;display:flex;align-items:center;gap:6px;background:rgba(20,18,28,.72);color:#fff;border-radius:99px;padding:4px 4px 4px 12px;font-size:12.5px;font-weight:700;z-index:3;max-width:70%}
+.sp-music .mt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sp-music.on .mt{color:var(--gold)}
+.sp-music .mute{width:30px;height:30px;border-radius:50%;background:rgba(255,255,255,.18);font-size:15px;flex:none}
+.space:has(.sp-music) .sp-help{top:100px}
+.sp-unlock{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);width:auto;white-space:nowrap;z-index:5;background:var(--c);padding:12px 22px;box-shadow:0 6px 18px rgba(0,0,0,.35)}
+/* Không có WebGL: quán vẫn mở dạng phẳng */
+.space.flat{background:radial-gradient(circle at 50% 35%,color-mix(in srgb,var(--c) 55%,#fff) 0,var(--c) 45%,#1c1410 100%)}
+#cafe .space.flat .sp-view::after{content:"☕🎶";position:absolute;left:50%;top:40%;transform:translate(-50%,-50%);font-size:84px;opacity:.9}

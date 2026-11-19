@@ -1,6 +1,6 @@
 // Sảnh hội chợ 3D (CSS 3D): đi lại tự do, máy quay xoay quanh nhân vật, thấy người chơi khác trong cùng khu.
 import { $, esc, beep } from "./ui.js";
-import { BOOTHS, PLACE_NAME } from "./config.js";
+import { BOOTHS, PLACE_NAME, CAFE } from "./config.js";
 import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK, FAIR_R, standPoint } from "../../shared/world.js";
 
 // Bố cục lấy từ shared/world.js (dùng chung với bản Three.js và máy chủ).
@@ -50,6 +50,7 @@ export function buildHub(context) {
   h += at(GATE.x, GATE.y, shadowAt(320, 60) + up(cub(24, 250, 24, red, "", 0, -125) + cub(24, 250, 24, red, "", 0, 125) +
     cub(290, 66, 30, "--fr:linear-gradient(180deg,#e01b3c,#a50e27);--sd:#8f0b20;--tp:#c8102e", '<div class="beamtx">HỘI CHỢ ONLINE<small>' + esc(PLACE_NAME) + "</small></div>", 220)), 0, "occ_gate");
   BOOTHS.forEach(b => { const sp = SPOTS[b.id]; h += at(sp.x, sp.y, stall(b, 200, 130, 110), sp.r, "occ_" + b.id); });
+  h += at(SPOTS.cafe.x, SPOTS.cafe.y, stall({ ...CAFE, goods: "Cà phê · nhạc" }, 200, 130, 110), SPOTS.cafe.r, "occ_cafe"); // quán cà phê
   LOCKED.map(l => [l.x, l.y, l.r, l.name]).forEach(g => h += at(g[0], g[1], shadowAt(220, 150) + up(cub(160, 110, 100, "--fr:linear-gradient(180deg,#8a7a6a,#5e5246);--sd:#4f453b;--tp:#4f453b", '<div class="soon">🔒 ' + g[3] + "<small>Sắp mở</small></div>")), g[2], "occ_s" + g[3].slice(-1)));
   const S = SPOTS.board;
   h += at(S.x, S.y, shadowAt(240, 90) + up(
@@ -59,7 +60,7 @@ export function buildHub(context) {
   h += avHTML("avo", ctx.nick + " (bạn)", "🧑", true);
   $("cam").innerHTML = h;
   let st = ""; for (let i = 0; i < 46; i++) st += '<i style="left:' + (i * 37 % 100) + "%;top:" + (i * 53 % 90) + "%;animation-delay:" + (-(i % 9) * .3) + 's"></i>'; $("sky").innerHTML = st;
-  $("jumps").innerHTML = BOOTHS.map(b => '<button data-j="' + b.id + '"><i>' + b.icons.slice(0, 2) + "</i>" + b.tag + "</button>").join("") + '<button data-j="board"><i>🏆</i>Bảng vàng</button>';
+  $("jumps").innerHTML = BOOTHS.map(b => '<button data-j="' + b.id + '"><i>' + b.icons.slice(0, 2) + "</i>" + b.tag + "</button>").join("") + '<button data-j="cafe"><i>☕</i>Cà phê</button><button data-j="board"><i>🏆</i>Bảng vàng</button>';
   $("jumps").querySelectorAll("button").forEach(btn => btn.onclick = () => goTo(btn.dataset.j));
   $("emo").innerHTML = EMOTES.map((e, i) => '<button data-e="' + i + '"><i>' + e[0] + "</i>" + e[1] + "</button>").join("");
   $("emo").querySelectorAll("button").forEach(btn => btn.onclick = () => { const i = +btn.dataset.e; bubble("avo", EMOTES[i][0]); beep("coin"); ctx.send({ t: "emote", e: i }); ctx.onEmote && ctx.onEmote(i); });

@@ -20,10 +20,10 @@ export const SPOTS = {
   g1: at(-700, 0, -90),       // phía tây
   g2: at(0, -700, 0),         // phía bắc
   g3: at(700, 0, 90),         // phía đông
-  board: at(-640, 640, -135)  // góc tây nam
+  board: at(-640, 640, -135), // góc tây nam
+  cafe: at(-640, -640, -45)   // góc tây bắc: quán cà phê (không gian riêng có nhạc)
 };
 export const LOCKED = [
-  at(-640, -640, -45, { id: "s4", name: "Gian 4" }),   // góc tây bắc
   at(640, -640, 45, { id: "s5", name: "Gian 5" })      // góc đông bắc
 ];
 
@@ -61,7 +61,7 @@ export const PAVILION = { hw: 510, hd: 345, scale: 1.5 };
 
 /** Chỗ người chơi đứng trước một gian (hoặc Bảng vàng) để mở gian đó. */
 export function standPoint(id) {
-  const sp = SPOTS[id], r = sp.r * Math.PI / 180, dist = id === "board" ? 140 : PAVILION.hd + 150;
+  const sp = SPOTS[id], r = sp.r * Math.PI / 180, dist = id === "board" ? 140 : id === "cafe" ? 300 : PAVILION.hd + 150;
   return { x: sp.x - Math.sin(r) * dist, y: sp.y + Math.cos(r) * dist };
 }
 
@@ -71,6 +71,7 @@ const pavBlock = s => { const r = s.r * Math.PI / 180, lx = Math.cos(r), ly = Ma
   return [[s.x, s.y, PAVILION.hd + 10], [s.x + lx * o, s.y + ly * o, 230], [s.x - lx * o, s.y - ly * o, 230]]; };
 export const BLOCK = [
   [SPOTS.board.x, SPOTS.board.y, 110],
+  [SPOTS.cafe.x, SPOTS.cafe.y, 260],
   ...["g1", "g2", "g3"].flatMap(id => pavBlock(SPOTS[id])),
   ...LOCKED.map(s => [s.x, s.y, 110]),
   ...TABLES.map(t => [t.x, t.y, 45])
@@ -79,3 +80,5 @@ export const BLOCK = [
 /* ---------- Không gian riêng của gian hàng (phòng chờ 3D) ---------- */
 // Mỗi phòng chờ là một không gian riêng rộng ROOM.w × ROOM.h px (100 px = 1 đơn vị 3D), cửa ở cạnh dưới (phía máy quay).
 export const BOOTH_ROOM = { w: 1200, h: 900, door: { x: 600, y: 820 }, margin: 70 };
+// Quán cà phê: tối đa bao nhiêu người một phòng (đông hơn thì mở thêm phòng)
+export const CAFE_MAX = 50;

@@ -62,3 +62,4 @@ export const peerSit = (id, s) => impl.peerSit && impl.peerSit(id, s);
 export const sitRejected = s => impl.sitRejected && impl.sitRejected(s);
 // Nút "Vào phòng chờ" trước mỗi gian (bản Three.js): dòng chữ nhỏ báo số người đang chờ.
 export const setBoothInfo = (id, text) => impl.setBoothInfo && impl.setBoothInfo(id, text);
+export const setCafeMusic = on => impl.setCafeMusic && impl.setCafeMusic(on);

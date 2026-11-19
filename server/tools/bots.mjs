@@ -16,12 +16,14 @@ const BASE = (process.argv[4] || "http://localhost:8787").replace(/\/$/, "");
 const SPEED = 450, STEP_MS = 125; // giống người thật: khoảng 8 lần gửi vị trí mỗi giây
 const LINES = ["Chào cả nhà 👋", "Gian nào dễ nhất vậy mọi người?", "Mình vừa chơi Gian 3, vui ghê", "Có ai ngồi uống trà không?", "Hội chợ đẹp quá!",
   "Cố lên mọi người!", "Mình đang ở gần cổng nè", "Gian 1 nhiều tin lừa đảo ghê", "Ai lên Bảng vàng chưa?", "Đèn lồng lung linh quá", "Hẹn gặp ở Bảng vàng 🏆", "Cảm ơn nha 🙏"];
+const ROOM_LINES = ["Còn mấy người nữa vậy ta?", "Mình sẵn sàng rồi!", "Chơi vui nha mọi người 😄", "Ai chơi lần đầu không?", "Lần trước mình được hạng 3 đó", "Cố lên cả phòng!", "Chờ xíu là đủ người thôi"];
+const CAFE_LINES = ["Nhạc hay quá 🎶", "Cà phê sữa đá đi mọi người ☕", "Quán xinh ghê", "Ai chơi Gian 3 chưa, khó không?", "Ngồi nghỉ chút rồi chơi tiếp", "Chào cả quán 👋"];
 const REPLIES = ["Chào bạn! 👋", "Chào nha 😄", "Hello bạn ơi", "Chào bạn, chơi vui nhé!"];
 const rnd = (a, b) => a + Math.random() * (b - a), pick = a => a[Math.floor(Math.random() * a.length)];
 const wait = ms => new Promise(r => setTimeout(r, ms));
 
 const seatOcc = new Map(); // ghế -> mã người ngồi (theo tin từ máy chủ)
-const botIds = new Set();
+const botIds = new Set(), botNicks = new Set();
 let lastReply = 0;
 
 function blockPush(p) {
@@ -49,7 +51,8 @@ function nextGoal(b) {
     const free = SEATS.map((s, i) => i).filter(i => !seatOcc.has(i));
     if (free.length) { const i = free.sort((a, c) => Math.hypot(SEATS[a].x - b.x, SEATS[a].y - b.y) - Math.hypot(SEATS[c].x - b.x, SEATS[c].y - b.y))[Math.floor(Math.random() * Math.min(6, free.length))]; return { x: SEATS[i].x, y: SEATS[i].y, seat: i }; }
   }
-  if (r < 0.35) { const p = standPoint(pick(Object.keys(SPOTS))); return { x: p.x + rnd(-120, 120), y: p.y + rnd(-120, 120), idle: rnd(4000, 10000) }; }
+  if (r < 0.3) { const p = standPoint("cafe"); return { x: p.x + rnd(-80, 80), y: p.y + rnd(-60, 60), cafe: true }; } // ghé quán cà phê
+  if (r < 0.42) { const p = standPoint(pick(Object.keys(SPOTS))); return { x: p.x + rnd(-120, 120), y: p.y + rnd(-120, 120), idle: rnd(4000, 10000) }; }
   const a = rnd(0, Math.PI * 2), d = Math.sqrt(Math.random()) * (Math.random() < 0.7 ? PLAZA_R : FAIR_R * 0.85);
   return { x: CENTER.x + Math.cos(a) * d, y: CENTER.y + Math.sin(a) * d, idle: rnd(1500, 6000) };
 }
@@ -65,7 +68,7 @@ async function makeBot(i) {
   ws.onmessage = e => {
     let m; try { m = JSON.parse(e.data); } catch (err) { return; }
     if (m.t && m.t[0] === "m" && m.g) return onMatch(b, m);
-    if (m.t === "welcome") { b.id = m.you.id; botIds.add(b.id); for (const p of m.peers) if (p.seat >= 0) seatOcc.set(p.seat, p.id); }
+    if (m.t === "welcome") { b.id = m.you.id; botIds.add(b.id); botNicks.add(m.you.nick); for (const p of m.peers) if (p.seat >= 0) seatOcc.set(p.seat, p.id); }
     else if (m.t === "sit") { for (const [k, v] of seatOcc) if (v === m.id) seatOcc.delete(k); if (m.s >= 0) seatOcc.set(m.s, m.id); }
     else if (m.t === "leave") { for (const [k, v] of seatOcc) if (v === m.id) seatOcc.delete(k); }
     else if (m.t === "sitno") { b.seat = -1; b.goal = null; b.until = Date.now() + 500; }
@@ -88,6 +91,9 @@ function onMatch(b, m) {
   if (m.t === "merr") { b.match = null; b.until = Date.now() + rnd(20000, 40000); return; }
   if (m.t === "mspace") { b.match.room = { x: m.you.x, y: m.you.y, gx: m.you.x, gy: m.you.y, wait: Date.now() + rnd(300, 2500), emote: Date.now() + rnd(3000, 20000) }; return; }
   if (m.t === "mstart") { b.match.room = null; return; }
+  if (m.t === "mchat" && b.match.room && /chào|hello|hi\b/i.test(m.text) && !botNicks.has(m.nick) && Math.random() < 0.25) { // người thật chào thì vài người ảo chào lại
+    setTimeout(() => send({ t: "mchat", text: pick(REPLIES) }), rnd(1200, 4000));
+  }
   if (m.t === "mround" && m.g === "g1") { // chọn sau 1,5–7 giây (đúng sai ngẫu nhiên)
     const k = m.k; b.match.t = setTimeout(() => send({ t: "mans", k, a: Math.random() < 0.5 }), rnd(0.15, 0.7) * m.dur);
   } else if (m.t === "mround" && m.g === "g2") { // dùng gợi ý dần, đủ chữ thì đoán; một số người bỏ cuộc
@@ -107,6 +113,9 @@ function stepRoom(b, now) {
   const r = b.match.room; if (!r || b.ws.readyState !== 1) return;
   const send = o => b.ws.send(JSON.stringify(o)), M = BOOTH_ROOM.margin + 20;
   if (now > r.emote) { send({ t: "memote", e: Math.floor(Math.random() * 4) }); r.emote = now + rnd(8000, 30000); }
+  if (r.chat == null) r.chat = now + rnd(5000, 40000);
+  if (now > r.chat) { send({ t: "mchat", text: pick(b.match.g === "cafe" ? CAFE_LINES : ROOM_LINES) }); r.chat = now + rnd(25000, 90000); }
+  if (b.match.g === "cafe" && now > b.match.leaveAt) { send({ t: "mleave" }); b.match = null; b.until = now + rnd(1000, 4000); return; } // rời quán
   if (now < r.wait) return;
   const dx = r.gx - r.x, dy = r.gy - r.y, d = Math.hypot(dx, dy), stepLen = 260 * STEP_MS / 1000;
   if (d <= stepLen) { r.x = r.gx; r.y = r.gy; r.gx = rnd(M, BOOTH_ROOM.w - M); r.gy = rnd(M + 120, BOOTH_ROOM.h - M); r.wait = now + rnd(1500, 7000); }
@@ -133,6 +142,7 @@ function stepBot(b, now) {
     b.x = g.x; b.y = g.y;
     send({ t: "pos", x: Math.round(b.x), y: Math.round(b.y) });
     if (g.seat !== undefined) { b.seat = g.seat; seatOcc.set(g.seat, b.id); send({ t: "sit", s: g.seat }); b.until = now + rnd(15000, 45000); }
+    else if (g.cafe) { b.match = { g: "cafe", leaveAt: now + rnd(30000, 100000) }; send({ t: "mjoin", g: "cafe" }); }
     else if (g.play) { heading[g.play] = Math.max(0, heading[g.play] - 1); b.match = { g: g.play }; send({ t: "mjoin", g: g.play }); }
     else b.until = now + (g.idle || 2000);
     b.goal = null;

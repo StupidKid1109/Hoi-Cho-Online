@@ -3,7 +3,7 @@
 // Tọa độ thế giới tính theo "px" của sân (shared/world.js, dùng chung với máy chủ); 100 px = 1 đơn vị Three.js.
 import * as THREE from "three";
 import { $, esc, beep } from "./ui.js";
-import { BOOTHS, PLACE_NAME } from "./config.js";
+import { BOOTHS, PLACE_NAME, CAFE } from "./config.js";
 import { EMOTES } from "./hubCss.js";
 import { initialQuality } from "./gfx/webgl.js";
 import {
@@ -69,6 +69,7 @@ export function buildHub(context) {
   const kit = hasKit();
   BOOTHS.forEach(b => buildPavilion(scene, b, kit));
   LOCKED.forEach(l => (kit ? buildLockedKit : buildLocked)(scene, l.x, l.y, l.r, l.name, l.id));
+  buildCafe(scene);
   if (kit) buildDecor(scene);
   buildSeating(scene, kit);
   buildBoard(scene);
@@ -80,7 +81,7 @@ export function buildHub(context) {
   setShadows(q >= 1);
 
   // nút nhảy nhanh và biểu cảm (giống bản CSS)
-  $("jumps").innerHTML = BOOTHS.map(b => '<button data-j="' + b.id + '"><i>' + b.icons.slice(0, 2) + "</i>" + b.tag + "</button>").join("") + '<button data-j="board"><i>🏆</i>Bảng vàng</button><button id="sitBtn"><i>🪑</i>Ngồi</button>';
+  $("jumps").innerHTML = BOOTHS.map(b => '<button data-j="' + b.id + '"><i>' + b.icons.slice(0, 2) + "</i>" + b.tag + "</button>").join("") + '<button data-j="cafe"><i>☕</i>Cà phê</button><button data-j="board"><i>🏆</i>Bảng vàng</button><button id="sitBtn"><i>🪑</i>Ngồi</button>';
   $("jumps").querySelectorAll("button[data-j]").forEach(btn => btn.onclick = () => goTo(btn.dataset.j));
   $("sitBtn").onclick = () => (mySeat >= 0 ? standUp() : sitNearest());
   $("hint3").textContent = "Chạm mặt đất để đi · Kéo để xoay · Chạm ghế để ngồi";
@@ -373,6 +374,69 @@ function counterTex(text) {
     g.textAlign = "center"; g.textBaseline = "middle"; g.fillStyle = "#ffc533"; fitText(g, text, w / 2, h / 2 + 2, w - 40, 48, 800);
   });
 }
+
+
+/* ---------- Quán cà phê (góc tây bắc): sàn gỗ, quầy, mái bạt nâu kem, ly cà phê khổng lồ, bàn dù, dây đèn ---------- */
+function buildCafe(scene) {
+  const sp = SPOTS.cafe, g = new THREE.Group(); g.position.set(wx(sp.x), 0, wz(sp.y)); g.rotation.y = -sp.r * DEG;
+  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  const wood = new THREE.MeshStandardMaterial({ color: 0x8a5a32, roughness: 0.8 }), dark = new THREE.MeshStandardMaterial({ color: 0x4a2c16, roughness: 0.85 });
+  const cream = new THREE.MeshStandardMaterial({ color: 0xf6e7cc, roughness: 0.85 }), brown = new THREE.MeshStandardMaterial({ color: 0x7a4a2a, roughness: 0.6 });
+  const deckTex = canvasTex(256, 256, (c, w, h) => { for (let j = 0; j < 8; j++) { c.fillStyle = j % 2 ? "#a8743f" : "#97652f"; c.fillRect(0, j * h / 8, w, h / 8); c.fillStyle = "rgba(50,25,8,.35)"; c.fillRect(0, j * h / 8, w, 2); } }, { repeat: [2, 2] });
+  const deck = add(new THREE.BoxGeometry(6.2, 0.2, 4.6), [dark, dark, new THREE.MeshStandardMaterial({ map: deckTex, roughness: 0.8 }), dark, dark, dark], 0, 0.1, 0.3);
+  // quầy và vách sau có bảng thực đơn
+  add(new THREE.BoxGeometry(4.2, 2.6, 0.14), cream, 0, 1.5, -1.75);
+  const menu = canvasTex(512, 256, (c, w, h) => {
+    c.fillStyle = "#2f3a33"; rrect(c, 4, 4, w - 8, h - 8, 16); c.fill(); c.strokeStyle = "#c79a5b"; c.lineWidth = 10; rrect(c, 8, 8, w - 16, h - 16, 14); c.stroke();
+    c.textAlign = "center"; c.fillStyle = "#ffe7b8"; fitText(c, "THỰC ĐƠN", w / 2, 50, w - 60, 40, 900);
+    c.fillStyle = "#fff"; c.textAlign = "left"; [["☕ Cà phê sữa đá", "Mời"], ["🥛 Bạc xỉu", "Mời"], ["🍑 Trà đào", "Mời"], ["🎵 Nhạc hay", "Miễn phí"]].forEach(([a, b], i) => { fitText(c, a, 40, 102 + i * 38, 300, 28, 700); c.textAlign = "right"; fitText(c, b, w - 40, 102 + i * 38, 140, 26, 700); c.textAlign = "left"; });
+  });
+  const board = add(new THREE.PlaneGeometry(2.2, 1.1), new THREE.MeshStandardMaterial({ map: menu, roughness: 0.9 }), 0, 1.9, -1.67);
+  const ctex = canvasTex(512, 128, (c, w, h) => { const gr = c.createLinearGradient(0, 0, 0, h); gr.addColorStop(0, "#8a5a32"); gr.addColorStop(1, "#5a361a"); c.fillStyle = gr; c.fillRect(0, 0, w, h); c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#ffe7b8"; fitText(c, "☕ Cà phê · 🎵 Nhạc · 💬 Trò chuyện", w / 2, h / 2, w - 30, 40, 800); });
+  add(new THREE.BoxGeometry(3.6, 1.0, 0.6), [wood, wood, wood, wood, new THREE.MeshStandardMaterial({ map: ctex, roughness: 0.8 }), wood], 0, 0.7, -0.8);
+  add(new THREE.BoxGeometry(3.7, 0.08, 0.72), cream, 0, 1.24, -0.8);
+  for (const [e, x] of [["☕", -1.2], ["🧋", -0.3], ["🥐", 0.6], ["🍰", 1.3]]) { const s = emojiSprite(e, 0.42); s.position.set(x, 1.5, -0.8); g.add(s); }
+  // mái bạt sọc nâu kem
+  const awnTex = canvasTex(512, 256, (c, w, h) => { const n = 8, sw = w / n, body = h * 0.72, r = sw / 2; for (let i = 0; i < n; i++) { c.fillStyle = i % 2 ? "#fff3dc" : "#7a4a2a"; c.fillRect(i * sw, 0, sw, body); c.beginPath(); c.arc(i * sw + r, body, r, 0, Math.PI); c.fill(); } });
+  const awn = add(new THREE.PlaneGeometry(4.8, 1.7), new THREE.MeshStandardMaterial({ map: awnTex, side: THREE.DoubleSide, alphaTest: 0.5, roughness: 0.75 }), 0, 2.75, -0.55); awn.rotation.x = -1.0;
+  for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.06, 0.06, 2.9, 8), dark, sx * 2.05, 1.55, -0.1);
+  // biển tên và ly cà phê khổng lồ trên nóc
+  const sign = canvasTex(512, 160, (c, w, h) => { c.fillStyle = "#7a4a2a"; rrect(c, 6, 6, w - 12, h - 12, 30); c.fill(); c.strokeStyle = "#ffc533"; c.lineWidth = 8; rrect(c, 10, 10, w - 20, h - 20, 26); c.stroke(); c.textAlign = "center"; c.textBaseline = "middle"; c.fillStyle = "#ffe7b8"; fitText(c, "QUÁN CÀ PHÊ", w / 2, 50, w - 80, 30, 800); c.fillStyle = "#fff"; fitText(c, "Cà phê Hội chợ", w / 2, 108, w - 60, 54, 900); });
+  const sg = add(new THREE.BoxGeometry(2.6, 0.82, 0.08), [dark, dark, dark, dark, new THREE.MeshStandardMaterial({ map: sign, roughness: 0.5, emissive: 0x1a0d00 }), dark], 0, 3.45, -1.7);
+  G.anim.push({ o: sg, k: "bob", y: 3.45, p: 3 });
+  const cupG = new THREE.Group(); cupG.position.set(0, 4.3, -1.75); g.add(cupG);
+  const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.42, 0.9, 24), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 })); cupG.add(cup);
+  const coffee = new THREE.Mesh(new THREE.CircleGeometry(0.5, 24), new THREE.MeshStandardMaterial({ color: 0x5a3214, roughness: 0.4 })); coffee.rotation.x = -Math.PI / 2; coffee.position.y = 0.44; cupG.add(coffee);
+  const handle = new THREE.Mesh(new THREE.TorusGeometry(0.22, 0.07, 8, 16, Math.PI * 1.3), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.35 })); handle.position.set(0.58, 0.02, 0); handle.rotation.z = -Math.PI * 0.65; cupG.add(handle);
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.48, 0.18, 24, 1, true), brown); band.position.y = -0.05; cupG.add(band);
+  const steam = emojiSprite("♨️", 0.6); steam.position.set(0, 5.15, -1.75); g.add(steam); G.anim.push({ o: steam, k: "float", y: 5.15, p: 1 });
+  // nốt nhạc bay quanh loa khi đang phát nhạc
+  G.cafeNotes = [];
+  for (const sx of [-1, 1]) {
+    add(new THREE.BoxGeometry(0.45, 0.7, 0.35), dark, sx * 1.75, 1.6, -1.55);
+    const n = emojiSprite(sx > 0 ? "🎵" : "🎶", 0.5); n.position.set(sx * 1.75, 2.3, -1.4); n.visible = false; g.add(n); G.cafeNotes.push({ o: n, sx });
+  }
+  // bàn dù ngoài hiên
+  const umb = [0xc8102e, 0x0f8a5f, 0xe0a030];
+  [[-2.1, 1.4], [0, 1.9], [2.1, 1.4]].forEach(([x, z], i) => {
+    add(new THREE.CylinderGeometry(0.42, 0.42, 0.05, 18), cream, x, 0.78, z);
+    add(new THREE.CylinderGeometry(0.04, 0.04, 2.1, 6), dark, x, 1.25, z);
+    const top = add(new THREE.ConeGeometry(0.95, 0.42, 8), new THREE.MeshStandardMaterial({ color: umb[i], roughness: 0.6 }), x, 2.35, z);
+    for (const a of [0.4, Math.PI + 0.4]) add(new THREE.CylinderGeometry(0.17, 0.17, 0.45, 10), wood, x + Math.cos(a) * 0.7, 0.42, z + Math.sin(a) * 0.7);
+    const cupS = emojiSprite(i === 1 ? "🧋" : "☕", 0.3); cupS.position.set(x, 0.98, z); g.add(cupS);
+  });
+  // dây đèn bóng tròn
+  const bulbs = [];
+  for (let i = 0; i <= 10; i++) { const k = i / 10, x = -3 + k * 6, y = 2.65 - Math.sin(k * Math.PI) * 0.35; bulbs.push(x, y, 2.55); }
+  for (const sx of [-1, 1]) add(new THREE.CylinderGeometry(0.04, 0.05, 2.7, 6), dark, sx * 3, 1.35, 2.55);
+  const bg = new THREE.BufferGeometry(); bg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(bulbs), 3));
+  const glow = new THREE.Points(bg, new THREE.PointsMaterial({ map: glowTex(), color: 0xffd58a, size: 0.7, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })); g.add(glow);
+  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.pick = "cafe"; G.pick.push(o); } });
+  scene.add(g);
+  G.occ.push({ id: "cafe", x: sp.x, y: sp.y, g, op: 1, w: 260, near: 5 });
+}
+/** Có nhạc trong quán thì nốt nhạc bay quanh loa (main.js gọi theo /api/match). */
+export function setCafeMusic(on) { G.cafeOn = !!on; }
 
 /* ---------- Gian hàng lớn: nhà triển lãm mái ngói hai tầng, cột sơn son, bậc thềm, thảm đỏ ---------- */
 let PM = null; // vật liệu dùng chung cho cả 3 gian
@@ -737,11 +801,11 @@ function buildSeatPrompt(scene) {
 /* ---------- Nút "Vào phòng chờ" trước thềm mỗi gian ---------- */
 const NEAR_BOOTH = 300; // px quanh chỗ đứng trước gian: nút to lên, phím E để vào
 function buildEnterButtons(scene) {
-  G.enter = BOOTHS.map(b => {
-    const sp = SPOTS[b.id], r = sp.r * DEG, d = PAVILION.hd + 110;
+  G.enter = [...BOOTHS, CAFE].map(b => {
+    const sp = SPOTS[b.id], r = sp.r * DEG, d = b.id === "cafe" ? 260 : PAVILION.hd + 110;
     const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 0.05, wz(sp.y + Math.cos(r) * d)); scene.add(anchor); // trên thảm, nút treo xuống dưới điểm này
-    const solo = b.id === "g3";
-    const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (solo ? " · chơi một mình" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
+    const solo = b.id === "g3", cafe = b.id === "cafe";
+    const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (cafe ? "☕ Vào quán" : solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (cafe ? " · nghe nhạc, trò chuyện" : solo ? " · chơi một mình" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
     const btn = el.querySelector("button");
     btn.addEventListener("click", e => { e.stopPropagation(); goTo(b.id); });
     btn.addEventListener("pointerdown", e => e.stopPropagation());
@@ -1122,6 +1186,7 @@ function animateProps(dt) {
     else if (a.k === "swing") a.o.rotation.z = Math.sin(t * 2.4 + a.p) * 0.12;
     else if (a.k === "flag") a.o.rotation.y = Math.sin(t * 1.7 + a.p) * 0.25;
   }
+  if (G.cafeNotes) G.cafeNotes.forEach((n, i) => { n.o.visible = !!G.cafeOn; if (G.cafeOn) { const k = (t * 0.5 + i * 0.5) % 1; n.o.position.set(n.sx * (1.75 + Math.sin(k * 7) * 0.25), 2.2 + k * 1.4, -1.4); n.o.material.opacity = 1 - k; } });
   // đèn lồng đung đưa
   const L = G.lanterns, m = new THREE.Matrix4(), r = new THREE.Matrix4();
   const cp = G.camera.position, dx = wx(me.x) - cp.x, dz = wz(me.y) - cp.z, dd = dx * dx + dz * dz || 1;

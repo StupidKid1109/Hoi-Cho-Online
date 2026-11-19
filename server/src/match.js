@@ -6,11 +6,13 @@
 // Điện thoại gửi:  {t:"mjoin", g} · {t:"mleave"} · {t:"mans", k, a} (Gian 1, a = true nếu cho là lừa đảo)
 //                  {t:"mguess", k, text} · {t:"mhint", k} (Gian 2)
 //                  {t:"mpos", x, y} · {t:"memote", e} (đi lại, chào nhau trong không gian riêng của gian)
+//                  {t:"mchat", text} (chat trong phòng chờ và quán cà phê; g = "cafe" khi vào quán)
 // Máy chủ gửi:     mlobby (phòng chờ) · mspace / mpjoin / mpleave / mposes / memote (người trong không gian gian hàng)
 //                  mstart · mround (mở một câu) · mreveal (đáp án câu đó)
 //                  mguess / mhint (trả lời riêng) · msolved (có người đoán đúng) · mend (kết quả) · merr
 import { shuffle, strip, tilesFor } from "./games.js";
-import { BOOTH_ROOM } from "../../shared/world.js";
+import { BOOTH_ROOM, CAFE_MAX } from "../../shared/world.js";
+import { blockReason, cleanText, normalize, CHAT_GAP_MS } from "../../shared/chatFilter.js";
 import { encodeFrame } from "./ws.js";
 
 const G1_CARDS = 10, G1_MS = 10000, G1_REVEAL_MS = 4500;
@@ -21,7 +23,8 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   const MIN = config.matchMin || 20, MAX = config.matchMax || 50;
   const COUNTDOWN = config.matchCountdown ?? 15000, SPEED = config.matchSpeed || 1;
   const ms = v => Math.round(v * SPEED);
-  const lobbies = new Map();   // game -> phòng chờ hiện tại
+  const lobbies = new Map();   // game -> phòng chờ hiện tại ("cafe": phòng quán cà phê đang nhận khách)
+  let music = { file: null, title: "", startedAt: 0, loop: true, volume: 0.8 }; // nhạc trong quán, quản trị viên bật
   const where = new Map();     // pid -> phòng chờ hoặc phòng đang chơi
   let nextRoom = 1;
 
@@ -33,7 +36,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   /* ---------- Phòng chờ ---------- */
   function lobbyOf(game) {
     let L = lobbies.get(game);
-    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
+    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, cafe: game === "cafe", nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
     return L;
   }
   /* ---------- Không gian riêng của gian hàng: ai đang chờ, đứng ở đâu ---------- */
@@ -72,11 +75,32 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     if (!p || !Number.isInteger(e) || e < 0 || e > 3 || now - (p.lastEmote || 0) < 1500) return;
     p.lastEmote = now; toAll(L, { t: "memote", g: L.game, n: p.n, e });
   }
+  /** Chat trong phòng chờ / quán: cùng bộ lọc với chat ở sảnh (số điện thoại, link, OTP, từ tục, gửi quá nhanh). */
+  function chatInSpace(c, m) {
+    const L = where.get(c.pid); if (!L || !L.lobby) return;
+    const p = L.players.get(c.pid), now = Date.now(); if (!p) return;
+    if (c.banned) return send(c, { t: "msys", g: L.game, text: "Tài khoản của bạn đang bị tạm khóa chat." });
+    if (now - (p.lastChat || 0) < CHAT_GAP_MS) return send(c, { t: "msys", g: L.game, text: "Bạn nhắn nhanh quá, đợi vài giây nhé." });
+    const text = normalize(m.text); if (!text) return;
+    const why = blockReason(text);
+    if (why) return send(c, { t: "msys", g: L.game, text: "⚠️ Tin chưa được gửi vì chứa " + why + ". Không chia sẻ những thông tin này ở nơi công cộng, cẩn thận lừa đảo!" });
+    p.lastChat = now;
+    toAll(L, { t: "mchat", g: L.game, n: p.n, nick: p.nick, text: cleanText(text) });
+  }
+  const musicMsg = () => ({ t: "cmusic", g: "cafe", ...music, now: Date.now() });
+  /** Quản trị viên bật/tắt nhạc: báo cho mọi người đang trong quán (mọi phòng quán). */
+  function setMusic(next) {
+    music = { ...music, ...next };
+    for (const L of live) if (L.cafe) toAll(L, musicMsg());
+    return music;
+  }
   function lobbyState(L) {
+    if (L.cafe) return toAll(L, { t: "mlobby", g: "cafe", n: L.players.size, max: CAFE_MAX, cafe: true, names: [] });
     const names = [...L.players.values()].map(p => p.nick);
     toAll(L, { t: "mlobby", g: L.game, n: L.players.size, min: MIN, max: MAX, startIn: L.startAt ? Math.max(0, L.startAt - Date.now()) : null, names });
   }
   function schedule(L) {
+    if (L.cafe) { if (L.players.size >= CAFE_MAX && lobbies.get("cafe") === L) lobbies.delete("cafe"); return; } // quán không bắt đầu ván; đầy thì mở phòng mới
     clearTimeout(L.timer); L.timer = null;
     const n = L.players.size;
     if (n < MIN) { L.startAt = null; return; }
@@ -86,24 +110,29 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     L.timer = setTimeout(() => startRoom(L), Math.max(0, wait));
   }
   function join(c, game) {
-    if (game !== "g1" && game !== "g2") return;
+    if (game !== "g1" && game !== "g2" && game !== "cafe") return;
     const cur = where.get(c.pid);
     if (cur && cur.players.has(c.pid)) cur.players.get(c.pid).c = c; // kết nối lại: gắn vào kết nối mới
-    if (cur && cur.lobby && cur.game === game) { const p = cur.players.get(c.pid); send(c, { t: "mspace", g: game, you: pub(p), peers: [...cur.players.values()].filter(q => q !== p).map(pub) }); return lobbyState(cur); } // đã ở phòng chờ này
+    if (cur && cur.lobby && cur.game === game) { const p = cur.players.get(c.pid); send(c, { t: "mspace", g: game, you: pub(p), peers: [...cur.players.values()].filter(q => q !== p).map(pub) }); if (cur.cafe) send(c, musicMsg()); return lobbyState(cur); } // đã ở phòng chờ này
     if (cur && !cur.lobby && cur.game === game && !cur.players.get(c.pid).left) return send(c, { t: "mstart", g: game, room: cur.id, n: cur.players.size, total: cur.set.length, in: 0, rejoin: true });
     if (cur) leave(c);
-    const why = canPlay(c.pid); if (why) return send(c, { t: "merr", g: game, text: why });
+    const why = game === "cafe" ? null : canPlay(c.pid); if (why) return send(c, { t: "merr", g: game, text: why });
     const L = lobbyOf(game);
     const p = { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0 };
     L.players.set(c.pid, p);
     where.set(c.pid, L);
     enterSpace(L, p);
+    if (L.cafe) send(c, musicMsg());
     schedule(L); lobbyState(L);
   }
   function leave(c) {
     const R = where.get(c.pid); if (!R) return;
     where.delete(c.pid);
-    if (R.lobby) { const p = R.players.get(c.pid); R.players.delete(c.pid); if (p) toAll(R, { t: "mpleave", g: R.game, n: p.n }); schedule(R); lobbyState(R); return; }
+    if (R.lobby) {
+      const p = R.players.get(c.pid); R.players.delete(c.pid); if (p) toAll(R, { t: "mpleave", g: R.game, n: p.n });
+      if (R.cafe && !R.players.size && lobbies.get("cafe") !== R) { live.delete(R); return; } // phòng quán phụ đã vắng: đóng
+      schedule(R); lobbyState(R); return;
+    }
     const p = R.players.get(c.pid); if (p) p.left = true; // rời giữa ván: vẫn tính điểm đã có khi ván kết thúc
     if ([...R.players.values()].every(x => x.left || !x.c.open)) endRoom(R, true);
   }
@@ -231,6 +260,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     else if (m.t === "mhint") hintG2(c, m);
     else if (m.t === "mpos") moveInSpace(c, m);
     else if (m.t === "memote") emoteInSpace(c, m);
+    else if (m.t === "mchat") chatInSpace(c, m);
   }
   /** Mất kết nối: rời phòng chờ, hoặc đánh dấu đã rời ván đang chơi. */
   function onClose(c) { const R = where.get(c.pid); if (R && R.players.get(c.pid)?.c === c) leave(c); }
@@ -238,8 +268,9 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   function status() {
     const rooms = new Set([...where.values()].filter(r => !r.lobby));
     const wait = g => { const L = lobbies.get(g); return L ? { n: L.players.size, startIn: L.startAt ? Math.max(0, L.startAt - Date.now()) : null } : { n: 0, startIn: null }; };
-    return { min: MIN, max: MAX, g1: wait("g1"), g2: wait("g2"), rooms: rooms.size, playing: [...rooms].reduce((n, r) => n + [...r.players.values()].filter(p => !p.left).length, 0) };
+    const cafe = [...live].filter(L => L.cafe).reduce((n, L) => n + L.players.size, 0);
+    return { min: MIN, max: MAX, g1: wait("g1"), g2: wait("g2"), cafe: { n: cafe, music: music.file ? music.title : null }, rooms: rooms.size, playing: [...rooms].reduce((n, r) => n + [...r.players.values()].filter(p => !p.left).length, 0) };
   }
 
-  return { onMessage, onClose, status, MIN, MAX };
+  return { onMessage, onClose, status, setMusic, music: () => music, MIN, MAX };
 }

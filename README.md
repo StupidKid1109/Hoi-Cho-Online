@@ -107,6 +107,13 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Thử khi chưa đủ người thật: bấm đúp `nguoi-ao.cmd` (khoảng 80% người ảo vào phòng đấu và chơi).
 
 
+
+## Chat trong phòng chờ và quán cà phê có nhạc
+
+- Trong phòng chờ Gian 1, Gian 2 bấm **💬 Chat** để nhắn cho cả phòng: tin hiện thành bong bóng trên đầu nhân vật và trong khung chat góc trái. Dùng chung bộ lọc với chat ở sảnh (chặn số điện thoại, link, mã OTP, che từ tục, chống gửi liên tục).
+- **Quán cà phê** ở góc tây bắc sân (nút **☕ Cà phê** ở thanh dưới, hoặc nút **☕ Vào quán** trước quán): bước vào là tới không gian riêng của quán, thấy những người đang ngồi quán, đi lại, chào, chat.
+- **Nhạc trong quán do quản trị viên bật**: vào `/admin` → mục *☕ Nhạc quán cà phê*: tải bài lên (mp3, m4a, ogg, wav, tối đa 40 MB), bấm **▶ Phát** hoặc **⏹ Tắt nhạc**, chỉnh âm lượng, lặp lại. Cả quán nghe cùng một đoạn; người vào sau nghe tiếp đúng đoạn đang phát. Có sẵn một bài nhạc mẫu không lời để thử. Người chơi tắt/bật tiếng bằng nút loa góc trên. Chỉ dùng nhạc được phép phát công khai.
+
 ## Chơi thử trên điện thoại (cùng Wi-Fi)
 
 1. Bấm đúp `chay-thu.cmd` trên máy tính. Lần đầu Windows hỏi tường lửa cho Node.js: tick **Private networks** rồi bấm **Allow access**.

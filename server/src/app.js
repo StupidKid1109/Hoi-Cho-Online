@@ -7,6 +7,7 @@ import { makeAuth } from "./auth.js";
 import { makeStore, GAMES } from "./store.js";
 import { makeRealtime } from "./realtime.js";
 import { makeMatches } from "./match.js";
+import { makeMusic, MUSIC_MAX_BYTES } from "./music.js";
 import { attachWebSocket } from "./ws.js";
 import { swipe, rebus, runner, GameError } from "./games.js";
 import { ROOT_DIR, SERVER_DIR } from "./config.js";
@@ -33,6 +34,10 @@ export function createApp(config) {
     finishRun: (runId, game, res) => finishResponse(store.loadRun(runId), game, res)
   });
   const rt = makeRealtime({ db, store, auth, config, matches });
+  // Nhạc trong quán cà phê: nhớ bài đang phát qua các lần khởi động lại
+  const music = makeMusic(config);
+  { const st = music.loadState(); if (st && st.file && music.has(st.file)) matches.setMusic(st); }
+  const setMusic = next => { const st = matches.setMusic(next); music.saveState(st); return st; };
   const authHits = new Map();
 
   const send = (res, status, data, headers = {}) => {
@@ -72,6 +77,10 @@ export function createApp(config) {
       const khu = rt.khuList();
       return send(res, 200, { ok: true, time: Date.now(), online: khu.reduce((n, k) => n + k.online, 0), khu: khu.map(k => k.online), memMB: Math.round(process.memoryUsage().rss / 1048576) });
     }
+
+    // File nhạc của quán (công khai, có Range để tua đúng đoạn đang phát)
+    const mf = path.match(/^\/api\/music\/file\/([^/]+)$/);
+    if (mf && (method === "GET" || method === "HEAD")) return music.serve(req, res, decodeURIComponent(mf[1]));
 
     if (path === "/api/auth" && method === "POST") {
       const ip = clientIp(req), now = Date.now(), hits = (authHits.get(ip) || []).filter(t => now - t < 60000);
@@ -170,6 +179,30 @@ export function createApp(config) {
         const b = id => store.bests(id);
         const lines = ["hang,biet_danh,ma_nguoi_choi,diem_tong,gian_1,gian_2,gian_3"].concat(lb.ranked.slice(0, top).map(r => { const s = b(r.id); return [r.rank, '"' + r.nick + '"', r.id, r.score, s.g1, s.g2, s.g3].join(","); }));
         return send(res, 200, "﻿" + lines.join("\n"), { "content-type": "text/csv; charset=utf-8", "content-disposition": 'attachment; filename="bang-vang.csv"' });
+      }
+      // Nhạc quán cà phê
+      if (path === "/api/admin/music" && method === "GET") return send(res, 200, { tracks: music.list(), state: matches.music(), listeners: matches.status().cafe.n });
+      if (path === "/api/admin/music" && method === "PUT") { // { file } để phát (null để tắt), { loop, volume }
+        const b = await readBody(req);
+        if (b.file && !music.has(b.file)) return send(res, 404, { error: "Không có bài này" });
+        const next = { loop: b.loop !== false, volume: Math.max(0, Math.min(1, Number(b.volume ?? 0.8))) };
+        if ("file" in b) Object.assign(next, b.file ? { file: b.file, title: music.title(b.file), startedAt: Date.now() } : { file: null, title: "", startedAt: 0 });
+        return send(res, 200, { state: setMusic(next) });
+      }
+      if (path === "/api/admin/music/upload" && method === "POST") { // thân yêu cầu là file nhạc; tên file ở ?name=
+        const buf = await new Promise((resolve, reject) => {
+          let size = 0; const chunks = [];
+          req.on("data", c => { size += c.length; if (size > MUSIC_MAX_BYTES) { reject(new GameError("File quá lớn (tối đa 40 MB)", 413)); req.destroy(); } else chunks.push(c); });
+          req.on("end", () => resolve(Buffer.concat(chunks))); req.on("error", reject);
+        });
+        if (!buf.length) return send(res, 400, { error: "Chưa có file" });
+        try { return send(res, 200, { file: music.save(url.searchParams.get("name") || "bai-hat.mp3", buf), tracks: music.list() }); }
+        catch (e) { return send(res, 400, { error: e.message }); }
+      }
+      if (path === "/api/admin/music/delete" && method === "POST") {
+        const { file } = await readBody(req);
+        if (matches.music().file === file) setMusic({ file: null, title: "", startedAt: 0 });
+        music.remove(file); return send(res, 200, { tracks: music.list() });
       }
       if (path === "/api/admin/reload-content" && method === "POST") { content = loadContent(); return send(res, 200, { ok: true }); }
       return send(res, 404, { error: "Không tìm thấy" });

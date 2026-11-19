@@ -18,6 +18,7 @@ const hash = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + 
 const THEMES = {
   g1: { wall: "#f6dcdc", trim: "#c8102e", floorA: "#fff4ec", floorB: "#f7d9d3", posters: ["Không chia sẻ mã OTP", "Xác minh trước khi chuyển tiền", "Cảnh giác tin nhắn lạ"], props: ["🛡️", "📱", "🔒"] },
   g2: { wall: "#dcf1e5", trim: "#0f8a5f", floorA: "#fffaf0", floorB: "#e3f3e8", posters: ["🌊 + 🗡️ = ?", "🛕 + 1️⃣ + 🏛️ = ?", "🐉 + 🌊 = ?"], props: ["🖼️", "🔤", "💡"] },
+  cafe: { wall: "#f3e2c8", trim: "#7a4a2a", floorA: "#a8743f", floorB: "#94612f", posters: ["☕ Cà phê sữa đá", "Trò chuyện lịch sự, vui vẻ", "🎵 Nhạc do ban tổ chức chọn"], props: ["☕", "🥐", "🎶"] },
   g3: { wall: "#dbe8fb", trim: "#2563eb", floorA: "#3b3f4a", floorB: "#3b3f4a", posters: ["Đội mũ bảo hiểm khi đi xe", "Đã uống rượu bia, không lái xe", "Dừng lại khi đèn đỏ"], props: ["🛵", "🚦", "⛑️"] }
 };
 
@@ -42,6 +43,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       g.fillStyle = T.floorA; g.fillRect(0, 0, w, h);
       for (let i = 0; i < 1500; i++) { g.fillStyle = Math.random() < .5 ? "rgba(255,255,255,.05)" : "rgba(0,0,0,.12)"; g.fillRect(Math.random() * w, Math.random() * h, 2, 2); }
       g.fillStyle = "rgba(255,255,255,.85)"; g.fillRect(w / 2 - 4, 0, 8, h / 2);
+    } else if (game === "cafe") { // sàn ván gỗ
+      for (let j = 0; j < 8; j++) { g.fillStyle = j % 2 ? T.floorA : T.floorB; g.fillRect(0, j * h / 8, w, h / 8); g.fillStyle = "rgba(60,30,10,.35)"; g.fillRect(0, j * h / 8, w, 2); g.fillRect(((j * 97) % 200) + 20, j * h / 8, 2, h / 8); }
+      for (let i = 0; i < 600; i++) { g.fillStyle = "rgba(60,30,10,.08)"; g.fillRect(Math.random() * w, Math.random() * h, 6, 1); }
     } else { const n = 4, s = w / n; for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) { g.fillStyle = (i + j) % 2 ? T.floorB : T.floorA; g.fillRect(i * s, j * s, s, s); } }
   }, { repeat: game === "g3" ? [3, 3] : [6, 4.5] });
   const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, H), new THREE.MeshLambertMaterial({ map: floorTex }));
@@ -101,8 +105,29 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     for (let i = 0; i < 4; i++) { const cone = new THREE.Mesh(new THREE.ConeGeometry(0.18, 0.55, 12), new THREE.MeshLambertMaterial({ color: 0xff7a00 })); cone.position.set(-W / 2 + 0.6, 0.27, -1.5 + i * 0.9); scene.add(cone); }
     for (let i = 0; i < 6; i++) { const z = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), new THREE.MeshBasicMaterial({ color: 0xf4f1e8 })); z.rotation.x = -Math.PI / 2; z.position.set(-1.5 + i * 0.6, 0.03, 2.6); scene.add(z); }
   }
+  // quán cà phê: quầy pha chế, bàn ghế, loa hai bên màn hình, nốt nhạc bay khi đang phát nhạc
+  const notes = [];
+  if (game === "cafe") {
+    const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f1f }), top = new THREE.MeshLambertMaterial({ color: 0xe9d3ad }), dark = new THREE.MeshLambertMaterial({ color: 0x2b2420 });
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 0.7), wood); bar.position.set(-W / 2 + 2.3, 0.5, -H / 2 + 1.2); scene.add(bar);
+    const btop = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.08, 0.8), top); btop.position.set(-W / 2 + 2.3, 1.04, -H / 2 + 1.2); scene.add(btop);
+    const mach = emojiSprite("☕", 0.55); mach.position.set(-W / 2 + 1.5, 1.4, -H / 2 + 1.2); scene.add(mach);
+    const cake = emojiSprite("🍰", 0.45); cake.position.set(-W / 2 + 2.8, 1.33, -H / 2 + 1.2); scene.add(cake);
+    for (const [x, z] of [[1.6, -0.6], [3.6, 0.9], [-0.6, 1.6], [-3.4, 0.4]]) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.06, 20), top); t.position.set(x, 0.72, z); scene.add(t);
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, 0.7, 8), dark); leg.position.set(x, 0.35, z); scene.add(leg);
+      const cup = emojiSprite(Math.random() < 0.5 ? "☕" : "🧋", 0.32); cup.position.set(x, 0.92, z); scene.add(cup);
+      for (const a of [0, Math.PI]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.45, 12), wood); st.position.set(x + Math.cos(a) * 0.75, 0.22, z + Math.sin(a) * 0.75); scene.add(st); }
+    }
+    for (const sx of [-1, 1]) {
+      const spk = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.45), dark); spk.position.set(sx * 3.9, 2.2, -H / 2 + 0.3); scene.add(spk);
+      for (const [y, r] of [[2.45, 0.17], [2.0, 0.1]]) { const cone = new THREE.Mesh(new THREE.CircleGeometry(r, 16), new THREE.MeshLambertMaterial({ color: 0x777777 })); cone.position.set(sx * 3.9, y, -H / 2 + 0.53); scene.add(cone); }
+      for (let i = 0; i < 3; i++) { const n = emojiSprite(i % 2 ? "🎵" : "🎶", 0.4); n.position.set(sx * 3.9, 2.8, -H / 2 + 0.5); n.visible = false; scene.add(n); notes.push({ o: n, sx, p: i / 3 + (sx > 0 ? 0.15 : 0) }); }
+    }
+  }
+  let musicOn = false;
   // đèn lồng treo dọc hai tường bên (không che màn hình lớn)
-  const lanGeo = new THREE.SphereGeometry(0.2, 12, 10), lanMat = new THREE.MeshLambertMaterial({ color: 0xe01b3c, emissive: 0xff3a1a, emissiveIntensity: 0.6 });
+  const lanGeo = new THREE.SphereGeometry(0.2, 12, 10), lanMat = game === "cafe" ? new THREE.MeshLambertMaterial({ color: 0xffd58a, emissive: 0xffb347, emissiveIntensity: 0.9 }) : new THREE.MeshLambertMaterial({ color: 0xe01b3c, emissive: 0xff3a1a, emissiveIntensity: 0.6 });
   const lanPos = [];
   for (const sx of [-1, 1]) for (const z of [-2.8, -0.6, 1.6]) lanPos.push([sx * (W / 2 - 0.45), 2.75, z]);
   lanPos.forEach(([x, y, z], i) => { const l = new THREE.Mesh(lanGeo, lanMat); l.scale.y = 1.25; l.position.set(x, y, z); scene.add(l); anim.push({ o: l, swing: true, p: i }); });
@@ -131,6 +156,11 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     scene.remove(a.root); a.body.geometry.dispose(); a.mat.dispose(); a.el.remove(); people.delete(key);
   }
   function bubble(a, emo) { const b = a.el.querySelector(".bub"); b.textContent = emo; b.classList.add("on"); clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("on"), 2200); a.wave = 1.6; a.hop = 1; }
+  /** Bong bóng chat trên đầu (chữ nhỏ, hiện lâu hơn). */
+  function sayBubble(a, text) {
+    const b = a.el.querySelector(".bub"); b.innerHTML = '<span class="txt">' + esc(text.length > 60 ? text.slice(0, 59) + "…" : text) + "</span>";
+    b.classList.add("on"); clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("on"), 5000); a.talk = 5;
+  }
 
   const me = addPerson("me", nick, BOOTH_ROOM.door.x, BOOTH_ROOM.door.y, true);
   let target = null, sentAt = 0, sentX = -1, sentY = -1;
@@ -187,6 +217,10 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     const fz = Math.min(wz(me.y), 1.2) * 0.7; // nhìn về phía màn hình lớn, máy quay không lùi ra ngoài cửa quá xa
     camPos.lerp(v3.set(wx(me.x) * 0.5, camD * 0.95, fz + camD), Math.min(1, dt * 4));
     camera.position.copy(camPos); camera.lookAt(camPos.x, 0.8, camPos.z - camD * 1.05);
+    for (const nt of notes) {
+      nt.o.visible = musicOn;
+      if (musicOn) { const k = (t * 0.45 + nt.p) % 1; nt.o.position.set(nt.sx * (3.9 + Math.sin(k * 6 + nt.p * 9) * 0.3), 2.8 + k * 1.6, -H / 2 + 0.6 + k * 0.6); nt.o.material.opacity = 1 - k; }
+    }
     for (const o of anim) { if (o.swing) o.o.rotation.z = Math.sin(t * 2.3 + o.p) * 0.12; else o.o.position.y = o.y + Math.sin(t * 2.4 + o.p) * 0.1; }
     renderer.render(scene, camera);
     // nhãn tên: chỉ hiện 10 người gần mình nhất (và người đang chào) cho đỡ rối
@@ -194,7 +228,8 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     const near = [...people.values()].sort((p1, p2) => Math.hypot(p1.x - me.x, p1.y - me.y) - Math.hypot(p2.x - me.x, p2.y - me.y));
     near.forEach((a, i) => {
       v3.set(a.root.position.x, 1.45, a.root.position.z).project(camera);
-      const on = (i <= NAME_MAX || a.wave > 0) && v3.z < 1 && Math.abs(v3.x) < 1.2 && Math.abs(v3.y) < 1.2;
+      a.talk = Math.max(0, (a.talk || 0) - dt);
+      const on = (i <= NAME_MAX || a.wave > 0 || a.talk > 0) && v3.z < 1 && Math.abs(v3.x) < 1.2 && Math.abs(v3.y) < 1.2;
       a.el.style.visibility = on ? "visible" : "hidden";
       if (on) a.el.style.transform = "translate3d(" + Math.round((v3.x + 1) / 2 * w) + "px," + Math.round((1 - v3.y) / 2 * h) + "px,0)";
     });
@@ -213,6 +248,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     removePeer(n) { removePerson(n); },
     movePeers(list, myN) { for (const [n, x, y] of list) { if (n === myN) continue; const a = people.get(n); if (a) { a.tx = x; a.ty = y; } } },
     emote(n, e) { const a = people.get(n); if (a && EMO[e]) bubble(a, EMO[e]); },
+    /** Tin chat của người số n (myN: số của mình) hiện thành bong bóng trên đầu. */
+    say(n, text, myN) { const a = n === myN ? me : people.get(n); if (a) sayBubble(a, text); },
+    setMusicOn(on) { musicOn = on; },
     selfEmote(e) { bubble(me, EMO[e]); if (!solo) send({ t: "memote", e }); },
     /** Cập nhật màn hình lớn trên tường. */
     setScreen: drawScreen,

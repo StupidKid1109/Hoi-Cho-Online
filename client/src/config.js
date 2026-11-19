@@ -14,4 +14,7 @@ export const BOOTHS = [
     desc: "Lái xe về nhà, đổi làn để né các lỗi vi phạm, nhặt xu, sao và mũ bảo hiểm. Có 3 mạng, chạy càng xa càng nhiều điểm." }
 ];
 export const BOOTH = id => BOOTHS.find(b => b.id === id);
+// Quán cà phê (góc tây bắc): không có trò chơi, vào để trò chuyện và nghe nhạc ban tổ chức bật
+export const CAFE = { id: "cafe", c: "#7a4a2a", tag: "Quán cà phê", name: "Cà phê Hội chợ", icons: "☕🎵",
+  intro: ["☕", "Cà phê Hội chợ", [["🎵", "Nhạc do ban tổ chức bật, cả quán nghe cùng một bài"], ["💬", "Bấm Chat để trò chuyện với mọi người trong quán"], ["👋", "Chạm sàn để đi lại, bấm Chào, Vỗ tay để làm quen"], ["🔇", "Bấm nút loa ở góc trên để tắt, bật tiếng"]]] };
 export const PLACE_NAME = "Phường … (tên mẫu)"; // thay bằng tên phường
