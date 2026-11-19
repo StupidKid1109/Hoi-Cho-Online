@@ -11,7 +11,7 @@
 //                  mstart · mround (mở một câu) · mreveal (đáp án câu đó)
 //                  mguess / mhint (trả lời riêng) · msolved (có người đoán đúng) · mend (kết quả) · merr
 import { shuffle, strip, tilesFor } from "./games.js";
-import { BOOTH_ROOM, CAFE_MAX } from "../../shared/world.js";
+import { BOOTH_ROOM, CAFE_MAX, CAFE_SEATS } from "../../shared/world.js";
 import { blockReason, cleanText, normalize, CHAT_GAP_MS } from "../../shared/chatFilter.js";
 import { encodeFrame } from "./ws.js";
 
@@ -36,12 +36,25 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   /* ---------- Phòng chờ ---------- */
   function lobbyOf(game) {
     let L = lobbies.get(game);
-    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, cafe: game === "cafe", nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
+    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, cafe: game === "cafe", seats: new Map(), nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
     return L;
   }
   /* ---------- Không gian riêng của gian hàng: ai đang chờ, đứng ở đâu ---------- */
   const live = new Set(); // các phòng chờ đang mở (cả phòng đã đủ người đang chờ bắt đầu)
-  const pub = p => ({ n: p.n, nick: p.nick, x: Math.round(p.x), y: Math.round(p.y) });
+  const pub = p => ({ n: p.n, nick: p.nick, x: Math.round(p.x), y: Math.round(p.y), seat: p.seat ?? -1 });
+  /** Ghế trong quán: mỗi ghế một người; s = -1 là đứng dậy. */
+  function freeSeat(L, p) { if (p.seat >= 0 && L.seats.get(p.seat) === p.pid) L.seats.delete(p.seat); const had = p.seat >= 0; p.seat = -1; return had; }
+  function sitInSpace(c, m) {
+    const L = where.get(c.pid); if (!L || !L.lobby || !L.cafe) return;
+    const p = L.players.get(c.pid), s = Number(m.s); if (!p || !Number.isInteger(s)) return;
+    const now = Date.now(); if (now - (p.lastSit || 0) < 300) return; p.lastSit = now;
+    if (s === -1) { if (freeSeat(L, p)) toAll(L, { t: "msit", g: L.game, n: p.n, s: -1 }); return; }
+    const se = CAFE_SEATS[s]; if (!se) return;
+    const who = L.seats.get(s);
+    if (who && who !== p.pid) return send(c, { t: "msitno", g: L.game, s, text: "Ghế này có người ngồi rồi, bạn chọn ghế khác nhé." });
+    freeSeat(L, p); L.seats.set(s, p.pid); p.seat = s; p.x = se.x; p.y = se.y;
+    toAll(L, { t: "msit", g: L.game, n: p.n, s });
+  }
   /** Đưa người chơi vào không gian của phòng chờ L: gán số thứ tự, chỗ đứng gần cửa, báo cho mọi người. */
   function enterSpace(L, p) {
     p.n = L.nextN++;
@@ -67,6 +80,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     if (!p || !Number.isFinite(x) || !Number.isFinite(y)) return;
     const now = Date.now(); if (now - (p.lastPos || 0) < 60) return; p.lastPos = now;
     p.x = Math.max(M, Math.min(BOOTH_ROOM.w - M, x)); p.y = Math.max(M, Math.min(BOOTH_ROOM.h - M, y));
+    if (p.seat >= 0) { const se = CAFE_SEATS[p.seat]; if (Math.hypot(se.x - p.x, se.y - p.y) > 40 && freeSeat(L, p)) toAll(L, { t: "msit", g: L.game, n: p.n, s: -1 }); } // đi khỏi ghế
     L.dirty.add(p);
   }
   function emoteInSpace(c, m) {
@@ -118,7 +132,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     if (cur) leave(c);
     const why = game === "cafe" ? null : canPlay(c.pid); if (why) return send(c, { t: "merr", g: game, text: why });
     const L = lobbyOf(game);
-    const p = { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0 };
+    const p = { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0, seat: -1 };
     L.players.set(c.pid, p);
     where.set(c.pid, L);
     enterSpace(L, p);
@@ -129,7 +143,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     const R = where.get(c.pid); if (!R) return;
     where.delete(c.pid);
     if (R.lobby) {
-      const p = R.players.get(c.pid); R.players.delete(c.pid); if (p) toAll(R, { t: "mpleave", g: R.game, n: p.n });
+      const p = R.players.get(c.pid); R.players.delete(c.pid); if (p) { if (R.seats) freeSeat(R, p); toAll(R, { t: "mpleave", g: R.game, n: p.n }); }
       if (R.cafe && !R.players.size && lobbies.get("cafe") !== R) { live.delete(R); return; } // phòng quán phụ đã vắng: đóng
       schedule(R); lobbyState(R); return;
     }
@@ -261,6 +275,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     else if (m.t === "mpos") moveInSpace(c, m);
     else if (m.t === "memote") emoteInSpace(c, m);
     else if (m.t === "mchat") chatInSpace(c, m);
+    else if (m.t === "msit") sitInSpace(c, m);
   }
   /** Mất kết nối: rời phòng chờ, hoặc đánh dấu đã rời ván đang chơi. */
   function onClose(c) { const R = where.get(c.pid); if (R && R.players.get(c.pid)?.c === c) leave(c); }

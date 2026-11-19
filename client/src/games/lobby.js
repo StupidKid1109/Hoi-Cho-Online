@@ -41,7 +41,7 @@ export function top3(top) {
 }
 
 /* ---------- Không gian 3D riêng của gian hàng ---------- */
-const SPACE_MSG = new Set(["mspace", "mpjoin", "mpleave", "mposes", "memote", "mchat", "msys", "cmusic"]);
+const SPACE_MSG = new Set(["mspace", "mpjoin", "mpleave", "mposes", "memote", "mchat", "msys", "cmusic", "msit", "msitno"]);
 /**
  * Mở không gian riêng của gian `game` (lớp phủ trong màn hình của gian). Trả về bộ điều khiển ngay;
  * phần 3D nạp sau (tin đến trước thì xếp hàng). Không có WebGL thì trả về null (game dùng thẻ phòng chờ 2D),
@@ -66,7 +66,7 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     '<button class="sp-b" data-a="rules">' + (cafe ? "☕<span>Giới thiệu</span>" : "📜<span>Luật chơi</span>") + "</button>" +
     '<button class="sp-b" data-a="out">🚪<span>Ra hội chợ</span></button></div>' +
     (solo ? '<button class="btn sp-go">🛵 Bắt đầu chạy</button>' : "") +
-    (use3d ? '<div class="sp-help">Chạm sàn để đi lại · máy tính: W A S D</div>' : "") +
+    (use3d ? '<div class="sp-help">Kéo để nhìn quanh · chạm sàn để đi · máy tính: W A S D, V đổi góc nhìn' + (cafe ? ' · chạm ghế để ngồi' : '') + '</div>' : "") +
     '<div class="sp-fade"><div>' + (cafe ? "☕" : solo ? "🛵" : "🚪") + "<b>Đang vào " + esc(tag) + "…</b></div></div>" +
     '<div class="sp-rules"></div>';
   scr.appendChild(el);
@@ -221,6 +221,8 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     else if (m.t === "mpleave") room.removePeer(m.n);
     else if (m.t === "mposes") room.movePeers(m.p, myN);
     else if (m.t === "memote") room.emote(m.n, m.e);
+    else if (m.t === "msit") room.sit(m.n, m.s, myN);
+    else if (m.t === "msitno") { room.sitRejected(m.s); if (toast) toast(m.text); }
   }
   const ctl = {
     /** Tin "mlobby": số người, đếm ngược. */

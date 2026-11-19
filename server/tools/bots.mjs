@@ -9,7 +9,7 @@
 // Trong lúc chờ ở không gian riêng của gian, họ đi lại trong phòng và chào nhau.
 // chơi xong nghỉ vài giây rồi vào phòng mới.
 // Nhấn Ctrl+C (hoặc đóng cửa sổ) để cho tất cả rời khu.
-import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint, BOOTH_ROOM } from "../../shared/world.js";
+import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint, BOOTH_ROOM, CAFE_SEATS } from "../../shared/world.js";
 
 const N = Number(process.argv[2]) || 60, KHU = Number(process.argv[3]) || 1;
 const BASE = (process.argv[4] || "http://localhost:8787").replace(/\/$/, "");
@@ -89,7 +89,12 @@ function onMatch(b, m) {
   const send = o => { if (b.ws.readyState === 1) b.ws.send(JSON.stringify(o)); };
   if (!b.match) return;
   if (m.t === "merr") { b.match = null; b.until = Date.now() + rnd(20000, 40000); return; }
-  if (m.t === "mspace") { b.match.room = { x: m.you.x, y: m.you.y, gx: m.you.x, gy: m.you.y, wait: Date.now() + rnd(300, 2500), emote: Date.now() + rnd(3000, 20000) }; return; }
+  if (m.t === "mspace") {
+    b.match.room = { n: m.you.n, x: m.you.x, y: m.you.y, gx: m.you.x, gy: m.you.y, wait: Date.now() + rnd(300, 2500), emote: Date.now() + rnd(3000, 20000) };
+    if (m.g === "cafe" && Math.random() < 0.6) b.match.room.sitAt = Date.now() + rnd(2000, 8000); // 60% người ảo ngồi ghế trong quán
+    return;
+  }
+  if (m.t === "msit" && b.match.room && m.n === b.match.room.n) { b.match.room.seated = m.s >= 0; return; }
   if (m.t === "mstart") { b.match.room = null; return; }
   if (m.t === "mchat" && b.match.room && /chào|hello|hi\b/i.test(m.text) && !botNicks.has(m.nick) && Math.random() < 0.25) { // người thật chào thì vài người ảo chào lại
     setTimeout(() => send({ t: "mchat", text: pick(REPLIES) }), rnd(1200, 4000));
@@ -116,6 +121,8 @@ function stepRoom(b, now) {
   if (r.chat == null) r.chat = now + rnd(5000, 40000);
   if (now > r.chat) { send({ t: "mchat", text: pick(b.match.g === "cafe" ? CAFE_LINES : ROOM_LINES) }); r.chat = now + rnd(25000, 90000); }
   if (b.match.g === "cafe" && now > b.match.leaveAt) { send({ t: "mleave" }); b.match = null; b.until = now + rnd(1000, 4000); return; } // rời quán
+  if (r.sitAt && now > r.sitAt) { r.sitAt = 0; send({ t: "msit", s: Math.floor(Math.random() * CAFE_SEATS.length) }); }
+  if (r.seated) return; // đang ngồi: ngồi yên tới khi rời quán
   if (now < r.wait) return;
   const dx = r.gx - r.x, dy = r.gy - r.y, d = Math.hypot(dx, dy), stepLen = 260 * STEP_MS / 1000;
   if (d <= stepLen) { r.x = r.gx; r.y = r.gy; r.gx = rnd(M, BOOTH_ROOM.w - M); r.gy = rnd(M + 120, BOOTH_ROOM.h - M); r.wait = now + rnd(1500, 7000); }

@@ -1,6 +1,6 @@
 // Kiểm thử máy chủ: chạy bằng `npm test` trong thư mục server.
 import { test, before, after } from "node:test";
-import { SPAWN, SEATS, WORLD, BOOTH_ROOM } from "../../shared/world.js";
+import { SPAWN, SEATS, WORLD, BOOTH_ROOM, CAFE_SEATS } from "../../shared/world.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
@@ -321,6 +321,17 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
     assert.equal(b.inbox.filter(x => x.t === "cmusic").at(-1).file, tracks[0].file, "vào sau vẫn nghe đúng bài");
     b.send({ t: "mchat", text: "Cà phê ngon quá" }); await wait(120);
     assert.ok(a.inbox.find(x => x.t === "mchat" && x.g === "cafe"), "chat trong quán");
+    // ghế trong quán: mỗi ghế một người, đi khỏi ghế thì nhả ghế
+    const an = a.inbox.filter(x => x.t === "mspace" && x.g === "cafe").at(-1).you.n;
+    a.send({ t: "msit", s: 0 }); await wait(150);
+    assert.ok(b.inbox.find(x => x.t === "msit" && x.n === an && x.s === 0), "người khác thấy A ngồi ghế 0");
+    b.send({ t: "msit", s: 0 }); await wait(400);
+    assert.ok(b.inbox.find(x => x.t === "msitno" && x.s === 0), "không ngồi chồng lên người khác");
+    a.send({ t: "mpos", x: CAFE_SEATS[0].x + 200, y: CAFE_SEATS[0].y }); await wait(150);
+    assert.ok(b.inbox.find(x => x.t === "msit" && x.n === an && x.s === -1), "đi khỏi ghế thì đứng dậy");
+    b.send({ t: "msit", s: 0 }); await wait(150);
+    assert.ok(a.inbox.find(x => x.t === "msit" && x.s === 0 && x.n !== an), "ghế trống thì người khác ngồi được");
+    b.send({ t: "msit", s: 999 }); await wait(350);
     assert.equal((await call("/api/match")).data.cafe.n, 2, "đếm số người trong quán");
     const st = (await fetch(base + "/api/music/file/" + tracks[0].file, { headers: { range: "bytes=0-99" } }));
     assert.equal(st.status, 206); assert.equal((await st.arrayBuffer()).byteLength, 100, "phát nhạc có hỗ trợ tua (Range)");

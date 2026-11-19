@@ -82,3 +82,10 @@ export const BLOCK = [
 export const BOOTH_ROOM = { w: 1200, h: 900, door: { x: 600, y: 820 }, margin: 70 };
 // Quán cà phê: tối đa bao nhiêu người một phòng (đông hơn thì mở thêm phòng)
 export const CAFE_MAX = 50;
+// Bàn ghế trong quán (px theo BOOTH_ROOM): 4 bàn tròn mỗi bàn 4 ghế đẩu, 3 ghế cao trước quầy.
+// face: hướng mặt khi ngồi (quy ước atan2(dx, dy) như SEATS ở sảnh), h: độ cao mặt ghế (đơn vị 3D).
+export const CAFE_TABLES = [{ x: 760, y: 390 }, { x: 960, y: 560 }, { x: 540, y: 620 }, { x: 260, y: 500 }];
+export const CAFE_BAR = { x: 230, y: 120, w: 320 };
+export const CAFE_SEATS = [];
+for (const t of CAFE_TABLES) for (const [dx, dy] of [[-78, 0], [78, 0], [0, -78], [0, 78]]) CAFE_SEATS.push({ x: t.x + dx, y: t.y + dy, face: Math.atan2(-dx, -dy), h: 0.45, table: t });
+for (const dx of [-100, 0, 100]) CAFE_SEATS.push({ x: CAFE_BAR.x + dx, y: CAFE_BAR.y + 85, face: Math.PI, h: 0.62, bar: true });

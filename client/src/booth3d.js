@@ -5,7 +5,7 @@ import { esc } from "./ui.js";
 import { initialQuality } from "./gfx/webgl.js";
 import { createRenderer, setMaxAniso, canvasTex, emojiSprite, glowTex, blobTex, rrect, fitText, disposeTree, FONT } from "./gfx/kit.js";
 import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
-import { BOOTH_ROOM } from "../../shared/world.js";
+import { BOOTH_ROOM, CAFE_TABLES, CAFE_SEATS } from "../../shared/world.js";
 
 const U = 100, W = BOOTH_ROOM.w / U, H = BOOTH_ROOM.h / U, M = BOOTH_ROOM.margin;
 const wx = x => (x - BOOTH_ROOM.w / 2) / U, wz = y => (y - BOOTH_ROOM.h / 2) / U;
@@ -106,19 +106,28 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     for (let i = 0; i < 6; i++) { const z = new THREE.Mesh(new THREE.PlaneGeometry(0.35, 1.6), new THREE.MeshBasicMaterial({ color: 0xf4f1e8 })); z.rotation.x = -Math.PI / 2; z.position.set(-1.5 + i * 0.6, 0.03, 2.6); scene.add(z); }
   }
   // quán cà phê: quầy pha chế, bàn ghế, loa hai bên màn hình, nốt nhạc bay khi đang phát nhạc
-  const notes = [];
+  const notes = [], seatPick = [];
   if (game === "cafe") {
     const wood = new THREE.MeshLambertMaterial({ color: 0x6b3f1f }), top = new THREE.MeshLambertMaterial({ color: 0xe9d3ad }), dark = new THREE.MeshLambertMaterial({ color: 0x2b2420 });
     const bar = new THREE.Mesh(new THREE.BoxGeometry(3.2, 1.0, 0.7), wood); bar.position.set(-W / 2 + 2.3, 0.5, -H / 2 + 1.2); scene.add(bar);
     const btop = new THREE.Mesh(new THREE.BoxGeometry(3.3, 0.08, 0.8), top); btop.position.set(-W / 2 + 2.3, 1.04, -H / 2 + 1.2); scene.add(btop);
     const mach = emojiSprite("☕", 0.55); mach.position.set(-W / 2 + 1.5, 1.4, -H / 2 + 1.2); scene.add(mach);
     const cake = emojiSprite("🍰", 0.45); cake.position.set(-W / 2 + 2.8, 1.33, -H / 2 + 1.2); scene.add(cake);
-    for (const [x, z] of [[1.6, -0.6], [3.6, 0.9], [-0.6, 1.6], [-3.4, 0.4]]) {
+    for (const tb of CAFE_TABLES) {
+      const x = wx(tb.x), z = wz(tb.y);
       const t = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 0.06, 20), top); t.position.set(x, 0.72, z); scene.add(t);
       const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.12, 0.7, 8), dark); leg.position.set(x, 0.35, z); scene.add(leg);
       const cup = emojiSprite(Math.random() < 0.5 ? "☕" : "🧋", 0.32); cup.position.set(x, 0.92, z); scene.add(cup);
-      for (const a of [0, Math.PI]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.45, 12), wood); st.position.set(x + Math.cos(a) * 0.75, 0.22, z + Math.sin(a) * 0.75); scene.add(st); }
     }
+    // ghế ngồi được (bấm vào ghế hoặc lại gần rồi bấm "Ngồi")
+    const cushion = new THREE.MeshLambertMaterial({ color: 0xc8553d });
+    CAFE_SEATS.forEach((se, i) => {
+      const g = new THREE.Group(); g.position.set(wx(se.x), 0, wz(se.y));
+      const legM = new THREE.Mesh(new THREE.CylinderGeometry(se.bar ? 0.05 : 0.14, se.bar ? 0.16 : 0.18, se.h - 0.06, 10), se.bar ? dark : wood); legM.position.y = (se.h - 0.06) / 2; g.add(legM);
+      const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.22, 0.08, 16), cushion); seat.position.y = se.h - 0.02; g.add(seat);
+      g.traverse(o => { if (o.isMesh) { o.userData.seat = i; seatPick.push(o); } });
+      scene.add(g);
+    });
     for (const sx of [-1, 1]) {
       const spk = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.45), dark); spk.position.set(sx * 3.9, 2.2, -H / 2 + 0.3); scene.add(spk);
       for (const [y, r] of [[2.45, 0.17], [2.0, 0.1]]) { const cone = new THREE.Mesh(new THREE.CircleGeometry(r, 16), new THREE.MeshLambertMaterial({ color: 0x777777 })); cone.position.set(sx * 3.9, y, -H / 2 + 0.53); scene.add(cone); }
@@ -163,60 +172,128 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
 
   const me = addPerson("me", nick, BOOTH_ROOM.door.x, BOOTH_ROOM.door.y, true);
-  let target = null, sentAt = 0, sentX = -1, sentY = -1;
-  const keys = {};
+  me.face = Math.PI; // quay mặt vào phòng (về phía màn hình lớn)
+  let target = null, sentAt = 0, sentX = -1, sentY = -1, mySeat = -1, pendingSeat = -1;
+  const keys = {}, joy = { x: 0, y: 0 };
+  const seatOcc = new Map(); // ghế -> khoá người ngồi ("me" hoặc n)
 
-  /* ---------- Điều khiển: chạm sàn để đi, W A S D ---------- */
+  /* ---------- Góc nhìn giống sảnh: thứ ba sát sau vai / thứ nhất; kéo để nhìn quanh ---------- */
+  const VIEW = { eye: 0.98, dist: 3.6, side: 0.5, height: 1.6 };
+  let view = (() => { try { return localStorage.getItem("hc_view") === "first" ? "first" : "third"; } catch (e) { return "third"; } })();
+  let yaw = 0, lookPitch = -8, viewBlend = view === "third" ? 1 : 0; // yaw 0: nhìn về tường có màn hình lớn
+
+  // nút trên màn hình: đổi góc nhìn, cần điều khiển, Ngồi / Đứng dậy
+  const ui = document.createElement("div"); ui.className = "room-ui";
+  ui.innerHTML = '<button class="viewbtn rv" type="button" aria-label="Đổi góc nhìn"></button><div class="joy rj"><i></i></div><button class="sitp rs" type="button" hidden></button>';
+  container.appendChild(ui);
+  const vbtn = ui.querySelector(".rv"), joyEl = ui.querySelector(".rj"), knob = joyEl.firstElementChild, sitBtn = ui.querySelector(".rs");
+  const drawView = () => { vbtn.innerHTML = view === "first" ? "👁️<span>Thứ nhất</span>" : "🎥<span>Thứ ba</span>"; };
+  const toggleView = () => { view = view === "first" ? "third" : "first"; try { localStorage.setItem("hc_view", view); } catch (e) { /* bỏ qua */ } drawView(); };
+  drawView(); vbtn.onclick = e => { e.stopPropagation(); toggleView(); };
+  { let id = null, cx = 0, cy = 0; const R = 46;
+    const mv = e => { let dx = e.clientX - cx, dy = e.clientY - cy; const d = Math.hypot(dx, dy); if (d > R) { dx *= R / d; dy *= R / d; } knob.style.transform = "translate(" + dx + "px," + dy + "px)"; joy.x = dx / R; joy.y = dy / R; };
+    joyEl.addEventListener("pointerdown", e => { e.stopPropagation(); e.preventDefault(); id = e.pointerId; const r = joyEl.getBoundingClientRect(); cx = r.left + r.width / 2; cy = r.top + r.height / 2; try { joyEl.setPointerCapture(id); } catch (_) { /* bỏ qua */ } mv(e); joyEl.classList.add("on"); });
+    joyEl.addEventListener("pointermove", e => { if (e.pointerId === id) mv(e); });
+    const end = e => { if (e.pointerId !== id) return; id = null; joy.x = joy.y = 0; knob.style.transform = ""; joyEl.classList.remove("on"); };
+    joyEl.addEventListener("pointerup", end); joyEl.addEventListener("pointercancel", end); }
+
+  /* ---------- Ghế (quán cà phê) ---------- */
+  const canSit = game === "cafe" && !solo;
+  function sitAt(i) { if (!canSit || i < 0) return; const o = seatOcc.get(i); if (o && o !== "me") return; pendingSeat = i; const se = CAFE_SEATS[i]; target = { x: se.x, y: se.y, seat: i }; }
+  function standUp() { if (mySeat < 0) return; seatOcc.delete(mySeat); mySeat = -1; send({ t: "msit", s: -1 }); }
+  function nearestFreeSeat() { let best = -1, bd = 110; CAFE_SEATS.forEach((se, i) => { if (seatOcc.has(i)) return; const d = Math.hypot(se.x - me.x, se.y - me.y); if (d < bd) { bd = d; best = i; } }); return best; }
+  sitBtn.onclick = e => { e.stopPropagation(); if (mySeat >= 0) standUp(); else sitAt(nearestFreeSeat()); };
+
+  /* ---------- Điều khiển: kéo để nhìn, chạm sàn (hoặc ghế) để đi tới, W A S D / cần điều khiển, Shift chạy ---------- */
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2(), plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0), hit = new THREE.Vector3();
   let down = null;
-  const onDown = e => { down = { x: e.clientX, y: e.clientY }; };
+  const onDown = e => { down = { x: e.clientX, y: e.clientY, yaw, pitch: lookPitch, drag: false }; };
+  const onMove = e => {
+    if (!down) return; const dx = e.clientX - down.x, dy = e.clientY - down.y;
+    if (!down.drag && Math.abs(dx) + Math.abs(dy) > 10) down.drag = true;
+    if (down.drag) { yaw = down.yaw - dx * 0.3; lookPitch = Math.max(view === "first" ? -75 : -40, Math.min(view === "first" ? 75 : 35, down.pitch + dy * 0.25)); }
+  };
   const onUp = e => {
-    if (!down || Math.hypot(e.clientX - down.x, e.clientY - down.y) > 12) { down = null; return; } down = null;
+    if (!down) return; const d = down; down = null; if (d.drag) return;
     const r = renderer.domElement.getBoundingClientRect();
     ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
-    if (ray.ray.intersectPlane(plane, hit)) target = { x: Math.max(M, Math.min(BOOTH_ROOM.w - M, hit.x * U + BOOTH_ROOM.w / 2)), y: Math.max(M, Math.min(BOOTH_ROOM.h - M, hit.z * U + BOOTH_ROOM.h / 2)) };
+    if (canSit) { const h = ray.intersectObjects(seatPick, false)[0]; if (h) return sitAt(h.object.userData.seat); }
+    if (ray.ray.intersectPlane(plane, hit)) { standUp(); pendingSeat = -1; target = { x: Math.max(M, Math.min(BOOTH_ROOM.w - M, hit.x * U + BOOTH_ROOM.w / 2)), y: Math.max(M, Math.min(BOOTH_ROOM.h - M, hit.z * U + BOOTH_ROOM.h / 2)) }; }
   };
-  const onKey = e => { if (!active || e.target.tagName === "INPUT") return; keys[e.key.toLowerCase()] = e.type === "keydown"; };
-  renderer.domElement.addEventListener("pointerdown", onDown); renderer.domElement.addEventListener("pointerup", onUp);
+  const onKey = e => {
+    if (!active || e.target.tagName === "INPUT") return;
+    const k = e.key.toLowerCase();
+    if (e.type === "keydown" && !e.repeat && k === "v") return toggleView();
+    if (e.type === "keydown" && !e.repeat && k === "e" && canSit) return sitBtn.onclick(e);
+    keys[k] = e.type === "keydown";
+  };
+  renderer.domElement.addEventListener("pointerdown", onDown); window.addEventListener("pointermove", onMove); window.addEventListener("pointerup", onUp);
   document.addEventListener("keydown", onKey); document.addEventListener("keyup", onKey);
 
-  let camD = 7.6;
   function resize() {
     const w = container.clientWidth || 1, h = container.clientHeight || 1;
-    renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.8 ? 58 : 46; camera.updateProjectionMatrix();
-    camD = w / h < 0.8 ? 10.5 : 7.6; // màn hình dọc: lùi xa hơn để thấy cả phòng
+    renderer.setSize(w, h, false); camera.aspect = w / h; camera.fov = w / h < 0.8 ? 62 : 52; camera.updateProjectionMatrix();
   }
   const ro = new ResizeObserver(resize); ro.observe(container); resize();
 
   /* ---------- Vòng vẽ ---------- */
   let raf = 0, last = null, t = 0, active = true;
-  const v3 = new THREE.Vector3(), camPos = new THREE.Vector3(wx(me.x) * 0.5, camD * 0.95, Math.min(wz(me.y), 1.2) * 0.7 + camD);
+  const v3 = new THREE.Vector3(), look = new THREE.Vector3();
+  function poseSeat(a, seat, dt) {
+    const se = seat >= 0 ? CAFE_SEATS[seat] : null;
+    a.sitAmt = (a.sitAmt || 0) + ((se ? 1 : 0) - (a.sitAmt || 0)) * Math.min(1, dt * 8);
+    if (se) { a.lastSitH = se.h - 0.36; const dd = ((se.face - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += dd * Math.min(1, dt * 12); }
+    return (a.lastSitH || 0) * a.sitAmt;
+  }
   function loop(ts) {
     const dt = last == null ? 0 : Math.min(0.05, (ts - last) / 1000); last = ts; t += dt;
-    // đi lại
-    const kx = (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0), ky = (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0);
-    const ox = me.x, oy = me.y;
-    if (kx || ky) { target = null; const n = Math.hypot(kx, ky); me.x += kx / n * SPEED * dt; me.y += ky / n * SPEED * dt; }
-    else if (target) { const dx = target.x - me.x, dy = target.y - me.y, d = Math.hypot(dx, dy); if (d < 4) target = null; else { const k = Math.min(d, SPEED * dt) / d; me.x += dx * k; me.y += dy * k; } }
+    // đi lại theo hướng máy quay
+    const Y = yaw * Math.PI / 180, fx = -Math.sin(Y), fy = -Math.cos(Y), rx = Math.cos(Y), ry = -Math.sin(Y);
+    const kx = Math.max(-1, Math.min(1, (keys.d || keys.arrowright ? 1 : 0) - (keys.a || keys.arrowleft ? 1 : 0) + joy.x)), ky = Math.max(-1, Math.min(1, (keys.s || keys.arrowdown ? 1 : 0) - (keys.w || keys.arrowup ? 1 : 0) + joy.y));
+    const ox = me.x, oy = me.y, n = Math.hypot(kx, ky);
+    if (n > 0.15) {
+      target = null; pendingSeat = -1; standUp();
+      const sp = SPEED * (keys.shift ? 1.6 : 1) * Math.min(1, n);
+      me.x += (rx * kx - fx * ky) / n * sp * dt; me.y += (ry * kx - fy * ky) / n * sp * dt;
+    } else if (target) {
+      const dx = target.x - me.x, dy = target.y - me.y, d = Math.hypot(dx, dy);
+      if (d < 4) { if (target.seat != null && pendingSeat === target.seat && !seatOcc.has(target.seat)) { mySeat = target.seat; seatOcc.set(mySeat, "me"); send({ t: "msit", s: mySeat }); } target = null; pendingSeat = -1; }
+      else { const k = Math.min(d, SPEED * dt) / d; me.x += dx * k; me.y += dy * k; }
+    }
     me.x = Math.max(M, Math.min(BOOTH_ROOM.w - M, me.x)); me.y = Math.max(M, Math.min(BOOTH_ROOM.h - M, me.y));
     if (!solo && (Math.abs(me.x - sentX) > 2 || Math.abs(me.y - sentY) > 2) && ts - sentAt > 110) { sentAt = ts; sentX = me.x; sentY = me.y; send({ t: "mpos", x: Math.round(me.x), y: Math.round(me.y) }); }
+    // nút Ngồi / Đứng dậy
+    if (canSit) {
+      const near = mySeat >= 0 ? -2 : (!target ? nearestFreeSeat() : -1), want = near === -2 ? "🚶 Đứng dậy" : near >= 0 ? "🪑 Ngồi" + (matchMedia("(hover: hover)").matches ? " <kbd>E</kbd>" : "") : "";
+      if (sitBtn.dataset.w !== want) { sitBtn.dataset.w = want; sitBtn.innerHTML = want; sitBtn.hidden = !want; }
+    }
     // nhân vật
     for (const [key, a] of people) {
       let dx, dy;
       if (key === "me") { dx = me.x - ox; dy = me.y - oy; }
       else { const px = a.x, py = a.y, d = Math.hypot(a.tx - a.x, a.ty - a.y); if (d > 600) { a.x = a.tx; a.y = a.ty; } else { const k = Math.min(1, dt * 10); a.x += (a.tx - a.x) * k; a.y += (a.ty - a.y) * k; } dx = a.x - px; dy = a.y - py; }
-      const walking = Math.abs(dx) + Math.abs(dy) > 0.3;
+      const seat = key === "me" ? mySeat : (a.seat ?? -1);
+      const walking = seat < 0 && Math.abs(dx) + Math.abs(dy) > 0.3;
       a.root.position.set(wx(a.x), 0, wz(a.y));
       if (walking) { const want = Math.atan2(dx, dy), dd = ((want - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += dd * Math.min(1, dt * 12); }
+      const sitY = poseSeat(a, seat, dt);
       a.body.rotation.y = a.face; a.phase += dt * (walking ? 11 : 2.2); a.hop = Math.max(0, a.hop - dt * 2.5);
-      a.body.position.y = (walking ? Math.abs(Math.cos(a.phase)) * 0.05 : 0) + Math.sin(a.hop * Math.PI) * 0.22;
+      a.body.position.y = (walking ? Math.abs(Math.cos(a.phase)) * 0.05 : 0) + Math.sin(a.hop * Math.PI) * 0.22 + sitY;
+      a.body.position.x = -Math.sin(a.face) * 0.12 * (a.sitAmt || 0); a.body.position.z = -Math.cos(a.face) * 0.12 * (a.sitAmt || 0);
       animateCharacter(a, walking, dt);
     }
-    // máy quay đi theo mình, nhìn chếch xuống
-    const fz = Math.min(wz(me.y), 1.2) * 0.7; // nhìn về phía màn hình lớn, máy quay không lùi ra ngoài cửa quá xa
-    camPos.lerp(v3.set(wx(me.x) * 0.5, camD * 0.95, fz + camD), Math.min(1, dt * 4));
-    camera.position.copy(camPos); camera.lookAt(camPos.x, 0.8, camPos.z - camD * 1.05);
+    // máy quay: thứ ba sát sau vai, hoặc thứ nhất ở mắt nhân vật; không lọt ra sau tường
+    viewBlend += ((view === "third" ? 1 : 0) - viewBlend) * Math.min(1, dt * 8);
+    const LP = lookPitch * Math.PI / 180, px = wx(me.x), pz = wz(me.y), eyeY = mySeat >= 0 ? CAFE_SEATS[mySeat].h + VIEW.eye * 0.62 : VIEW.eye;
+    const back = VIEW.dist * Math.cos(LP * 0.6), up3 = VIEW.height - Math.sin(LP) * VIEW.dist * 0.55;
+    let cx = px - fx * back * viewBlend + rx * VIEW.side * viewBlend, cy = eyeY + (Math.max(0.35, eyeY - VIEW.eye + up3) - eyeY) * viewBlend, cz = pz - fy * back * viewBlend + ry * VIEW.side * viewBlend;
+    cx = Math.max(-W / 2 + 0.25, Math.min(W / 2 - 0.25, cx)); cz = Math.max(-H / 2 + 0.25, Math.min(H / 2 + 6, cz)); cy = Math.min(4.6, cy);
+    camera.position.set(cx, cy, cz);
+    const ahead = 3.6;
+    look.set(px + fx * Math.cos(LP) * ahead + rx * VIEW.side * viewBlend * 0.5, eyeY + Math.sin(LP) * ahead + 0.15 * viewBlend, pz + fy * Math.cos(LP) * ahead + ry * VIEW.side * viewBlend * 0.5);
+    camera.lookAt(look);
+    me.root.visible = !(viewBlend < 0.25); me.el.style.display = viewBlend < 0.25 ? "none" : "";
     for (const nt of notes) {
       nt.o.visible = musicOn;
       if (musicOn) { const k = (t * 0.45 + nt.p) % 1; nt.o.position.set(nt.sx * (3.9 + Math.sin(k * 6 + nt.p * 9) * 0.3), 2.8 + k * 1.6, -H / 2 + 0.6 + k * 0.6); nt.o.material.opacity = 1 - k; }
@@ -227,7 +304,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
     const near = [...people.values()].sort((p1, p2) => Math.hypot(p1.x - me.x, p1.y - me.y) - Math.hypot(p2.x - me.x, p2.y - me.y));
     near.forEach((a, i) => {
-      v3.set(a.root.position.x, 1.45, a.root.position.z).project(camera);
+      v3.set(a.root.position.x, 1.45 + (a.lastSitH || 0) * (a.sitAmt || 0), a.root.position.z).project(camera);
       a.talk = Math.max(0, (a.talk || 0) - dt);
       const on = (i <= NAME_MAX || a.wave > 0 || a.talk > 0) && v3.z < 1 && Math.abs(v3.x) < 1.2 && Math.abs(v3.y) < 1.2;
       a.el.style.visibility = on ? "visible" : "hidden";
@@ -241,11 +318,20 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     /** Tin "mspace": mình và những người đang ở trong gian. */
     setSpace(m) {
       for (const k of [...people.keys()]) if (k !== "me") removePerson(k);
-      me.x = m.you.x; me.y = m.you.y; target = null;
-      for (const p of m.peers) addPerson(p.n, p.nick, p.x, p.y, false);
+      me.x = m.you.x; me.y = m.you.y; target = null; mySeat = -1; seatOcc.clear();
+      for (const p of m.peers) { const a = addPerson(p.n, p.nick, p.x, p.y, false); a.seat = p.seat ?? -1; if (a.seat >= 0) seatOcc.set(a.seat, p.n); }
     },
-    addPeer(p) { addPerson(p.n, p.nick, p.x, p.y, false); },
-    removePeer(n) { removePerson(n); },
+    addPeer(p) { const a = addPerson(p.n, p.nick, p.x, p.y, false); a.seat = p.seat ?? -1; },
+    removePeer(n) { for (const [s, k] of seatOcc) if (k === n) seatOcc.delete(s); removePerson(n); },
+    /** Tin "msit": người số n ngồi ghế s (-1: đứng dậy). */
+    sit(n, s, myN) {
+      if (n === myN) { if (s < 0 && mySeat >= 0) { seatOcc.delete(mySeat); mySeat = -1; } return; }
+      const a = people.get(n); if (!a) return;
+      if (a.seat >= 0 && seatOcc.get(a.seat) === n) seatOcc.delete(a.seat);
+      a.seat = s; if (s >= 0) { seatOcc.set(s, n); if (mySeat === s) { mySeat = -1; } if (pendingSeat === s) { pendingSeat = -1; target = null; } }
+    },
+    /** Tin "msitno": ghế vừa có người khác ngồi. */
+    sitRejected(s) { if (mySeat === s) { mySeat = -1; } if (seatOcc.get(s) === "me") seatOcc.delete(s); },
     movePeers(list, myN) { for (const [n, x, y] of list) { if (n === myN) continue; const a = people.get(n); if (a) { a.tx = x; a.ty = y; } } },
     emote(n, e) { const a = people.get(n); if (a && EMO[e]) bubble(a, EMO[e]); },
     /** Tin chat của người số n (myN: số của mình) hiện thành bong bóng trên đầu. */
@@ -256,10 +342,11 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     setScreen: drawScreen,
     count: () => people.size,
     /** Tạm dừng vẽ khi đang chơi (không tốn pin), vẽ lại khi quay về phòng. */
-    setActive(on) { if (on === active) return; active = on; cancelAnimationFrame(raf); for (const k in keys) keys[k] = false; if (on) { last = null; resize(); raf = requestAnimationFrame(loop); } },
+    setActive(on) { if (on === active) return; active = on; cancelAnimationFrame(raf); for (const k in keys) keys[k] = false; joy.x = joy.y = 0; if (on) { last = null; resize(); raf = requestAnimationFrame(loop); } },
     close() {
       cancelAnimationFrame(raf); ro.disconnect();
       document.removeEventListener("keydown", onKey); document.removeEventListener("keyup", onKey);
+      window.removeEventListener("pointermove", onMove); window.removeEventListener("pointerup", onUp); ui.remove();
       for (const k of [...people.keys()]) removePerson(k);
       disposeTree(scene); renderer.dispose(); renderer.domElement.remove(); labels.remove();
     }

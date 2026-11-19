@@ -114,6 +114,7 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Mặc định **góc nhìn thứ ba sát sau vai** nhân vật; nút **🎥 / 👁️** ở góc phải (máy tính: phím **V**) đổi sang **góc nhìn thứ nhất** (nhìn bằng mắt nhân vật). Lựa chọn được nhớ cho lần sau.
 - Điện thoại: **cần điều khiển** góc dưới bên phải để đi, **kéo màn hình** để nhìn quanh (cả trái phải và lên xuống), chạm mặt đất để đi tới đó.
 - Máy tính: **W A S D** để đi, giữ **Shift** để chạy, giữ chuột trái và kéo để nhìn, nhấp lên sàn để đi tới.
+- Trong phòng chờ và quán cà phê cũng dùng cùng góc nhìn và cách điều khiển này. Trong quán, **chạm vào ghế** (hoặc lại gần rồi bấm **🪑 Ngồi**, máy tính phím **E**) để ngồi; mỗi ghế một người, đi đi là tự đứng dậy.
 
 ## Chat trong phòng chờ và quán cà phê có nhạc
 
