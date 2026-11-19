@@ -7,6 +7,7 @@ import { esc } from "./ui.js";
 import { initialQuality } from "./gfx/webgl.js";
 import { createRenderer, setMaxAniso, canvasTex, emojiSprite, glowTex, blobTex, rrect, fitText, disposeTree, FONT } from "./gfx/kit.js";
 import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
+import { attachHero } from "./gfx/hero.js";
 import { CAFE_SEATS, roomOf, inPoly } from "../../shared/world.js";
 
 const U = 100;
@@ -207,7 +208,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
   function removePerson(key) {
     const a = people.get(key); if (!a) return;
-    scene.remove(a.root); a.body.geometry.dispose(); a.mat.dispose(); a.el.remove(); people.delete(key);
+    scene.remove(a.root); if (a.hero) a.hero.dispose(); else a.body.geometry.dispose(); a.mat.dispose(); a.el.remove(); people.delete(key);
   }
   function bubble(a, emo) { const b = a.el.querySelector(".bub"); b.textContent = emo; b.classList.add("on"); clearTimeout(b._t); b._t = setTimeout(() => b.classList.remove("on"), 2200); a.wave = 1.6; a.hop = 1; }
   /** Bong bóng chat trên đầu (chữ nhỏ, hiện lâu hơn). */
@@ -217,6 +218,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
 
   const me = addPerson("me", nick, R.door.x, R.door.y, true);
+  attachHero(me, () => people.get("me") === me && !closed); // nhân vật của mình: Steve (Quaternius)
   me.face = CAFE ? 0 : Math.PI; // quay mặt vào phòng (gian: về phía màn hình lớn; quán: từ cửa nhìn vào trong)
   let target = null, sentAt = 0, sentX = -1, sentY = -1, mySeat = -1, pendingSeat = -1;
   const keys = {}, joy = { x: 0, y: 0 };
@@ -336,9 +338,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       if (walking) { const want = Math.atan2(dx, dy), dd = ((want - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += dd * Math.min(1, dt * 12); }
       const sitY = poseSeat(a, seat, dt);
       a.body.rotation.y = a.face; a.phase += dt * (walking ? 11 : 2.2); a.hop = Math.max(0, a.hop - dt * 2.5);
-      a.body.position.y = (walking ? Math.abs(Math.cos(a.phase)) * 0.05 : 0) + Math.sin(a.hop * Math.PI) * 0.22 + sitY;
+      a.body.position.y = (walking && !a.hero ? Math.abs(Math.cos(a.phase)) * 0.05 : 0) + Math.sin(a.hop * Math.PI) * (a.hero ? 0.12 : 0.22) + sitY;
       a.body.position.x = -Math.sin(a.face) * 0.12 * (a.sitAmt || 0); a.body.position.z = -Math.cos(a.face) * 0.12 * (a.sitAmt || 0);
-      animateCharacter(a, walking, dt);
+      if (a.hero) a.hero.update(a, walking, dt > 0 ? Math.hypot(dx, dy) / U / dt / K : 0, dt); else animateCharacter(a, walking, dt);
     }
     // máy quay: thứ ba sát sau vai, hoặc thứ nhất ở mắt nhân vật; không lọt ra sau tường
     viewBlend += ((view === "third" ? 1 : 0) - viewBlend) * Math.min(1, dt * 8);
