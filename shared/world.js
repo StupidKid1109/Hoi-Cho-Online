@@ -68,3 +68,7 @@ export const BLOCK = [
   ...LOCKED.map(s => [s.x, s.y, 110]),
   ...TABLES.map(t => [t.x, t.y, 45])
 ];
+
+/* ---------- Không gian riêng của gian hàng (phòng chờ 3D) ---------- */
+// Mỗi phòng chờ là một không gian riêng rộng ROOM.w × ROOM.h px (100 px = 1 đơn vị 3D), cửa ở cạnh dưới (phía máy quay).
+export const BOOTH_ROOM = { w: 1200, h: 900, door: { x: 600, y: 820 }, margin: 70 };

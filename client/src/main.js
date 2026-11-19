@@ -4,6 +4,7 @@ import { api, post, setToken, connectKhu } from "./api.js";
 import { initPlatform, loginPayload, share, inZalo } from "./platform.js";
 import { BOOTHS, BOOTH, PLACE_NAME } from "./config.js";
 import * as hub from "./hub.js";
+import { createSpace } from "./games/lobby.js";
 import * as chat from "./chat.js";
 import * as swipe from "./games/swipe.js";
 import * as rebus from "./games/rebus.js";
@@ -11,7 +12,7 @@ import * as runner from "./games/runner.js";
 
 const GAMES = { g1: swipe, g2: rebus, g3: runner };
 const PROVERBS = [["Ăn quả nhớ kẻ trồng cây.", "Tục ngữ"], ["Một cây làm chẳng nên non, ba cây chụm lại nên hòn núi cao.", "Ca dao"], ["Bán anh em xa, mua láng giềng gần.", "Tục ngữ"], ["Đi một ngày đàng, học một sàng khôn.", "Tục ngữ"]];
-const S = { me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null };
+const S = { me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null, space: null };
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* bỏ qua */ } } };
 
 /* ---------- Tải và đăng nhập ---------- */
@@ -55,7 +56,7 @@ function enterFair() {
   const send = o => S.conn && S.conn.send(o);
   hub.buildHub({
     nick: S.me.nick, hidden: [...chat.hiddenIds()], send, toast,
-    onBooth: id => boothSheet(id), onBoard: () => board("all"),
+    onBooth: id => enterBooth(id), onBoard: () => board("all"),
     onEmote: i => chat.onEmoteSelf(hub.EMOTES[i][0] + " " + hub.EMOTES[i][1])
   });
   chat.initChat({ khu: S.khu, send, nick: () => S.me.nick, get myId() { return S.myId; }, onPeerSay: hub.peerSay, onSelfSay: hub.selfSay, onHide: hub.hidePeer });
@@ -85,7 +86,7 @@ function onRealtime(m) {
   else if (m.t === "sys") chat.onSys(m.text, m.ok);
   else if (m.t === "feed") feed(m.text);
   else if (m.t === "full" || m.t === "error") toast(m.text);
-  else if (m.g && m.t[0] === "m" && S.cur === m.g && GAMES[m.g].onMsg) GAMES[m.g].onMsg(m); // đấu phòng
+  else if (m.g && m.t[0] === "m" && S.cur === m.g) { if (S.space && S.space.msg(m)) return; if (GAMES[m.g].onMsg) GAMES[m.g].onMsg(m); } // không gian gian hàng, đấu phòng
 }
 function renderWho() { $("who").innerHTML = "🧑 <b>" + esc(S.me.nick) + "</b> · Khu " + S.khu + " · " + (hub.peerCount() + 1) + " người đang dạo"; }
 function feed(text) { const row = document.createElement("div"); row.textContent = text; const f = $("feed"); f.appendChild(row); while (f.children.length > 2) f.firstChild.remove(); setTimeout(() => row.remove(), 6000); }
@@ -97,18 +98,23 @@ function renderHud() {
   const bd = $("bdTop"); if (bd) bd.textContent = S.me.rank ? "Bạn đang hạng #" + S.me.rank : "Chơi để lên bảng";
   renderWho();
 }
-function boothSheet(id) {
-  const b = BOOTH(id), v = S.me.bests[id];
-  openSheet('<button class="xx" aria-label="Đóng">✕</button><div class="bsh"><div class="ic">' + b.icons + "</div><h2>" + b.tag + " · " + b.name + '</h2><span class="tpill" style="background:' + b.c + '">' + b.topic + "</span><p>" + b.desc + '</p><div class="kv"><div><b>' + (v ? fmt(v) : "–") + '</b>Kỷ lục của bạn</div><div><b>' + fmt(S.me.total) + '</b>Tổng điểm hội chợ</div></div><button class="btn" id="enter" style="background:' + b.c + '">Vào gian hàng</button></div>', { onClose: () => hub.zoomOut() });
-  $("enter").onclick = () => { closeSheet(); openGame(id); };
-  if (id === "g1" || id === "g2") api("/api/match").then(s => { // đấu phòng: đang có bao nhiêu người chờ
-    const el = $("sheet").querySelector(".bsh p"); if (!el || !$("enter")) return;
-    const w = s[id], txt = w.startIn != null ? "👥 Phòng chờ đủ " + w.n + " người, sắp bắt đầu!" : "👥 Phòng chờ: " + w.n + "/" + s.min + " người (cần " + s.min + "–" + s.max + " người)";
-    el.insertAdjacentHTML("afterend", '<div class="wait-pill">' + txt + "</div>");
-  }).catch(() => {});
-}
 
 /* ---------- Gian hàng ---------- */
+// Bấm vào gian (máy quay đã phóng tới) thì bước vào không gian riêng của gian đó.
+// Gian 1, Gian 2: vào thẳng phòng chờ (gửi mjoin), thấy những người cùng chờ; đủ người thì ván bắt đầu.
+// Gian 3: chơi một mình, bấm "Bắt đầu chạy". Không có WebGL: dùng thẻ luật chơi và phòng chờ 2D như cũ.
+function enterBooth(id) {
+  closeSpace();
+  S.cur = id; show(id);
+  const b = BOOTH(id), solo = id === "g3";
+  S.space = createSpace({
+    game: id, title: b.name, tag: b.tag, color: b.c, nick: S.me.nick, solo, rules: GAMES[id].pre, use3d: hub.mode === "3d",
+    send: o => S.conn && S.conn.send(o), onLeave: leaveGame, onStart: () => { S.space.hide(); play(id); }
+  });
+  if (!S.space) return openGame(id);
+  if (!solo) play(id);
+}
+function closeSpace() { if (S.space) { S.space.close(); S.space = null; } }
 function openGame(id) {
   S.cur = id; show(id);
   const p = GAMES[id].pre, pre = $(id + "pre");
@@ -116,10 +122,12 @@ function openGame(id) {
   pre.classList.add("on");
   pre.querySelector("button").onclick = () => { pre.classList.remove("on"); play(id); };
 }
-// send: gửi tin qua kết nối của khu (đấu phòng Gian 1, Gian 2)
-const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.send(o) };
+// send: gửi tin qua kết nối của khu (đấu phòng Gian 1, Gian 2); space: không gian 3D của gian (nếu có)
+const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.send(o), get space() { return S.space; } };
 function play(id) { GAMES[id].start(gameCtx).catch(e => { toast(e.message); leaveGame(); }); }
-function leaveGame() { if (S.cur) GAMES[S.cur].stop(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); }
+// Chơi lại: Gian 1, Gian 2 quay về phòng chờ trong không gian của gian; Gian 3 chạy lại ngay
+function again(id) { if (S.space && id === "g3") S.space.hide(); play(id); }
+function leaveGame() { if (S.cur) GAMES[S.cur].stop(); closeSpace(); S.cur = null; closeSheet(); show("fair"); renderHud(); hub.startHub(); }
 function result(id, r, stats, review) {
   const b = BOOTH(id);
   S.me.bests = r.bests; S.me.total = r.total; S.me.rank = r.rank;
@@ -129,7 +137,7 @@ function result(id, r, stats, review) {
     '<div class="totbox">Tổng điểm hội chợ <b>' + fmt(r.total) + "</b>" + (r.rank ? " · Bảng vàng hạng <b>#" + r.rank + "</b>" : "") + "<br><small>Bảng vàng tính điểm cao nhất của mỗi gian</small></div>" + (review || "") +
     '<div class="acts"><button class="btn" id="rAgain" style="background:' + b.c + '">Chơi lại</button><button class="btn ghost" id="rBack">Về hội chợ</button></div>' +
     '<div class="acts" style="margin-top:10px"><button class="btn ghost" id="rShare">Thách bạn bè</button><button class="btn ghost" id="rLb">Bảng vàng</button></div>', { dismiss: false });
-  $("rAgain").onclick = () => { closeSheet(); play(id); };
+  $("rAgain").onclick = () => { closeSheet(); again(id); };
   $("rBack").onclick = leaveGame;
   $("rLb").onclick = () => board("all", true);
   $("rShare").onclick = async () => {
@@ -154,7 +162,7 @@ async function board(tab, fromResult) {
     '<p class="note">' + esc(e.rules || "") + "</p>" +
     (fromResult ? '<div class="acts" style="margin-top:12px"><button class="btn" id="bAgain">Chơi lại</button><button class="btn ghost" id="bBack">Về hội chợ</button></div>' : ""), { dismiss: !fromResult, onClose: fromResult ? null : () => hub.zoomOut() });
   $("sheet").querySelectorAll(".tabs button").forEach(b => b.onclick = () => board(b.dataset.t, fromResult));
-  if (fromResult) { $("bAgain").onclick = () => { closeSheet(); play(S.cur); }; $("bBack").onclick = leaveGame; }
+  if (fromResult) { $("bAgain").onclick = () => { closeSheet(); again(S.cur); }; $("bBack").onclick = leaveGame; }
 }
 
 /* ---------- Gắn nút trong gian hàng ---------- */

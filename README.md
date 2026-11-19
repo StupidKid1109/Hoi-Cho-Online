@@ -95,7 +95,10 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 
 ## Gian 1, Gian 2: đấu phòng 20–50 người
 
-- Vào gian là vào **phòng chờ** (hiện số người và biệt danh). Đủ **20 người** thì đếm ngược 15 giây để người khác kịp vào; đủ **50 người** thì đóng phòng và bắt đầu sau 3 giây, người đến sau vào phòng chờ mới. Bảng thông tin của gian trên sảnh cho biết phòng chờ đang có bao nhiêu người.
+- Mỗi gian là **một không gian 3D riêng**: bấm vào gian trên sảnh thì máy quay phóng tới rồi bước vào phòng của gian đó (Gian 1 tông đỏ, Gian 2 tông xanh lá, Gian 3 mặt đường). Trong phòng thấy những người đang chờ cùng mình, đi lại (chạm sàn hoặc W A S D), bấm Chào hoặc Vỗ tay. Màn hình lớn trên tường báo số người và đếm ngược. Nút 📜 Luật chơi (lần đầu vào tự hiện), 🚪 Ra hội chợ.
+- Đủ **20 người** thì đếm ngược 15 giây để người khác kịp vào; đủ **50 người** thì đóng phòng và bắt đầu sau 3 giây, người đến sau vào phòng chờ mới. Ván bắt đầu thì chuyển sang màn hình chơi; "Chơi lại" đưa về phòng chờ của gian.
+- Gian 3 chơi một mình: phòng riêng có nút **🛵 Bắt đầu chạy**.
+- Máy không có WebGL: dùng thẻ luật chơi và phòng chờ 2D như cũ.
 - **Gian 1:** cả phòng cùng xem 10 tin nhắn, mỗi tin 10 giây chọn Lừa đảo hay An toàn. Đúng được 500 điểm cộng tối đa 500 điểm theo tốc độ, đúng liên tiếp thưởng thêm. Sau mỗi tin: đáp án, giải thích, tỉ lệ cả phòng chọn, 3 người dẫn đầu.
 - **Gian 2:** cả phòng cùng đoán 5 câu, mỗi câu 30 giây. Đúng được 300 điểm cộng tối đa 700 điểm theo tốc độ; ai đúng nhất, nhì, ba được thêm 200, 100, 50; mỗi gợi ý trừ 100.
 - Cuối ván: xếp hạng trong phòng; điểm vẫn tính vào Bảng vàng (điểm cao nhất của mỗi gian). Rời giữa ván vẫn giữ số điểm đã có.

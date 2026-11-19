@@ -13,6 +13,7 @@ export async function start(ctx) {
   $("g1sc").textContent = "0"; $("g1st").textContent = "Đang chờ phòng"; $("g1sec").textContent = "–";
   $("g1t").style.transform = "scaleX(1)";
   setButtons(false);
+  if (ctx.space) ctx.space.show();
   ctx.send({ t: "mjoin", g: "g1" });
 }
 /** Rời gian hàng: báo máy chủ rời phòng chờ hoặc rời ván. */
@@ -27,9 +28,9 @@ export function decide(saysScam) { answer(saysScam); }
 /** Tin nhắn đấu phòng từ máy chủ (main.js chuyển sang). */
 export function onMsg(m) {
   if (!g || !g.running) return;
-  if (m.t === "mlobby") renderLobby(g.lobby, m, "Thật hay giả?", "#c8102e", () => g.ctx.leave());
+  if (m.t === "mlobby") { if (g.ctx.space) g.ctx.space.lobby(m); else renderLobby(g.lobby, m, "Thật hay giả?", "#c8102e", () => g.ctx.leave()); }
   else if (m.t === "merr") { g.ctx.toast(m.text); g.ctx.leave(); }
-  else if (m.t === "mstart") { hideLobby(g.lobby); msg($("g1msg"), "ok", "<b>Phòng đã đủ " + m.n + " người!</b><br>Chuẩn bị: " + m.total + " tin nhắn", 2200); beep("ok"); }
+  else if (m.t === "mstart") { hideLobby(g.lobby); if (g.ctx.space) g.ctx.space.hide(); msg($("g1msg"), "ok", "<b>Phòng đã đủ " + m.n + " người!</b><br>Chuẩn bị: " + m.total + " tin nhắn", 2200); beep("ok"); }
   else if (m.t === "mround") round(m);
   else if (m.t === "mreveal") reveal(m);
   else if (m.t === "mend") end(m);

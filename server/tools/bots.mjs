@@ -6,9 +6,10 @@
 //
 // Người ảo đi dạo quanh sân, ghé gian hàng, tìm ghế trống ngồi rồi đứng dậy, thỉnh thoảng chào và chat.
 // Khoảng 80% số người ảo vào phòng đấu Gian 1, Gian 2 và chơi thật (để đủ 20 người cho phòng bắt đầu),
+// Trong lúc chờ ở không gian riêng của gian, họ đi lại trong phòng và chào nhau.
 // chơi xong nghỉ vài giây rồi vào phòng mới.
 // Nhấn Ctrl+C (hoặc đóng cửa sổ) để cho tất cả rời khu.
-import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint } from "../../shared/world.js";
+import { CENTER, PLAZA_R, FAIR_R, SEATS, SPOTS, BLOCK, standPoint, BOOTH_ROOM } from "../../shared/world.js";
 
 const N = Number(process.argv[2]) || 60, KHU = Number(process.argv[3]) || 1;
 const BASE = (process.argv[4] || "http://localhost:8787").replace(/\/$/, "");
@@ -85,6 +86,8 @@ function onMatch(b, m) {
   const send = o => { if (b.ws.readyState === 1) b.ws.send(JSON.stringify(o)); };
   if (!b.match) return;
   if (m.t === "merr") { b.match = null; b.until = Date.now() + rnd(20000, 40000); return; }
+  if (m.t === "mspace") { b.match.room = { x: m.you.x, y: m.you.y, gx: m.you.x, gy: m.you.y, wait: Date.now() + rnd(300, 2500), emote: Date.now() + rnd(3000, 20000) }; return; }
+  if (m.t === "mstart") { b.match.room = null; return; }
   if (m.t === "mround" && m.g === "g1") { // chọn sau 1,5–7 giây (đúng sai ngẫu nhiên)
     const k = m.k; b.match.t = setTimeout(() => send({ t: "mans", k, a: Math.random() < 0.5 }), rnd(0.15, 0.7) * m.dur);
   } else if (m.t === "mround" && m.g === "g2") { // dùng gợi ý dần, đủ chữ thì đoán; một số người bỏ cuộc
@@ -99,8 +102,20 @@ function onMatch(b, m) {
   else if (m.t === "mend") { clearTimeout(b.match.t); b.match = null; b.until = Date.now() + rnd(3000, 8000); }
 }
 
+/** Đang chờ trong không gian của gian: đi dạo trong phòng, thỉnh thoảng chào. */
+function stepRoom(b, now) {
+  const r = b.match.room; if (!r || b.ws.readyState !== 1) return;
+  const send = o => b.ws.send(JSON.stringify(o)), M = BOOTH_ROOM.margin + 20;
+  if (now > r.emote) { send({ t: "memote", e: Math.floor(Math.random() * 4) }); r.emote = now + rnd(8000, 30000); }
+  if (now < r.wait) return;
+  const dx = r.gx - r.x, dy = r.gy - r.y, d = Math.hypot(dx, dy), stepLen = 260 * STEP_MS / 1000;
+  if (d <= stepLen) { r.x = r.gx; r.y = r.gy; r.gx = rnd(M, BOOTH_ROOM.w - M); r.gy = rnd(M + 120, BOOTH_ROOM.h - M); r.wait = now + rnd(1500, 7000); }
+  else { r.x += dx / d * stepLen; r.y += dy / d * stepLen; }
+  r.tick = !r.tick; if (r.tick || d <= stepLen) send({ t: "mpos", x: Math.round(r.x), y: Math.round(r.y) });
+}
+
 function stepBot(b, now) {
-  if (b.match) return; // đang trong phòng đấu: đứng yên trước gian
+  if (b.match) return stepRoom(b, now); // trong gian: đi dạo trong phòng chờ, đang chơi thì đứng yên
   if (b.closed || b.ws.readyState !== 1) return;
   const send = o => b.ws.send(JSON.stringify(o));
   if (now > b.nextEmote) { send({ t: "emote", e: Math.floor(Math.random() * 4) }); b.nextEmote = now + rnd(20000, 70000); }

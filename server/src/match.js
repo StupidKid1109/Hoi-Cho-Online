@@ -5,9 +5,13 @@
 //
 // Điện thoại gửi:  {t:"mjoin", g} · {t:"mleave"} · {t:"mans", k, a} (Gian 1, a = true nếu cho là lừa đảo)
 //                  {t:"mguess", k, text} · {t:"mhint", k} (Gian 2)
-// Máy chủ gửi:     mlobby (phòng chờ) · mstart · mround (mở một câu) · mreveal (đáp án câu đó)
+//                  {t:"mpos", x, y} · {t:"memote", e} (đi lại, chào nhau trong không gian riêng của gian)
+// Máy chủ gửi:     mlobby (phòng chờ) · mspace / mpjoin / mpleave / mposes / memote (người trong không gian gian hàng)
+//                  mstart · mround (mở một câu) · mreveal (đáp án câu đó)
 //                  mguess / mhint (trả lời riêng) · msolved (có người đoán đúng) · mend (kết quả) · merr
 import { shuffle, strip, tilesFor } from "./games.js";
+import { BOOTH_ROOM } from "../../shared/world.js";
+import { encodeFrame } from "./ws.js";
 
 const G1_CARDS = 10, G1_MS = 10000, G1_REVEAL_MS = 4500;
 const G2_MS = 30000, G2_REVEAL_MS = 6000, G2_HINT_COST = 100, G2_PLACE_BONUS = [200, 100, 50];
@@ -29,8 +33,44 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   /* ---------- Phòng chờ ---------- */
   function lobbyOf(game) {
     let L = lobbies.get(game);
-    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true }; lobbies.set(game, L); }
+    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
     return L;
+  }
+  /* ---------- Không gian riêng của gian hàng: ai đang chờ, đứng ở đâu ---------- */
+  const live = new Set(); // các phòng chờ đang mở (cả phòng đã đủ người đang chờ bắt đầu)
+  const pub = p => ({ n: p.n, nick: p.nick, x: Math.round(p.x), y: Math.round(p.y) });
+  /** Đưa người chơi vào không gian của phòng chờ L: gán số thứ tự, chỗ đứng gần cửa, báo cho mọi người. */
+  function enterSpace(L, p) {
+    p.n = L.nextN++;
+    p.x = BOOTH_ROOM.door.x + (Math.random() - 0.5) * 300; p.y = BOOTH_ROOM.door.y - Math.random() * 120;
+    send(p.c, { t: "mspace", g: L.game, you: pub(p), peers: [...L.players.values()].filter(q => q !== p).map(pub) });
+    const s = JSON.stringify({ t: "mpjoin", g: L.game, peer: pub(p) });
+    for (const q of L.players.values()) if (q !== p && q.c.open) q.c.conn.send(s);
+  }
+  // nhịp gửi vị trí trong không gian gian hàng (giống ở sảnh: gom 100 ms một lần)
+  const posTick = setInterval(() => {
+    for (const L of live) {
+      if (!L.dirty.size) continue;
+      const p = [...L.dirty].filter(q => L.players.get(q.pid) === q).map(q => [q.n, Math.round(q.x), Math.round(q.y)]); L.dirty.clear();
+      if (!p.length) continue;
+      const f = encodeFrame(JSON.stringify({ t: "mposes", g: L.game, p }));
+      for (const q of L.players.values()) if (q.c.open) q.c.conn.sendFrame(f);
+    }
+  }, 100);
+  posTick.unref();
+  function moveInSpace(c, m) {
+    const L = where.get(c.pid); if (!L || !L.lobby) return;
+    const p = L.players.get(c.pid), x = Number(m.x), y = Number(m.y), M = BOOTH_ROOM.margin;
+    if (!p || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const now = Date.now(); if (now - (p.lastPos || 0) < 60) return; p.lastPos = now;
+    p.x = Math.max(M, Math.min(BOOTH_ROOM.w - M, x)); p.y = Math.max(M, Math.min(BOOTH_ROOM.h - M, y));
+    L.dirty.add(p);
+  }
+  function emoteInSpace(c, m) {
+    const L = where.get(c.pid); if (!L || !L.lobby) return;
+    const p = L.players.get(c.pid), e = Number(m.e), now = Date.now();
+    if (!p || !Number.isInteger(e) || e < 0 || e > 3 || now - (p.lastEmote || 0) < 1500) return;
+    p.lastEmote = now; toAll(L, { t: "memote", g: L.game, n: p.n, e });
   }
   function lobbyState(L) {
     const names = [...L.players.values()].map(p => p.nick);
@@ -49,19 +89,21 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     if (game !== "g1" && game !== "g2") return;
     const cur = where.get(c.pid);
     if (cur && cur.players.has(c.pid)) cur.players.get(c.pid).c = c; // kết nối lại: gắn vào kết nối mới
-    if (cur && cur.lobby && cur.game === game) return lobbyState(cur); // đã ở phòng chờ này
+    if (cur && cur.lobby && cur.game === game) { const p = cur.players.get(c.pid); send(c, { t: "mspace", g: game, you: pub(p), peers: [...cur.players.values()].filter(q => q !== p).map(pub) }); return lobbyState(cur); } // đã ở phòng chờ này
     if (cur && !cur.lobby && cur.game === game && !cur.players.get(c.pid).left) return send(c, { t: "mstart", g: game, room: cur.id, n: cur.players.size, total: cur.set.length, in: 0, rejoin: true });
     if (cur) leave(c);
     const why = canPlay(c.pid); if (why) return send(c, { t: "merr", g: game, text: why });
     const L = lobbyOf(game);
-    L.players.set(c.pid, { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0 });
+    const p = { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0 };
+    L.players.set(c.pid, p);
     where.set(c.pid, L);
+    enterSpace(L, p);
     schedule(L); lobbyState(L);
   }
   function leave(c) {
     const R = where.get(c.pid); if (!R) return;
     where.delete(c.pid);
-    if (R.lobby) { R.players.delete(c.pid); schedule(R); lobbyState(R); return; }
+    if (R.lobby) { const p = R.players.get(c.pid); R.players.delete(c.pid); if (p) toAll(R, { t: "mpleave", g: R.game, n: p.n }); schedule(R); lobbyState(R); return; }
     const p = R.players.get(c.pid); if (p) p.left = true; // rời giữa ván: vẫn tính điểm đã có khi ván kết thúc
     if ([...R.players.values()].every(x => x.left || !x.c.open)) endRoom(R, true);
   }
@@ -69,12 +111,13 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   /* ---------- Bắt đầu ván ---------- */
   function startRoom(L) {
     if (lobbies.get(L.game) === L) lobbies.delete(L.game);
+    live.delete(L);
     clearTimeout(L.timer);
     // người đã mất kết nối thì bỏ khỏi phòng; còn dưới MIN (hiếm) thì quay lại chờ
     for (const [pid, p] of L.players) if (!p.c.open) { L.players.delete(pid); where.delete(pid); }
     if (L.players.size < MIN) {
       const N = lobbyOf(L.game);
-      for (const [pid, p] of L.players) { N.players.set(pid, p); where.set(pid, N); }
+      for (const [pid, p] of L.players) { N.players.set(pid, p); where.set(pid, N); enterSpace(N, p); }
       schedule(N); lobbyState(N); return;
     }
     const R = { id: L.id, game: L.game, players: L.players, lobby: false, k: -1, open: false, timer: null, startedAt: Date.now() };
@@ -186,6 +229,8 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     else if (m.t === "mans") answerG1(c, m);
     else if (m.t === "mguess") guessG2(c, m);
     else if (m.t === "mhint") hintG2(c, m);
+    else if (m.t === "mpos") moveInSpace(c, m);
+    else if (m.t === "memote") emoteInSpace(c, m);
   }
   /** Mất kết nối: rời phòng chờ, hoặc đánh dấu đã rời ván đang chơi. */
   function onClose(c) { const R = where.get(c.pid); if (R && R.players.get(c.pid)?.c === c) leave(c); }

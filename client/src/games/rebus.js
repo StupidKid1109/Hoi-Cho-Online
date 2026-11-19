@@ -12,6 +12,7 @@ export async function start(ctx) {
   $("g2sc").textContent = "0"; $("g2n").textContent = "Đang chờ phòng"; $("g2sec").textContent = "–";
   $("g2pic").innerHTML = ""; $("g2slots").innerHTML = ""; $("g2tiles").innerHTML = ""; $("g2rev").className = "reveal";
   $("g2skip").textContent = "Bỏ câu này";
+  if (ctx.space) ctx.space.show();
   ctx.send({ t: "mjoin", g: "g2" });
 }
 export function stop() {
@@ -25,9 +26,9 @@ export function skip() { if (g && g.running && !g.locked) { g.locked = true; ren
 
 export function onMsg(m) {
   if (!g || !g.running) return;
-  if (m.t === "mlobby") renderLobby(g.lobby, m, "Đuổi hình bắt chữ", "#0f8a5f", () => g.ctx.leave());
+  if (m.t === "mlobby") { if (g.ctx.space) g.ctx.space.lobby(m); else renderLobby(g.lobby, m, "Đuổi hình bắt chữ", "#0f8a5f", () => g.ctx.leave()); }
   else if (m.t === "merr") { g.ctx.toast(m.text); g.ctx.leave(); }
-  else if (m.t === "mstart") { hideLobby(g.lobby); g.ctx.toast("Phòng đã đủ " + m.n + " người! Chuẩn bị " + m.total + " câu"); beep("ok"); }
+  else if (m.t === "mstart") { hideLobby(g.lobby); if (g.ctx.space) g.ctx.space.hide(); g.ctx.toast("Phòng đã đủ " + m.n + " người! Chuẩn bị " + m.total + " câu"); beep("ok"); }
   else if (m.t === "mround") round(m);
   else if (m.t === "mguess" && m.k === g.k) guessed(m);
   else if (m.t === "mhint" && m.k === g.k) hinted(m);
