@@ -126,7 +126,8 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 ## Nhạc nền game
 
 - Nhạc nền phát ở sảnh, phòng chờ và các gian (vào quán cà phê thì tắt để nghe nhạc của quán, ra khỏi quán thì phát lại).
-- Quản trị viên chọn bài ở `/admin` → mục **🎶 Nhạc nền game**: chọn bài trong danh sách file nhạc (tải bài lên ở mục Nhạc quán cà phê), chỉnh âm lượng, bật/tắt, bấm **Lưu nhạc nền**. Mặc định là bài nhạc mẫu không lời. Chỉ dùng nhạc được phép phát công khai.
+- Quản trị viên chọn bài ở `/admin` → mục **🎶 Nhạc nền game**: tích chọn một hay nhiều bài (phát lần lượt như playlist, có **Trộn bài**), chỉnh âm lượng, bật/tắt, bấm **Lưu nhạc nền**.
+- Thêm bài: tải file lên, hoặc dán **link tải trực tiếp** rồi bấm **Tải từ link** (ví dụ YouTube Studio → Thư viện âm thanh → chuột phải nút Tải xuống → Sao chép địa chỉ liên kết). Link video YouTube thông thường không dùng được. Mặc định là bài nhạc mẫu không lời. Chỉ dùng nhạc được phép phát công khai.
 - Điện thoại chặn tự phát có tiếng thì nhạc vẫn chạy không tiếng, chạm màn hình lần đầu là có tiếng.
 
 ## Chơi thử trên điện thoại (cùng Wi-Fi)

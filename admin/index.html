@@ -47,10 +47,11 @@
   </section>
   <section>
     <h2>🎶 Nhạc nền game</h2>
-    <p class="muted">Phát ở sảnh, phòng chờ và các gian; vào quán cà phê thì tắt để nghe nhạc của quán. Chọn một bài trong danh sách file nhạc (tải bài lên ở mục Nhạc quán cà phê bên dưới). Mỗi người chơi nghe từ đầu bài, lặp lại liên tục.</p>
-    <div class="row"><label style="margin:0">Bài</label><select id="bgFile" style="max-width:320px;padding:8px;border:1px solid #d9cbb6;border-radius:8px"></select>
-      <label style="margin:0">Âm lượng</label><input id="bgVol" type="range" min="0" max="100" value="50" style="max-width:160px">
-      <label style="margin:0"><input id="bgOn" type="checkbox" checked style="width:auto"> Bật</label><button id="bgSave">Lưu nhạc nền</button></div>
+    <p class="muted">Phát ở sảnh, phòng chờ và các gian; vào quán cà phê thì tắt để nghe nhạc của quán. Tích chọn các bài làm danh sách phát (phát lần lượt, hết thì quay lại bài đầu). Tải bài mới ở mục Nhạc quán cà phê bên dưới (tải file lên hoặc dán link tải từ YouTube Audio Library).</p>
+    <div id="bgList" style="display:grid;gap:4px;margin:8px 0"></div>
+    <div class="row"><label style="margin:0">Âm lượng</label><input id="bgVol" type="range" min="0" max="100" value="50" style="max-width:160px">
+      <label style="margin:0"><input id="bgShuf" type="checkbox" style="width:auto"> Trộn bài</label>
+      <label style="margin:0"><input id="bgOn" type="checkbox" checked style="width:auto"> Bật nhạc nền</label><button id="bgSave">Lưu nhạc nền</button></div>
   </section>
   <section>
     <h2>☕ Nhạc quán cà phê</h2>
@@ -62,6 +63,8 @@
     <table style="margin-top:8px"><tbody id="ytList"><tr><td class="muted">Chưa có video nào.</td></tr></tbody></table>
     <p class="muted">Video YouTube phát bằng trình phát nhúng chính thức của YouTube: trong quán hiện một khung video nhỏ, cả quán xem và nghe cùng một đoạn. Không tải nhạc từ YouTube về máy chủ (YouTube không cho phép). Một số video bị chủ kênh chặn phát nhúng, khi đó chọn video khác. Có thể có quảng cáo của YouTube.</p>
     <h3 style="font-size:14px;margin:16px 0 6px">🎵 File nhạc</h3>
+    <div class="row"><input id="mUrl" placeholder="Dán link tải file nhạc (nút Tải xuống của YouTube Audio Library, Pixabay…)" style="max-width:420px"><input id="mUrlName" placeholder="Tên bài (không bắt buộc)" style="max-width:200px"><button class="ghost" id="mFetch">Tải từ link</button></div>
+    <p class="muted" style="margin:4px 0 8px">Link phải là link tải trực tiếp file nhạc. YouTube Audio Library: vào YouTube Studio → Thư viện âm thanh, bấm chuột phải vào nút Tải xuống của bài → Sao chép địa chỉ liên kết. Nếu link cần đăng nhập thì tải file về máy rồi dùng nút Tải bài lên. Bài có giấy phép Creative Commons cần ghi tên tác giả.</p>
     <div class="row" style="margin-top:10px"><input id="mFile" type="file" accept=".mp3,.m4a,.aac,.ogg,.wav,audio/*" style="max-width:320px"><button class="ghost" id="mUp">Tải bài lên</button></div>
     <p class="muted">Bấm “Phát” là mọi người đang trong quán nghe ngay, cả quán nghe cùng một đoạn; người vào sau nghe tiếp đúng đoạn đang phát. Chỉ dùng nhạc được phép phát công khai (nhạc của đơn vị, nhạc không bản quyền, nhạc đã mua quyền). File tối đa 40 MB.</p>
   </section>
@@ -121,12 +124,17 @@ async function setMusic(extra) {
 async function loadBgm() {
   try {
     const d = await call("/api/admin/bgm");
-    $("bgFile").innerHTML = d.tracks.map(t => '<option value="' + esc(t.file) + '"' + (t.file === d.bgm.file ? " selected" : "") + ">" + esc(t.title) + "</option>").join("");
-    $("bgVol").value = Math.round((d.bgm.volume ?? 0.5) * 100); $("bgOn").checked = !!d.bgm.on;
+    const sel = d.bgm.files || (d.bgm.file ? [d.bgm.file] : []);
+    $("bgList").innerHTML = d.tracks.map(t => '<label style="margin:0;font-weight:500"><input type="checkbox" value="' + esc(t.file) + '"' + (sel.includes(t.file) ? " checked" : "") + ' style="width:auto"> ' + esc(t.title) + "</label>").join("") || '<span class="muted">Chưa có bài nào.</span>';
+    $("bgVol").value = Math.round((d.bgm.volume ?? 0.5) * 100); $("bgOn").checked = !!d.bgm.on; $("bgShuf").checked = !!d.bgm.shuffle;
   } catch (e) { note(e.message); }
 }
 $("bgSave").onclick = async () => {
-  try { await call("/api/admin/bgm", { method: "PUT", body: JSON.stringify({ file: $("bgFile").value || undefined, volume: $("bgVol").value / 100, on: $("bgOn").checked }) }); note("Đã lưu nhạc nền (người chơi nhận trong vài giây)"); loadBgm(); } catch (e) { note(e.message); }
+  try { await call("/api/admin/bgm", { method: "PUT", body: JSON.stringify({ files: [...document.querySelectorAll("#bgList input:checked")].map(i => i.value), shuffle: $("bgShuf").checked, volume: $("bgVol").value / 100, on: $("bgOn").checked }) }); note("Đã lưu nhạc nền (người chơi nhận trong vài giây)"); loadBgm(); } catch (e) { note(e.message); }
+};
+$("mFetch").onclick = async () => {
+  const url = $("mUrl").value.trim(); if (!url) return note("Dán link trước");
+  try { note("Đang tải về máy chủ…"); const d = await call("/api/admin/music/fetch", { method: "POST", body: JSON.stringify({ url, title: $("mUrlName").value.trim() || undefined }) }); $("mUrl").value = ""; $("mUrlName").value = ""; note("Đã thêm " + d.file); loadMusic(); loadBgm(); } catch (e) { note(e.message); }
 };
 $("ytAdd").onclick = async () => {
   const url = $("ytUrl").value.trim(); if (!url) return note("Dán link YouTube trước");

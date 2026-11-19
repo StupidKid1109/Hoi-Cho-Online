@@ -1,13 +1,13 @@
 // Máy chủ HTTP: API cho Mini App, trang quản trị, phục vụ file giao diện khi chạy thử.
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, createReadStream } from "node:fs";
-import { join, normalize as pnorm, extname, sep } from "node:path";
+import { join, normalize as pnorm, extname, basename, sep } from "node:path";
 import { openDb } from "./db.js";
 import { makeAuth } from "./auth.js";
 import { makeStore, GAMES } from "./store.js";
 import { makeRealtime } from "./realtime.js";
 import { makeMatches } from "./match.js";
-import { makeMusic, MUSIC_MAX_BYTES, youtubeId } from "./music.js";
+import { makeMusic, MUSIC_MAX_BYTES, youtubeId, extFromType, AUDIO_EXT } from "./music.js";
 import { attachWebSocket } from "./ws.js";
 import { swipe, rebus, runner, GameError } from "./games.js";
 import { ROOT_DIR, SERVER_DIR } from "./config.js";
@@ -49,8 +49,10 @@ export function createApp(config) {
   // Nhạc nền cả game (trừ trong quán cà phê): file tải lên hoặc link YouTube; mặc định bài anh chọn
   // Nhạc nền cả game (trừ trong quán cà phê): file nhạc tải lên; mặc định bài nhạc mẫu không lời
   const BGM_DEFAULT = { on: true, file: "nhac-mau-thu-gian.wav", title: "Nhạc mẫu thư giãn (không lời)", volume: 0.5 };
-  let bgm = { ...BGM_DEFAULT, ...(music.loadBgm() || {}) };
-  if (bgm.file && !music.has(bgm.file)) bgm = { ...bgm, file: null, title: "" };
+  let bgm = { ...BGM_DEFAULT, shuffle: false, ...(music.loadBgm() || {}) };
+  // danh sách phát: files (nhiều bài, phát lần lượt); file/title = bài đầu (để tương thích)
+  const fixBgm = b => { const files = (b.files || (b.file ? [b.file] : [])).filter(f => music.has(f)); return { ...b, files, file: files[0] || null, title: files.length ? files.map(f => music.title(f)).join(" · ") : "" }; };
+  bgm = fixBgm(bgm);
   const setMusic = next => { const st = matches.setMusic(next); music.saveState(st); return st; };
   const authHits = new Map();
 
@@ -201,8 +203,32 @@ export function createApp(config) {
         const b = await readBody(req), next = { ...bgm };
         if ("on" in b) next.on = !!b.on;
         if ("volume" in b) next.volume = Math.max(0, Math.min(1, Number(b.volume) || 0));
-        if (b.file) { if (!music.has(b.file)) return send(res, 404, { error: "Không có bài này" }); Object.assign(next, { file: b.file, title: music.title(b.file) }); }
-        bgm = next; music.saveBgm(bgm); return send(res, 200, { bgm });
+        if ("shuffle" in b) next.shuffle = !!b.shuffle;
+        const list = Array.isArray(b.files) ? b.files : b.file ? [b.file] : null; // danh sách phát mới
+        if (list) { if (list.some(f => !music.has(f))) return send(res, 404, { error: "Không có bài này" }); next.files = [...new Set(list)].slice(0, 50); }
+        bgm = fixBgm(next); music.saveBgm(bgm); return send(res, 200, { bgm });
+      }
+      if (path === "/api/admin/music/fetch" && method === "POST") { // { url }: tải file nhạc từ link (link Tải xuống của YouTube Audio Library, Pixabay...) về máy chủ
+        const b = await readBody(req); let u;
+        try { u = new URL(String(b.url || "").trim()); } catch (e) { return send(res, 400, { error: "Link không hợp lệ" }); }
+        if (!/^https?:$/.test(u.protocol)) return send(res, 400, { error: "Chỉ nhận link http hoặc https" });
+        if (youtubeId(u.href)) return send(res, 400, { error: "Đây là link video YouTube, không tải nhạc từ video được. Vào YouTube Studio → Thư viện âm thanh, bấm Tải xuống rồi tải file lên, hoặc chép link tải xuống của bài." });
+        let r;
+        try { r = await fetch(u, { redirect: "follow", signal: AbortSignal.timeout(90000), headers: { "user-agent": "HoiChoOnline/1.0" } }); }
+        catch (e) { return send(res, 502, { error: "Không tải được từ link này (máy chủ không kết nối được hoặc quá lâu)" }); }
+        if (!r.ok) return send(res, 400, { error: "Link trả về lỗi " + r.status + (r.status === 401 || r.status === 403 ? " (link cần đăng nhập: tải file về máy rồi dùng nút Tải bài lên)" : "") });
+        const type = r.headers.get("content-type") || "", disp = r.headers.get("content-disposition") || "";
+        let name = (disp.match(/filename\*=UTF-8''([^;]+)/i) || [])[1]; name = name ? decodeURIComponent(name) : (disp.match(/filename="?([^";]+)"?/i) || [])[1];
+        if (!name) name = decodeURIComponent(basename(u.pathname)) || "bai-hat";
+        let ext = extname(name).toLowerCase();
+        if (!AUDIO_EXT[ext]) { ext = extFromType(type); if (!ext) return send(res, 400, { error: "Link này không phải file nhạc (" + (type || "không rõ loại") + "). Cần link tải trực tiếp file mp3, m4a, ogg, wav." }); name = basename(name, extname(name)) + ext; }
+        const len = Number(r.headers.get("content-length") || 0); if (len > MUSIC_MAX_BYTES) return send(res, 413, { error: "File quá lớn (tối đa 40 MB)" });
+        const chunks = []; let size = 0;
+        for await (const c of r.body) { size += c.length; if (size > MUSIC_MAX_BYTES) return send(res, 413, { error: "File quá lớn (tối đa 40 MB)" }); chunks.push(c); }
+        if (!size) return send(res, 400, { error: "File rỗng" });
+        if (b.title) name = String(b.title).slice(0, 80) + ext;
+        try { return send(res, 200, { file: music.save(name, Buffer.concat(chunks)), tracks: music.list() }); }
+        catch (e) { return send(res, 400, { error: e.message }); }
       }
       if (path === "/api/admin/music/youtube" && method === "POST") { // { url, title? }: thêm link YouTube vào danh sách
         const b = await readBody(req), id = youtubeId(b.url);
@@ -238,7 +264,7 @@ export function createApp(config) {
       if (path === "/api/admin/music/delete" && method === "POST") {
         const { file } = await readBody(req);
         if (matches.music().file === file) setMusic({ file: null, yt: null, title: "", startedAt: 0 });
-        if (bgm.file === file) { bgm = { ...bgm, file: null, title: "" }; music.saveBgm(bgm); }
+        if ((bgm.files || []).includes(file)) { music.remove(file); bgm = fixBgm(bgm); music.saveBgm(bgm); }
         music.remove(file); return send(res, 200, { tracks: music.list() });
       }
       if (path === "/api/admin/reload-content" && method === "POST") { content = loadContent(); return send(res, 200, { ok: true }); }

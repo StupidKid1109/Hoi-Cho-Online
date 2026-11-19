@@ -357,5 +357,16 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
     assert.ok(bg1.file === tracks[0].file && bg1.volume === 0.3, "đổi nhạc nền sang file tải lên");
     await call("/api/admin/bgm", { method: "PUT", body: { on: false }, admin: "admin-test" });
     assert.equal((await call("/api/match")).data.bgm.on, false, "tắt nhạc nền");
+    // thêm nhạc bằng link tải trực tiếp (như link Tải xuống của YouTube Audio Library)
+    assert.equal((await call("/api/admin/music/fetch", { method: "POST", body: { url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ" }, admin: "admin-test" })).status, 400, "không tải từ video YouTube");
+    assert.equal((await call("/api/admin/music/fetch", { method: "POST", body: { url: base + "/api/health" }, admin: "admin-test" })).status, 400, "link không phải file nhạc");
+    const got = await call("/api/admin/music/fetch", { method: "POST", body: { url: base + "/api/music/file/" + tracks[0].file, title: "Bài từ link" }, admin: "admin-test" });
+    assert.equal(got.status, 200); assert.ok(got.data.tracks.find(t => t.file === got.data.file && t.title === "Bài từ link"), "tải về và lưu vào thư viện");
+    // nhạc nền nhiều bài, trộn bài
+    await call("/api/admin/bgm", { method: "PUT", body: { files: [tracks[0].file, got.data.file], shuffle: true, on: true }, admin: "admin-test" });
+    const bg2 = (await call("/api/match")).data.bgm;
+    assert.deepEqual(bg2.files, [tracks[0].file, got.data.file]); assert.equal(bg2.shuffle, true);
+    await call("/api/admin/music/delete", { method: "POST", body: { file: got.data.file }, admin: "admin-test" });
+    assert.deepEqual((await call("/api/match")).data.bgm.files, [tracks[0].file], "xóa bài thì bỏ khỏi danh sách phát");
   } finally { for (const x of [a, b]) x.ws.close(); }
 });

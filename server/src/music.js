@@ -10,6 +10,13 @@ export const MUSIC_MAX_BYTES = 40 * 1024 * 1024;
 const SAMPLE = "nhac-mau-thu-gian.wav";
 
 /** Lấy mã video từ link YouTube (youtu.be/…, watch?v=…, shorts/…, embed/…, music.youtube.com), không hợp lệ thì null. */
+/** Đuôi file theo kiểu nội dung tải về (khi link không có đuôi). */
+export function extFromType(type) {
+  const t = String(type || "").split(";")[0].trim().toLowerCase();
+  return { "audio/mpeg": ".mp3", "audio/mp3": ".mp3", "audio/mp4": ".m4a", "audio/x-m4a": ".m4a", "audio/aac": ".aac", "audio/ogg": ".ogg", "audio/wav": ".wav", "audio/x-wav": ".wav", "audio/wave": ".wav", "audio/webm": ".webm" }[t] || null;
+}
+export const AUDIO_EXT = EXT;
+
 export function youtubeId(url) {
   const s = String(url || "").trim();
   if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;
