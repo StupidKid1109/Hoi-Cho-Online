@@ -20,6 +20,8 @@ set DEV_LOGIN=1
 set ADMIN_KEY=hoicho2026
 echo Dang mo Hoi cho online tai http://localhost:8787
 echo Trang quan tri: http://localhost:8787/admin  (ma: hoicho2026)
+echo Choi tren dien thoai: dien thoai bat cung Wi-Fi voi may tinh, mo dia chi "Dien thoai" hien ben duoi.
+echo Lan dau Windows hoi tuong lua: tick "Private networks" roi bam Allow access.
 echo Dong cua so nay de tat may chu.
 echo.
 start "" cmd /c "timeout /t 2 /nobreak >nul & start http://localhost:8787"

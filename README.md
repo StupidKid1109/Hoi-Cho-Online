@@ -106,6 +106,15 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Máy chủ ghép phòng, gửi đề, giữ đáp án, tính giờ và chấm điểm (`server/src/match.js`); hai gian này không chơi một mình được. Số người đổi bằng `MATCH_MIN`, `MATCH_MAX`, thời gian đếm ngược `MATCH_COUNTDOWN` (mili giây) trong `server/.env`.
 - Thử khi chưa đủ người thật: bấm đúp `nguoi-ao.cmd` (khoảng 80% người ảo vào phòng đấu và chơi).
 
+
+## Chơi thử trên điện thoại (cùng Wi-Fi)
+
+1. Bấm đúp `chay-thu.cmd` trên máy tính. Lần đầu Windows hỏi tường lửa cho Node.js: tick **Private networks** rồi bấm **Allow access**.
+2. Cửa sổ máy chủ in dòng "Điện thoại … mở một trong các địa chỉ", ví dụ `http://192.168.1.15:8787/`.
+3. Điện thoại bắt **cùng Wi-Fi** với máy tính, mở Chrome và gõ đúng địa chỉ đó.
+
+Không vào được: kiểm tra mạng Wi-Fi trên máy tính đang để chế độ **Private** (Cài đặt → Mạng → Wi-Fi → Thuộc tính), tắt chế độ "cách ly thiết bị" (AP isolation, hay gặp ở Wi-Fi khách, quán cà phê), hoặc dùng điểm phát Wi-Fi từ chính điện thoại cho máy tính bắt vào.
+
 ## Gian 3: vượt chướng ngại vật
 
 - Điện thoại: vuốt trái, phải (hoặc chạm hai bên xe) để đổi làn, **vuốt lên để nhảy**, **vuốt xuống để cúi**. Máy tính: A, D (hoặc mũi tên trái, phải) đổi làn, **W nhảy**, **S cúi**. Đang nhảy mà cúi thì rơi nhanh xuống.
