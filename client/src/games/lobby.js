@@ -53,10 +53,10 @@ const SPACE_MSG = new Set(["mspace", "mpjoin", "mpleave", "mposes", "memote", "m
 export function createSpace({ game, title, tag, color, nick, solo, cafe, send, rules, onLeave, onStart, use3d, apiBase = "", toast }) {
   if (!use3d && !cafe) return null;
   const scr = document.getElementById(game);
-  const el = document.createElement("div"); el.className = "space on" + (use3d ? "" : " flat"); el.style.setProperty("--c", color);
+  const el = document.createElement("div"); el.className = "space on sp-" + game + (use3d ? "" : " flat"); // sp-cafe: trong quán ẩn tên trên đầu nhân vật el.style.setProperty("--c", color);
   el.innerHTML = '<div class="sp-view"></div>' +
     '<div class="sp-top"><div class="sp-t"><small>' + esc(tag) + '</small>' + esc(title) + '</div><div class="sp-st"></div></div>' +
-    (cafe ? '<div class="sp-music"><span class="mt">🎵 Chưa bật nhạc</span><button class="zoom" aria-label="Xem to màn hình" hidden>⛶</button><button class="tv" aria-label="Ẩn, hiện video" hidden>📺</button><button class="mute" aria-label="Tắt tiếng">🔊</button></div><button class="btn sp-unlock" hidden>🔊 Bấm để nghe nhạc</button><div class="sp-yt" hidden><div></div></div>' : "") +
+    (cafe ? '<div class="sp-music"><span class="mt">🎵 Chưa bật nhạc</span><button class="zoom" aria-label="Xem to màn hình" hidden>⛶</button><button class="tv" aria-label="Ẩn, hiện video" hidden>📺</button><button class="mute" aria-label="Tắt tiếng">🔊</button></div><div class="sp-yt" hidden><div></div></div>' : "") +
     '<div class="sp-log" aria-live="polite"></div>' +
     '<form class="sp-chat" autocomplete="off"><input maxlength="80" placeholder="' + (cafe ? "Trò chuyện trong quán…" : "Nhắn cho cả phòng chờ…") + '" enterkeyhint="send"><button>Gửi</button></form>' +
     '<div class="sp-bar">' +
@@ -100,12 +100,25 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   }
 
   /* ---------- Nhạc của quán: phát đúng đoạn đang phát chung cho cả quán ---------- */
-  let audio = null, muted = false, mstate = null, skew = 0;
+  let audio = null, muted = false, mstate = null, skew = 0, blocked = false;
+  /** Trình duyệt chặn tự phát có tiếng (hay gặp trên điện thoại): phát không tiếng trước, chạm màn hình lần đầu là bật tiếng. Không hiện nút chắn giữa màn hình. */
+  function autoplayBlocked() {
+    blocked = true; musicUi();
+    if (mstate && mstate.yt && yt && yt.mute) { yt.mute(); yt.playVideo(); } else if (audio) { audio.muted = true; audio.play().catch(() => {}); }
+    const un = () => {
+      document.removeEventListener("pointerdown", un, true); document.removeEventListener("keydown", un, true);
+      if (closed) return; blocked = false;
+      if (mstate && mstate.yt) syncYT(); else if (audio && mstate && mstate.file) { audio.muted = muted; seek(); audio.play().catch(() => {}); }
+      musicUi();
+    };
+    document.addEventListener("pointerdown", un, true); document.addEventListener("keydown", un, true);
+  }
   function musicUi() {
     if (!cafe) return;
     const on = !!(mstate && (mstate.file || mstate.yt));
     $q(".sp-music .mt").textContent = on ? "🎵 " + mstate.title : "🎵 Chưa bật nhạc";
-    $q(".sp-music .mute").textContent = muted ? "🔇" : "🔊";
+    $q(".sp-music .mute").textContent = muted || blocked ? "🔇" : "🔊";
+    $q(".sp-music .mute").classList.toggle("need", blocked && !muted && on); // nhấp nháy nhẹ: chạm màn hình để bật tiếng
     $q(".sp-music").classList.toggle("on", on);
     if (room) room.setMusicOn(on && !muted && !(mstate.yt && ytHidden));
     drawLobby();
@@ -118,7 +131,8 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   }
   function playNow() {
     if (!audio || !mstate || !mstate.file) return;
-    const p = audio.play(); if (p && p.then) p.then(() => { $q(".sp-unlock").hidden = true; }).catch(e => { if (e && e.name === "AbortError") return; console.warn("Chưa phát được nhạc:", e && e.name); $q(".sp-unlock").hidden = false; });
+    audio.muted = muted || blocked;
+    const p = audio.play(); if (p && p.then) p.then(() => {}).catch(e => { if (e && e.name === "AbortError") return; if (!blocked) autoplayBlocked(); });
   }
   /* ---------- Video YouTube: trình phát nhúng chính thức của YouTube (hiện trên màn hình, không tải nhạc về) ---------- */
   let yt = null, ytId = null, ytHidden = false, ytCheck = 0, ytOnWall = false;
@@ -142,14 +156,14 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   }
   function syncYT() {
     if (!yt || !yt.seekTo || !mstate || !mstate.yt) return;
-    yt.setVolume(Math.round((mstate.volume ?? 0.8) * 100)); if (muted) yt.mute(); else yt.unMute();
+    yt.setVolume(Math.round((mstate.volume ?? 0.8) * 100)); if (muted || blocked) yt.mute(); else yt.unMute();
     if (ytHidden) return yt.pauseVideo();
     const t = ytTarget(); if (t < 0) return yt.pauseVideo();
     if (Math.abs((yt.getCurrentTime() || 0) - t) > 2) yt.seekTo(t, true);
     yt.playVideo();
     clearTimeout(ytCheck); ytCheck = setTimeout(() => { // trình duyệt chặn tự phát có tiếng: hiện nút bấm để nghe
       const st = yt && yt.getPlayerState ? yt.getPlayerState() : -1;
-      if (mstate && mstate.yt && !ytHidden && st !== 1 && st !== 3) $q(".sp-unlock").hidden = false;
+      if (mstate && mstate.yt && !ytHidden && st !== 1 && st !== 3 && !blocked) autoplayBlocked();
     }, 2500);
   }
   async function applyYT(m) {
@@ -169,7 +183,6 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
         events: {
           onReady: () => syncYT(),
           onStateChange: e => {
-            if (e.data === 1) $q(".sp-unlock").hidden = true;
             if (e.data === 0 && mstate && mstate.loop !== false) syncYT();
             // video do quản trị viên điều khiển: người chơi (hoặc nút phát/dừng của máy) làm dừng thì tự phát tiếp đúng đoạn chung
             if (e.data === 2 && mstate && mstate.yt && !ytHidden && !closed) setTimeout(() => { if (yt && yt.getPlayerState && yt.getPlayerState() === 2 && mstate && mstate.yt && !ytHidden) syncYT(); }, 400);
@@ -187,9 +200,9 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
 
   function applyMusic(m) {
     mstate = m; skew = Date.now() - (m.now || Date.now());
-    if (m.yt) { if (audio) audio.pause(); $q(".sp-unlock").hidden = true; applyYT(m); return musicUi(); }
+    if (m.yt) { if (audio) audio.pause(); applyYT(m); return musicUi(); }
     stopYT();
-    if (!m.file) { if (audio) audio.pause(); $q(".sp-unlock").hidden = true; return musicUi(); }
+    if (!m.file) { if (audio) audio.pause(); return musicUi(); }
     if (!audio) { audio = new Audio(); audio.preload = "auto"; audio.addEventListener("loadedmetadata", seek); window.__cafeAudio = audio; }
     const src = apiBase + "/api/music/file/" + encodeURIComponent(m.file);
     if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
@@ -199,7 +212,7 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   }
   if (cafe) {
     $q(".sp-music .mute").onclick = () => { muted = !muted; if (mstate && mstate.yt) syncYT(); else if (audio) { audio.muted = muted; if (!muted) { seek(); playNow(); } } musicUi(); };
-    $q(".sp-unlock").onclick = () => { if (mstate && mstate.yt) { if (yt && yt.unMute) { yt.unMute(); yt.playVideo(); } syncYT(); } else { seek(); playNow(); } };
+
     // ẩn video thì dừng phát cho riêng mình (YouTube yêu cầu trình phát phải hiện khi đang phát)
     $q(".sp-music .zoom").onclick = () => { if (!room) return; const on = !$q(".sp-music .zoom").classList.contains("on"); room.setCinema(on); $q(".sp-music .zoom").classList.toggle("on", on); };
     $q(".sp-music .tv").onclick = () => { ytHidden = !ytHidden; ytBox.hidden = ytHidden; $q(".sp-music .tv").classList.toggle("off", ytHidden); syncYT(); musicUi(); };
