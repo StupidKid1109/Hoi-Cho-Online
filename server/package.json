@@ -11,6 +11,7 @@
     "start": "node --disable-warning=ExperimentalWarning src/index.js",
     "dev": "node --disable-warning=ExperimentalWarning --watch src/index.js",
     "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js",
-    "loadtest": "node --disable-warning=ExperimentalWarning tools/loadtest.mjs"
+    "loadtest": "node --disable-warning=ExperimentalWarning tools/loadtest.mjs",
+    "bots": "node tools/bots.mjs"
   }
 }

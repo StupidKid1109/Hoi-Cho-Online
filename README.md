@@ -81,6 +81,8 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 
 **Thử nhiều người chơi:** mở thêm một cửa sổ ẩn danh (Ctrl+Shift+N), vào cùng một khu sẽ thấy nhau đi lại và chat với nhau.
 
+**Người chơi ảo (thử khi đông người):** khi máy chủ đang chạy ở chế độ thử (`chay-thu.cmd`), bấm đúp `nguoi-ao.cmd` để 60 người ảo vào khu 1: họ đi dạo quanh sân, ghé gian hàng, tìm ghế trống ngồi rồi đứng dậy, thỉnh thoảng chào và chat; mình nhắn có chữ "chào" thì có người chào lại. Đóng cửa sổ để họ rời khu. Đổi số người, khu: sửa dòng `set SO=60`, `set KHU=1` trong `nguoi-ao.cmd`, hoặc chạy `node tools/bots.mjs 80 2` trong thư mục `server`. Chỉ dùng được khi `DEV_LOGIN=1`.
+
 **Thử trên điện thoại:** điện thoại và máy tính dùng chung wifi. Trên máy tính chạy `ipconfig` để xem địa chỉ IPv4 (ví dụ 192.168.1.10), rồi mở `http://192.168.1.10:8787` trên điện thoại. Lần đầu Windows có thể hỏi cho phép Node.js qua tường lửa, chọn cho phép với mạng riêng.
 
 **Kiểm thử tự động:** trong thư mục `server` chạy `npm test` (9 nhóm kiểm thử: chấm điểm 3 gian, chống gian lận, Bảng vàng, chat, chỗ ngồi, quản trị).

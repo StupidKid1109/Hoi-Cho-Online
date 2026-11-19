@@ -20,6 +20,7 @@ Mini game tuyên truyền cho Zalo Mini App của một UBND phường. Đối t
 - `shared/chatFilter.js`: bộ lọc chat dùng chung.
 - `admin/index.html`: trang quản trị (đợt thưởng, báo cáo chat, xuất CSV trúng giải, nạp lại nội dung).
 - `chay-thu.cmd`: chạy máy chủ ở chế độ thử (DEV_LOGIN=1, ADMIN_KEY=hoicho2026) bằng cách bấm đúp.
+- `nguoi-ao.cmd` / `server/tools/bots.mjs`: 60 người chơi ảo vào khu 1 (đi dạo, ghé gian, ngồi ghế, chào, chat, chào lại khi người thật nhắn "chào"). Cần máy chủ đang chạy với DEV_LOGIN=1.
 - Nội dung mẫu: `server/content/*.json`. Gian 2 đang là địa danh toàn quốc, chưa có địa danh của phường.
 
 ## Quyết định của anh (18/11/2026)
