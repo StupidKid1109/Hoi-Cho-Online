@@ -11,7 +11,6 @@ import {
   rrect, fitText, mergeParts, disposeTree, waitFonts, FONT
 } from "./gfx/kit.js";
 import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
-import { attachHero, loadHero } from "./gfx/hero.js";
 import { loadKit, hasKit, model } from "./gfx/models.js";
 import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK as WORLD_BLOCK, BENCHES, TABLES, SEATS, PLAZA_R, FAIR_R, PAVILION, standPoint } from "../../shared/world.js";
 
@@ -85,7 +84,7 @@ export function buildHub(context) {
   buildMarker(scene);
   buildSeatPrompt(scene);
   buildEnterButtons(scene);
-  attachHero(addAvatar("avo", ctx.nick + " (bạn)", 7, true), () => G && G.avatars.has("avo")); // nhân vật của mình: Steve (Quaternius)
+  addAvatar("avo", ctx.nick + " (bạn)", 7, true);
   setShadows(q >= 1);
 
   // nút nhảy nhanh và biểu cảm (giống bản CSS)
@@ -926,7 +925,7 @@ const BLOB_M = new THREE.Matrix4();
 function removeAvatar(id) {
   const a = G && G.avatars.get(id); if (!a) return;
   G.scene.remove(a.root);
-  if (a.hero) a.hero.dispose(); else if (a.body) a.body.geometry.dispose(); a.mat.dispose(); a.root.children.forEach(o => { if (o !== a.body && o.material) o.material.dispose(); if (o.geometry && o !== a.body) o.geometry.dispose(); });
+  if (a.body) a.body.geometry.dispose(); a.mat.dispose(); a.root.children.forEach(o => { if (o !== a.body && o.material) o.material.dispose(); if (o.geometry && o !== a.body) o.geometry.dispose(); });
   removeLabel(id); G.avatars.delete(id);
 }
 /** Chào: vẫy tay và nhún nhẹ. */
@@ -1210,13 +1209,6 @@ function animateAvatar(a, x, y, dx, dy, walking, dt, seat = -1) {
   const want = se ? se.face : Math.abs(dx) + Math.abs(dy) > 0.05 ? Math.atan2(dx, dy) : null;
   if (want !== null) { const d = ((want - a.face + Math.PI * 3) % (Math.PI * 2)) - Math.PI; a.face += d * Math.min(1, dt * 12); }
   a.body.rotation.y = a.face;
-  if (a.hero) { // Steve: hoạt ảnh có sẵn (đi, chạy, chào), chỉ cần đặt độ cao khi ngồi / nhún khi chào
-    a.hop = Math.max(0, a.hop - dt * 2.5);
-    const sitH = se ? se.h - 0.36 : (a.lastSitH || 0); if (se) a.lastSitH = sitH;
-    a.body.position.set(-Math.sin(a.face) * 0.12 * a.sitAmt, Math.sin(a.hop * Math.PI) * 0.12 + sitH * a.sitAmt, -Math.cos(a.face) * 0.12 * a.sitAmt);
-    a.hero.update(a, walking, dt > 0 ? Math.hypot(dx, dy) / 100 / dt : 0, dt); a.walk = walking;
-    return;
-  }
   a.phase += dt * (walking ? 11 : 2.2);
   a.hop = Math.max(0, a.hop - dt * 2.5);
   const bounce = walking ? Math.abs(Math.cos(a.phase)) * 0.05 : 0;
