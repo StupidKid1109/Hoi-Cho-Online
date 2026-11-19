@@ -8,7 +8,7 @@ import { hasWebGL } from "../gfx/webgl.js";
 import { createSim, step, act, score, ROAD, OBSTACLES, FPS, DT, ACT } from "../../../shared/runnerSim.js";
 import * as cssView from "./runnerCss.js";
 
-export const pre = ["🛵", "Đường về an toàn", [["👆", "Vuốt hoặc chạm trái, phải để đổi làn"], ["⬆️", "Vuốt lên (hoặc nút Nhảy) để nhảy qua rào thấp: két bia, rào thi công"], ["⬇️", "Vuốt xuống (hoặc nút Cúi) để cúi qua biển treo: cấm ngược chiều, cờ đua"], ["🚦", "Cột đèn đỏ, điện thoại: phải đổi làn"], ["⛑️", "Nhặt mũ bảo hiểm để được bảo vệ 1 lần · có 3 mạng"]]];
+export const pre = ["🛵", "Đường về an toàn", [["👆", "Vuốt hoặc chạm trái, phải để đổi làn"], ["⬆️", "Vuốt lên (máy tính: W) để nhảy qua rào thấp: két bia, rào thi công"], ["⬇️", "Vuốt xuống (máy tính: S) để cúi qua biển treo: cấm ngược chiều, cờ đua"], ["🚦", "Cột đèn đỏ, điện thoại: phải đổi làn"], ["⛑️", "Nhặt mũ bảo hiểm để được bảo vệ 1 lần · có 3 mạng"]]];
 let g = null, view3d = null, tried3d = false;
 
 /** Chọn phần vẽ: Three.js nếu được, không thì CSS 3D. */

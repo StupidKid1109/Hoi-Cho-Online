@@ -95,7 +95,7 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 
 ## Gian 3: vượt chướng ngại vật
 
-- Vuốt trái, phải (hoặc chạm hai bên xe) để đổi làn; **vuốt lên** hoặc nút **⬆ Nhảy** (phím ↑, W, Space) để nhảy; **vuốt xuống** hoặc nút **⬇ Cúi** (phím ↓, S) để cúi. Đang nhảy mà cúi thì rơi nhanh xuống.
+- Điện thoại: vuốt trái, phải (hoặc chạm hai bên xe) để đổi làn, **vuốt lên để nhảy**, **vuốt xuống để cúi**. Máy tính: A, D (hoặc mũi tên trái, phải) đổi làn, **W nhảy**, **S cúi**. Đang nhảy mà cúi thì rơi nhanh xuống.
 - Ba loại vật cản: **rào thấp nhảy qua được** (két bia, rào thi công, biển có ⬆), **biển treo cúi qua được** (cấm ngược chiều, cờ đua, biển có ⬇), **vật cao phải đổi làn** (cột đèn đỏ, điện thoại). Từ giây 14 có hàng chắn kín 3 làn, luôn chừa một vật nhảy hoặc cúi qua được.
 - Luật nằm trong `shared/runnerSim.js` (máy chủ chạy lại đúng file này để chấm điểm). Thao tác gửi lên: `[khung hình, d]` với d = -1/1 đổi làn, 2 nhảy, -2 cúi.
 
