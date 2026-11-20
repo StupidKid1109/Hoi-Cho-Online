@@ -5,6 +5,7 @@ import { initPlatform, loginPayload, share, inZalo } from "./platform.js";
 import { BOOTHS, BOOTH, PLACE_NAME, CAFE, API_BASE } from "./config.js";
 import * as hub from "./hub.js";
 import * as bgm from "./bgm.js";
+import { mountSoundButton } from "./sound.js";
 import { createSpace } from "./games/lobby.js";
 import * as chat from "./chat.js";
 import * as swipe from "./games/swipe.js";
@@ -18,6 +19,7 @@ const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } cat
 
 /* ---------- Tải và đăng nhập ---------- */
 async function boot() {
+  mountSoundButton(); // nút 🔊 chỉnh âm lượng nhạc nền / nhạc quán của riêng người chơi
   initSheet();
   const q = PROVERBS[Math.floor(Math.random() * PROVERBS.length)]; $("lq").innerHTML = "“" + q[0] + "”<small>" + q[1] + "</small>";
   const stepTo = (pct, text) => { $("lbar").style.width = pct + "%"; $("lst").textContent = text; };

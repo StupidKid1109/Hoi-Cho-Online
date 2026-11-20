@@ -527,3 +527,19 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 .sp-cafe .avt .nm{display:none}
 .sp-music .mute.need{animation:muteNeed 1.2s ease-in-out infinite}
 @keyframes muteNeed{50%{background:var(--gold);color:#5a3a00}}
+
+/* Nút 🔊 chỉnh âm lượng của người chơi (sound.js) */
+.sndbtn{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 232px);z-index:60;display:flex;flex-direction:column;align-items:center;width:58px;padding:5px 0 4px;border-radius:14px;background:rgba(20,18,28,.62);color:#fff;font-size:20px;line-height:1.1;box-shadow:0 3px 10px rgba(0,0,0,.25);backdrop-filter:blur(3px);border:0;cursor:pointer}
+.sndbtn span{font-size:10px;font-weight:800}
+body:has(#land.on) .sndbtn,body:has(#land.on) .sndpanel{display:none} /* màn hình mở đầu chưa có nhạc */
+.sndpanel{position:fixed;right:12px;top:calc(env(safe-area-inset-top,0px) + 292px);z-index:61;width:min(290px,calc(100vw - 24px));background:#fffaf2;color:#3b2412;border-radius:16px;padding:10px 12px 8px;box-shadow:0 10px 30px rgba(0,0,0,.35)}
+.sndpanel .sh{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+.sndpanel .x{border:0;background:none;font-size:16px;cursor:pointer;color:#8a6a50}
+.sndpanel .sr{padding:6px 0;border-top:1px solid #f0e2cc}
+.sndpanel .st{display:flex;justify-content:space-between;font-weight:800;font-size:13.5px}
+.sndpanel .pct{color:#b45309;font-variant-numeric:tabular-nums}
+.sndpanel .sc{display:flex;align-items:center;gap:8px;margin-top:4px}
+.sndpanel input[type=range]{flex:1;accent-color:#d62839;width:auto}
+.sndpanel .tg{border:0;border-radius:10px;padding:5px 8px;background:#f3e3cb;font-weight:800;font-size:12px;cursor:pointer;white-space:nowrap}
+.sndpanel .sr.off .pct{color:#9c8a7a}.sndpanel .sr.off input{opacity:.5}
+.sndpanel .sn{font-size:11px;color:#9c8a7a;margin-top:2px}

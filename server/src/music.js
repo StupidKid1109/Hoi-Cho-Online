@@ -31,9 +31,14 @@ export function youtubeId(url) {
   return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? id : null;
 }
 
-export function makeMusic(config) {
+/**
+ * Một thư viện nhạc trong thư mục riêng. sub = "" : nhạc quán cà phê (server/data/music);
+ * sub = "nhac-nen": nhạc nền game (server/data/music/nhac-nen), tách riêng hẳn với nhạc quán.
+ */
+export function makeMusic(config, sub = "") {
   // cơ sở dữ liệu trong bộ nhớ (kiểm thử): dùng thư mục tạm
-  const dir = config.musicDir || (config.dbFile === ":memory:" ? mkdtempSync(join(tmpdir(), "hoicho-music-")) : join(dirname(config.dbFile), "music"));
+  const base = config.musicDir || (config.dbFile === ":memory:" ? mkdtempSync(join(tmpdir(), "hoicho-music-")) : join(dirname(config.dbFile), "music"));
+  const dir = sub ? join(base, sub) : base;
   mkdirSync(dir, { recursive: true });
   const stateFile = join(dir, "dang-phat.json"), namesFile = join(dir, "ten-bai.json"), ytFile = join(dir, "youtube.json");
   let yt = []; try { yt = JSON.parse(readFileSync(ytFile, "utf8")); } catch (e) { /* chưa có */ }
@@ -63,6 +68,8 @@ export function makeMusic(config) {
       names[f] = basename(String(name), extname(String(name))).replace(/[_]+/g, " ").trim().slice(0, 80) || f; saveNames();
       return f;
     },
+    /** Chép bài f từ thư viện khác sang đây (giữ tên bài có dấu). */
+    copyFrom(lib, f) { if (!lib.has(f) || has(f)) return; writeFileSync(join(dir, f), readFileSync(join(lib.dir, f))); names[f] = lib.title(f); saveNames(); },
     remove(f) { if (has(f)) { unlinkSync(join(dir, f)); delete names[f]; saveNames(); } },
     /* ---------- Danh sách link YouTube (phát bằng trình phát nhúng của YouTube, không tải về máy chủ) ---------- */
     ytList: () => yt.slice(),

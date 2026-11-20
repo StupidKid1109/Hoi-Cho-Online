@@ -1,11 +1,12 @@
 // Nhạc nền của game: phát ở sảnh, phòng chờ, các gian; vào quán cà phê thì tắt (quán có nhạc riêng).
 // Nguồn là file nhạc quản trị viên tải lên và chọn ở /admin (mục "Nhạc nền game"). Phát ẩn, không hiện gì trên màn hình.
 import { API_BASE } from "./config.js";
+import { level, onChange } from "./sound.js";
 
 let state = null, place = "none", audio = null, blocked = false, order = [], idx = 0;
 
 const list = () => (state && (state.files && state.files.length ? state.files : state.file ? [state.file] : [])) || [];
-const wanted = () => !!(state && state.on && list().length && place !== "cafe" && place !== "none");
+const wanted = () => !!(state && state.on && list().length && place !== "cafe" && place !== "none" && level("bgm") > 0); // người chơi tắt nhạc nền thì dừng hẳn
 /** Thứ tự phát: theo danh sách, hoặc trộn bài. */
 function makeOrder() {
   order = list().slice();
@@ -29,12 +30,13 @@ function apply() {
   }
   if (!order.length || !order.includes(order[idx])) makeOrder();
   audio.loop = order.length === 1;
-  const src = API_BASE + "/api/music/file/" + encodeURIComponent(order[idx]);
+  const src = API_BASE + "/api/bgm/file/" + encodeURIComponent(order[idx]); // thư viện nhạc nền riêng
   if (audio.dataset.src !== src) { audio.src = src; audio.dataset.src = src; }
-  audio.volume = Math.max(0, Math.min(1, state.volume ?? 0.5)); audio.muted = blocked;
+  audio.volume = Math.max(0, Math.min(1, (state.volume ?? 0.5) * level("bgm"))); audio.muted = blocked; // âm lượng quản trị viên × âm lượng người chơi
   const p = audio.play(); if (p && p.catch) p.catch(e => { if (e && e.name === "NotAllowedError") onBlocked(); });
 }
 
+onChange(() => apply()); // người chơi kéo thanh âm lượng / tắt nhạc nền
 /** Cài đặt nhạc nền từ máy chủ ({on, files, shuffle, volume}). */
 export function setState(s) {
   if (!s) return;
