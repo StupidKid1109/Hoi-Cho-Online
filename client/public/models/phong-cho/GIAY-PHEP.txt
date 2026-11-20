@@ -1,0 +1,10 @@
+Mô hình phòng chờ (Sketchfab), giấy phép CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/) - được dùng cả mục đích thương mại, bắt buộc ghi tên tác giả.
+
+hacker.glb - Gian 1: "Hacker Room low poly" của Pudding_King
+  https://sketchfab.com/3d-models/2d86dd3e18a44cc080f85a0e1af9ffe9
+tron.glb - Gian 2: "Scifi Tron Studio | Baked" của ida61xq
+  https://sketchfab.com/3d-models/88c7b7b5adc54b2eab451ebaf55ce941
+pho.glb - Gian 3: "Cartoon Lowpoly Small City Free Pack" của antonmoek
+  https://sketchfab.com/3d-models/edd1c604e1e045a0a2a552ddd9a293e6
+
+Thay đổi so với bản gốc: đổi vật liệu sang chuẩn metal-roughness, thu nhỏ ảnh kết cấu, đổi tên file; trong game phóng to, xoay, thay áp phích bằng áp phích chống lừa đảo, bỏ chữ "HACKER", dọn xe ở chỗ người chơi xuất hiện, thêm màn hình báo số người.
