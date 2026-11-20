@@ -26,8 +26,15 @@
     <h1>HỘI CHỢ ONLINE</h1>
     <div class="tag" id="landTag">Dạo hội, chơi game, rinh quà · Phường … (tên mẫu)</div>
     <div class="lcard">
-      <label>Biệt danh của bạn</label>
-      <div class="nick"><b id="nick"></b><button id="reroll">🎲 Đổi</button></div>
+      <label>Nhân vật của bạn</label>
+      <div class="pick" id="pick">
+        <canvas id="pv" aria-hidden="true"></canvas>
+        <div class="gsel" role="radiogroup" aria-label="Chọn nhân vật"><button data-g="nam" role="radio">👦 Nam</button><button data-g="nu" role="radio">👧 Nữ</button></div>
+      </div>
+      <label for="nameIn">Tên hiển thị</label>
+      <div class="nick"><b id="nick"></b><button id="reroll" title="Đổi biệt danh ngẫu nhiên">🎲 Đổi</button></div>
+      <form class="nreq" id="nameForm"><input id="nameIn" maxlength="16" placeholder="Đặt tên riêng của bạn" autocomplete="off" enterkeyhint="send"><button type="submit" id="nameSend">Gửi duyệt</button></form>
+      <div class="nst" id="nameSt">Tên riêng được ban tổ chức duyệt trước khi hiện cho mọi người. Không dùng số điện thoại, tên thật đầy đủ hay tên cơ quan.</div>
       <label for="khu">Chọn khu hội chợ</label>
       <select id="khu"></select>
       <div class="ctrls"><div><i>👆</i>Chạm đất để đi</div><div><i>↔️</i>Kéo để xoay</div><div><i>⌨️</i>W A S D trên máy tính</div></div>

@@ -348,3 +348,44 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
     assert.equal((await call("/api/admin/music/fetch", { method: "POST", body: { url: "https://x.mp3" }, admin: "admin-test" })).status, 404, "đã bỏ thêm nhạc bằng link");
   } finally { for (const x of [a, b]) x.ws.close(); }
 });
+
+test("Nhân vật nam/nữ và tên chờ quản trị viên duyệt", async () => {
+  const t = await login("ten-a"), t2 = await login("ten-b");
+  let me = (await call("/api/me", { token: t })).data;
+  assert.equal(me.gender, null); assert.equal(me.nameReq, null);
+  const auto = me.nick;
+  assert.equal((await call("/api/me/profile", { token: t, method: "POST", body: { gender: "x" } })).status, 400);
+  let r = await call("/api/me/profile", { token: t, method: "POST", body: { gender: "nu" } });
+  assert.equal(r.status, 200); assert.equal(r.data.gender, "nu");
+  // tên không hợp lệ: số điện thoại, link, từ tục, giả danh, ký tự lạ, quá dài
+  for (const bad of ["0912345678", "abc.com", "vcl", "Công an phường", "<b>x</b>", "Tên rất là dài quá mức cho phép", "a"])
+    assert.equal((await call("/api/me/profile", { token: t, method: "POST", body: { name: bad } })).status, 400, bad);
+  r = await call("/api/me/profile", { token: t, method: "POST", body: { name: "  Minh   Thư  " } });
+  assert.equal(r.status, 200); assert.equal(r.data.nick, auto, "chưa duyệt thì vẫn dùng biệt danh cũ");
+  assert.deepEqual(r.data.nameReq, { name: "Minh Thư", state: "pending", note: "" });
+  // người khác không xin được tên đang chờ duyệt
+  assert.match((await call("/api/me/profile", { token: t2, method: "POST", body: { name: "minh thư" } })).data.error || "", /đã có người/);
+  // quản trị: xem danh sách, sai mã thì bị chặn
+  assert.equal((await call("/api/admin/names", { admin: "sai" })).status, 403);
+  const list = (await call("/api/admin/names", { admin: "admin-test" })).data;
+  assert.equal(list.pending, 1); assert.equal(list.names[0].name, "Minh Thư"); assert.equal(list.names[0].gender, "nu");
+  // từ chối kèm lý do, người chơi thấy lý do và gửi tên khác
+  r = await call("/api/admin/names", { admin: "admin-test", method: "POST", body: { id: list.names[0].id, action: "reject", note: "Trùng tên người thật" } });
+  assert.equal(r.status, 200);
+  me = (await call("/api/me", { token: t })).data;
+  assert.equal(me.nick, auto); assert.equal(me.nameReq.state, "rejected"); assert.equal(me.nameReq.note, "Trùng tên người thật");
+  await call("/api/me/profile", { token: t, method: "POST", body: { name: "Thư Nhỏ" } });
+  const id = (await call("/api/admin/names", { admin: "admin-test" })).data.names[0].id;
+  r = await call("/api/admin/names", { admin: "admin-test", method: "POST", body: { id, action: "approve" } });
+  assert.equal(r.status, 200); assert.equal(r.data.nick, "Thư Nhỏ");
+  me = (await call("/api/me", { token: t })).data;
+  assert.equal(me.nick, "Thư Nhỏ"); assert.equal(me.gender, "nu");
+  // đã duyệt thì người khác không dùng được tên đó; thu hồi thì về biệt danh ngẫu nhiên
+  assert.equal((await call("/api/me/profile", { token: t2, method: "POST", body: { name: "THƯ NHỎ" } })).status, 400);
+  assert.equal((await call("/api/admin/names?state=approved", { admin: "admin-test" })).data.names[0].name, "Thư Nhỏ");
+  r = await call("/api/admin/names", { admin: "admin-test", method: "POST", body: { id, action: "revoke" } });
+  assert.notEqual(r.data.nick, "Thư Nhỏ");
+  // giới hạn 5 lần gửi tên mỗi ngày
+  for (let i = 0; i < 5; i++) assert.equal((await call("/api/me/profile", { token: t2, method: "POST", body: { name: "Bạn Mới " + i } })).status, 200);
+  assert.match((await call("/api/me/profile", { token: t2, method: "POST", body: { name: "Bạn Mới 9" } })).data.error, /nhiều lần/);
+});

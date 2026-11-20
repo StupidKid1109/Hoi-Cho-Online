@@ -19,9 +19,16 @@ export const MINE_LOOKS = {
   "non-la": { hat: "nonla", hair: "#1c1714", style: "short" },                 // kiểu cũ
   "mu-do": { hat: "cap", cap: "#d62839", star: true, hair: "#8b5a2b", style: "short" },
   "toc-nau": { hat: "none", hair: "#a0683a", style: "spiky" },
-  "mu-vang": { hat: "cap", cap: "#ffc533", hair: "#8b5a2b", style: "short" }
+  "mu-vang": { hat: "cap", cap: "#ffc533", hair: "#8b5a2b", style: "short" },
+  // nữ: mũ đỏ sao vàng, tóc đuôi ngựa dài, váy xanh, lông mi
+  "nu-do": { hat: "cap", cap: "#d62839", star: true, hair: "#5a3a22", style: "ponytail", skirt: "#1d3557", female: true }
 };
 export const MINE_LOOK = "mu-do";
+/** Kiểu nhân vật của mình theo giới tính người chơi chọn ở màn hình mở đầu. */
+export const LOOK_OF = { nam: "mu-do", nu: "nu-do" };
+let myLook = MINE_LOOK;
+export function setMyGender(g) { myLook = LOOK_OF[g] || MINE_LOOK; }
+export const myGender = () => myLook === "nu-do" ? "nu" : "nam";
 
 /* ---------- Dựng hình ---------- */
 function part(list, geo, color, limb, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
@@ -52,18 +59,24 @@ const Cyl = (rt, rb, h, s = 14, open = false) => new THREE.CylinderGeometry(rt, 
  * Tạo geometry nhân vật theo seed (cùng seed thì cùng ngoại hình trên mọi máy).
  * mine: nhân vật của mình, áo đỏ sao vàng để dễ nhận ra; true = kiểu MINE_LOOK, hoặc tên một kiểu trong MINE_LOOKS.
  */
-export function characterGeometry(seed, mine) {
+export function characterGeometry(seed, mine, gd) {
   let h = Math.abs(seed) || 1;
   const pick = arr => { h = (Math.imul(h, 1103515245) + 12345) >>> 0; return arr[(h >>> 8) % arr.length]; };
-  const look = mine ? MINE_LOOKS[mine === true ? MINE_LOOK : mine] || MINE_LOOKS[MINE_LOOK] : null;
+  const look = mine ? MINE_LOOKS[mine === true ? myLook : mine] || MINE_LOOKS[MINE_LOOK] : null;
   const skin = pick(SKIN), pants = pick(PANTS); let hair = pick(HAIR);
   if (look) hair = look.hair;
-  const outfit = mine ? "tee" : pick(["tee", "student", "aodai", "hoodie", "worker", "tee", "student"]);
+  // gd: giới tính người khác chọn ("nam" | "nu"); chưa chọn thì ngẫu nhiên như cũ
+  const female = look ? !!look.female : gd === "nu", male = !look && gd === "nam";
+  const outfit = mine ? "tee" : pick(female ? ["tee", "student", "aodai", "hoodie", "worker", "aodai", "student"] : male ? ["tee", "student", "hoodie", "worker", "tee", "student"] : ["tee", "student", "aodai", "hoodie", "worker", "tee", "student"]);
   const top = mine ? "#d62839" : outfit === "student" ? "#ffffff" : outfit === "worker" ? "#2f6db5" : outfit === "aodai" ? pick(AODAI) : pick(COLORS);
   const hat = look ? look.hat : outfit === "aodai" ? pick(["none", "nonla", "none", "none"]) : pick(["none", "none", "none", "none", "none", "cap", "cap", "nonla"]);
   // kiểu tóc hợp với mũ: đội mũ lưỡi trai thì tóc gọn, đội nón lá thì không búi cao
-  const style = look ? look.style : pick(hat === "cap" ? ["short", "ponytail"] : hat === "nonla" ? ["short", "bob", "long", "ponytail"]
+  const style = look ? look.style : male ? pick(hat === "none" ? ["short", "spiky", "short"] : ["short"])
+    : female ? pick(hat === "cap" ? ["ponytail"] : hat === "nonla" ? ["bob", "long", "ponytail"] : outfit === "aodai" ? ["long", "bun", "bob"] : ["bob", "ponytail", "buns", "long", "bun"])
+    : pick(hat === "cap" ? ["short", "ponytail"] : hat === "nonla" ? ["short", "bob", "long", "ponytail"]
     : outfit === "aodai" ? ["long", "bun", "bob"] : ["short", "spiky", "bob", "ponytail", "buns", "short", "long"]);
+  // váy: nữ mặc áo thun / đồng phục học sinh
+  const skirt = look ? look.skirt : female && (outfit === "student" || (outfit === "tee" && pick([true, false]))) ? (outfit === "student" ? "#1d3557" : pick(PANTS.concat(["#c8102e", "#6d597a"]))) : null;
   const L = [];
 
   // chân và giày
@@ -74,7 +87,8 @@ export function characterGeometry(seed, mine) {
     part(L, Sph(0.03, 6, 4), "#ffffff", limb, s * 0.085, 0.07, 0.13, 0, 0, 0, 1.2, 0.6, 0.6);
   }
   // hông, thân
-  part(L, Cyl(0.15, 0.16, 0.12), outfit === "aodai" ? top : legCol, BODY, 0, 0.36, 0);
+  part(L, Cyl(0.15, 0.16, 0.12), outfit === "aodai" ? top : skirt || legCol, BODY, 0, 0.36, 0);
+  if (skirt) part(L, Cyl(0.155, 0.25, 0.2, 16, true), skirt, BODY, 0, 0.3, 0, 0, 0, 0, 1, 1, 0.9); // váy xòe
   part(L, Cap(0.165, 0.15, 12), top, BODY, 0, 0.53, 0, 0, 0, 0, 1, 1, 0.82);
   if (outfit === "aodai") { // vạt áo dài trước và sau
     part(L, Cyl(0.15, 0.2, 0.36, 14, true), top, BODY, 0, 0.27, 0, 0, 0, 0, 1, 1, 0.6);
@@ -111,6 +125,7 @@ export function characterGeometry(seed, mine) {
     part(L, Sph(0.014, 6, 4), "#ffffff", EYE, s * 0.095 + 0.012, EYE_Y + 0.02, 0.257);
     part(L, new THREE.BoxGeometry(0.075, 0.016, 0.02), hair, BODY, s * 0.1, 1.025, 0.235, -0.25, 0, -s * 0.12);
     part(L, Sph(0.042, 8, 6), "#ff9aa2", BODY, s * 0.165, 0.86, 0.205, 0, 0, 0, 1, 0.55, 0.4);
+    if (female) part(L, new THREE.BoxGeometry(0.035, 0.01, 0.012), "#1f1a17", BODY, s * 0.135, EYE_Y + 0.035, 0.24, 0, 0, s * 0.55); // lông mi
   }
   part(L, new THREE.TorusGeometry(0.038, 0.011, 4, 10, Math.PI), "#9c3d33", BODY, 0, 0.85, 0.252, 0, 0, Math.PI);
 
@@ -120,7 +135,9 @@ export function characterGeometry(seed, mine) {
   if (style === "short") { cap(); bangs(Sph(0.12, 10, 6), hair, BODY, -0.08, 1.07, 0.19, 0, 0, 0, 1.4, 0.55, 0.6); }
   if (style === "spiky") { cap(0.28); for (let i = 0; i < 6; i++) { const a = -0.9 + i * 0.36; part(L, new THREE.ConeGeometry(0.07, 0.17, 6), hair, BODY, Math.sin(a) * 0.17, 1.17 - Math.abs(a) * 0.06, Math.cos(a) * 0.05 - 0.02, -0.3 + Math.cos(a) * 0.1, 0, -a * 0.6); } }
   if (style === "bob") { cap(0.3); part(L, Sph(0.3, 18, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.4), hair, BODY, 0, 0.93, -0.03, 0, 0, 0, 1.02, 1, 1); bangs(Sph(0.13, 10, 6), hair, BODY, 0.06, 1.07, 0.2, 0, 0, 0, 1.6, 0.5, 0.6); }
-  if (style === "ponytail") { cap(); part(L, Sph(0.06, 8, 6), "#e63946", BODY, 0, 1.0, -0.27); part(L, Cap(0.08, 0.22), hair, BODY, 0, 0.82, -0.32, 0.35); }
+  if (style === "ponytail") { cap(); part(L, Sph(0.06, 8, 6), "#e63946", BODY, 0, 1.0, -0.27);
+    if (female && hat === "cap") part(L, Cap(0.085, 0.32), hair, BODY, 0, 0.78, -0.33, 0.3); // đuôi ngựa dài luồn sau mũ
+    else part(L, Cap(0.08, 0.22), hair, BODY, 0, 0.82, -0.32, 0.35); }
   if (style === "buns") { cap(); for (const s of [-1, 1]) part(L, Sph(0.1, 10, 8), hair, BODY, s * 0.19, 1.15, -0.05); }
   if (style === "long") { cap(0.29); part(L, Cap(0.2, 0.3, 10), hair, BODY, 0, 0.78, -0.13, 0, 0, 0, 1.25, 1, 0.55); bangs(Sph(0.12, 10, 6), hair, BODY, -0.05, 1.07, 0.2, 0, 0, 0, 1.6, 0.5, 0.6); }
   if (style === "bun") { cap(); part(L, Sph(0.11, 10, 8), hair, BODY, 0, 1.08, -0.24); part(L, Cyl(0.008, 0.008, 0.26, 4), "#c9a54f", BODY, 0, 1.1, -0.26, 0, 0, 1.2); }

@@ -1,5 +1,6 @@
 // Người chơi, đợt treo thưởng, điểm cao nhất và Bảng vàng.
 import { randomInt, randomUUID } from "node:crypto";
+import { nameReason, tidyName } from "../../shared/chatFilter.js";
 
 const NICK_A = ["Hoa Sữa", "Sen Hồng", "Bằng Lăng", "Phượng Đỏ", "Mai Vàng", "Lúa Non", "Sao Mai", "Gió Nam", "Trăng Rằm", "Cánh Diều", "Hoa Gạo", "Mây Trắng", "Cỏ May", "Hải Âu", "Sông Xanh", "Nắng Mai"];
 export const GAMES = ["g1", "g2", "g3"];
@@ -7,8 +8,16 @@ const today = () => new Date(Date.now() + 7 * 36e5).toISOString().slice(0, 10);
 
 export function makeStore(db, defaultEvent) {
   const q = sql => db.prepare(sql);
+  // so tên không phân biệt hoa thường cả chữ có dấu (COLLATE NOCASE của SQLite chỉ hiểu chữ không dấu)
+  try { db.function("vlow", { deterministic: true }, s => s == null ? null : String(s).normalize("NFC").toLowerCase()); } catch (e) { /* đã đăng ký */ }
   const st = {
-    getPlayer: q("SELECT id, nick, banned FROM players WHERE id = ?"),
+    getPlayer: q("SELECT id, nick, banned, gender, name_req, name_state, name_note, name_at, name_tries, name_day FROM players WHERE id = ?"),
+    setGender: q("UPDATE players SET gender = ? WHERE id = ?"),
+    nameTaken: q("SELECT 1 AS x FROM players WHERE id != ? AND (vlow(nick) = vlow(?) OR (vlow(name_req) = vlow(?) AND name_state = 'pending')) LIMIT 1"),
+    putNameReq: q("UPDATE players SET name_req = ?, name_state = 'pending', name_note = NULL, name_at = ?, name_tries = ?, name_day = ? WHERE id = ?"),
+    nameDone: q("UPDATE players SET name_state = ?, name_note = ?, name_at = ? WHERE id = ?"),
+    nameApprove: q("UPDATE players SET nick = name_req, name_state = 'approved', name_note = NULL, name_at = ? WHERE id = ?"),
+    cancelName: q("UPDATE players SET name_req = NULL, name_state = NULL, name_note = NULL WHERE id = ?"),
     addPlayer: q("INSERT INTO players (id, nick, created) VALUES (?, ?, ?)"),
     setNick: q("UPDATE players SET nick = ?, reroll_day = ?, rerolls = ? WHERE id = ?"),
     getReroll: q("SELECT reroll_day, rerolls FROM players WHERE id = ?"),
@@ -41,6 +50,42 @@ export function makeStore(db, defaultEvent) {
     let p = st.getPlayer.get(id);
     if (!p) { st.addPlayer.run(id, newNick(), Date.now()); p = st.getPlayer.get(id); }
     return p;
+  }
+  const GENDERS = ["nam", "nu"];
+  function setGender(id, g) { if (!GENDERS.includes(g)) return false; ensurePlayer(id); st.setGender.run(g, id); return true; }
+  /** Thông tin tên xin đặt gửi cho người chơi. */
+  function nameInfo(p) { return p && p.name_req && p.name_state ? { name: p.name_req, state: p.name_state, note: p.name_note || "" } : null; }
+  /** Người chơi xin đặt tên: kiểm tra rồi chờ quản trị viên duyệt. Trả về { error } hoặc { ok, name }. */
+  function requestName(id, raw) {
+    const name = tidyName(raw), why = nameReason(name); if (why) return { error: why };
+    const p = ensurePlayer(id);
+    if (p.name_state === "pending" && p.name_req === name) return { ok: true, name };
+    if (name === p.nick) return { error: "Đây đã là tên của bạn" };
+    if (st.nameTaken.get(id, name, name)) return { error: "Tên này đã có người dùng, hãy chọn tên khác" };
+    const d = today(), n = p.name_day === d ? p.name_tries : 0;
+    if (n >= 5) return { error: "Hôm nay bạn đã gửi tên nhiều lần, hãy thử lại vào ngày mai" };
+    st.putNameReq.run(name, Date.now(), n + 1, d, id); return { ok: true, name };
+  }
+  function cancelName(id) { st.cancelName.run(id); }
+  /** Danh sách tên cho trang quản trị: pending (chờ duyệt), approved, rejected. */
+  function nameList(state = "pending", limit = 200) {
+    return db.prepare("SELECT id, nick, name_req AS name, name_state AS state, name_note AS note, name_at AS at, gender FROM players WHERE name_state = ? ORDER BY name_at " + (state === "pending" ? "ASC" : "DESC") + " LIMIT ?").all(state, limit);
+  }
+  /** Quản trị viên duyệt / từ chối / thu hồi tên. Trả về người chơi sau khi đổi, hoặc { error }. */
+  function decideName(id, action, note = "") {
+    const p = st.getPlayer.get(id); if (!p) return { error: "Không có người chơi" };
+    if (action === "approve") {
+      if (p.name_state !== "pending") return { error: "Tên này không còn chờ duyệt" };
+      if (db.prepare("SELECT 1 AS x FROM players WHERE id != ? AND vlow(nick) = vlow(?)").get(id, p.name_req)) return { error: "Đã có người khác dùng tên này" };
+      st.nameApprove.run(Date.now(), id);
+    } else if (action === "reject") {
+      if (p.name_state !== "pending") return { error: "Tên này không còn chờ duyệt" };
+      st.nameDone.run("rejected", String(note || "").slice(0, 120), Date.now(), id);
+    } else if (action === "revoke") { // thu hồi tên đã duyệt: về biệt danh ngẫu nhiên
+      db.prepare("UPDATE players SET nick = ? WHERE id = ?").run(newNick(), id);
+      st.nameDone.run("rejected", String(note || "Tên bị thu hồi").slice(0, 120), Date.now(), id);
+    } else return { error: "Thao tác không hợp lệ" };
+    return { player: st.getPlayer.get(id) };
   }
   function rerollNick(id) {
     const r = st.getReroll.get(id), d = today(), n = r && r.reroll_day === d ? r.rerolls : 0;
@@ -105,5 +150,5 @@ export function makeStore(db, defaultEvent) {
     return { tab, rows: ranked.slice(0, limit).map(r => ({ rank: r.rank, nick: r.nick, score: r.score, me: r.id === player })), me: me ? { rank: me.rank, score: me.score } : null, players: ranked.length, ranked };
   }
 
-  return { st, event, setEvent, eventActive, ensurePlayer, rerollNick, createRun, loadRun, saveRun, finishRun, runsSince, recordBest, bests, leaderboard, addG1, caps, setBan: (id, b) => st.setBan.run(b ? 1 : 0, id) };
+  return { st, event, setEvent, eventActive, ensurePlayer, rerollNick, setGender, nameInfo, requestName, cancelName, nameList, decideName, createRun, loadRun, saveRun, finishRun, runsSince, recordBest, bests, leaderboard, addG1, caps, setBan: (id, b) => st.setBan.run(b ? 1 : 0, id) };
 }

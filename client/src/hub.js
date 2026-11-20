@@ -51,6 +51,10 @@ export const addPeer = p => impl.addPeer(p);
 export const removePeer = id => impl.removePeer(id);
 export const movePeer = (id, x, y) => impl.movePeer(id, x, y);
 export const renamePeer = (id, nick) => impl.renamePeer(id, nick);
+export const renameSelf = nick => impl.renameSelf(nick);
+export const lookPeer = (id, gd) => impl.lookPeer(id, gd);
+/** Nhân vật của mình nam/nữ (gọi trước buildHub). */
+export const setGender = g => { if (impl.setGender) impl.setGender(g); };
 export const peerEmote = (id, e) => impl.peerEmote(id, e);
 export const peerSay = (id, text) => impl.peerSay(id, text);
 export const selfSay = text => impl.selfSay(text);

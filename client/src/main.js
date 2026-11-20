@@ -14,7 +14,7 @@ import * as runner from "./games/runner.js";
 
 const GAMES = { g1: hacker, g2: rebus, g3: runner };
 const PROVERBS = [["Ăn quả nhớ kẻ trồng cây.", "Tục ngữ"], ["Một cây làm chẳng nên non, ba cây chụm lại nên hòn núi cao.", "Ca dao"], ["Bán anh em xa, mua láng giềng gần.", "Tục ngữ"], ["Đi một ngày đàng, học một sàng khôn.", "Tục ngữ"]];
-const S = { hkInvite: /[?&]hk=\d{6}/.test(location.search), me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null, space: null };
+const S = { hkInvite: /[?&]hk=\d{6}/.test(location.search), me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null, space: null, preview: null };
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* bỏ qua */ } } };
 
 /* ---------- Tải và đăng nhập ---------- */
@@ -49,8 +49,68 @@ function landing(khuList) {
   const pick = khuList.find(k => k.khu === saved && k.online < k.capacity) || khuList.find(k => k.online < k.capacity) || khuList[0];
   $("khu").value = pick.khu;
   $("evInfo").textContent = S.event.active ? "🎊 " + S.event.name + " đang diễn ra đến " + new Date(S.event.end).toLocaleDateString("vi-VN") : "Hiện chưa có đợt treo thưởng. Bạn vẫn chơi để luyện tập được.";
-  $("reroll").onclick = async () => { try { const r = await post("/api/me/nickname"); S.me.nick = r.nick; $("nick").textContent = r.nick; } catch (e) { toast(e.message); } };
-  $("enterFair").onclick = () => { S.khu = Number($("khu").value); store.set("hc_khu", S.khu); enterFair(); };
+  $("reroll").onclick = async () => { try { const r = await post("/api/me/nickname"); S.me.nick = r.nick; $("nick").textContent = r.nick; renderNameReq(); } catch (e) { toast(e.message); } };
+  setupProfile();
+  $("enterFair").onclick = () => {
+    if (!S.me.gender) { toast("Chọn nhân vật nam hoặc nữ trước khi vào hội chợ"); const p = $("pick"); p.classList.remove("need"); void p.offsetWidth; p.classList.add("need"); return; }
+    S.khu = Number($("khu").value); store.set("hc_khu", S.khu);
+    if (S.preview) { S.preview.stop(); S.preview = null; }
+    enterFair();
+  };
+}
+
+/* ---------- Thiết lập nhân vật (nam/nữ) và tên riêng chờ duyệt ---------- */
+function setupProfile() {
+  const pick = $("pick"), btns = [...pick.querySelectorAll(".gsel button")];
+  const mark = g => { btns.forEach(b => { const on = b.dataset.g === g; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); }); if (S.preview) S.preview.set(g); };
+  const choose = async g => {
+    if (g === S.me.gender) return mark(g);
+    const old = S.me.gender; S.me.gender = g; mark(g); hub.setGender(g); pick.classList.remove("need");
+    try { await post("/api/me/profile", { gender: g }); } catch (e) { S.me.gender = old; mark(old); toast(e.message); }
+  };
+  btns.forEach(b => b.onclick = () => choose(b.dataset.g));
+  if (hub.mode === "3d" && !S.preview) {
+    pick.classList.remove("flat");
+    import("./gfx/preview.js").then(m => { S.preview = m.mountPreview($("pv"), choose); S.preview.set(S.me.gender); })
+      .catch(e => { console.warn("Không dựng được hình xem trước", e); pick.classList.add("flat"); });
+  } else if (hub.mode !== "3d") pick.classList.add("flat");
+  if (S.me.gender) hub.setGender(S.me.gender);
+  mark(S.me.gender);
+  $("nameForm").onsubmit = async e => {
+    e.preventDefault();
+    const v = $("nameIn").value.trim(); if (!v) return $("nameIn").focus();
+    $("nameSend").disabled = true;
+    try { const r = await post("/api/me/profile", { name: v }); S.me.nick = r.nick; S.me.nameReq = r.nameReq; $("nameIn").value = ""; $("nameIn").blur(); renderNameReq(); toast("Đã gửi tên “" + r.nameReq.name + "”, chờ ban tổ chức duyệt"); }
+    catch (er) { toast(er.message); }
+    $("nameSend").disabled = false;
+  };
+  renderNameReq();
+  // ở màn hình mở đầu chưa nối WebSocket: tên đang chờ duyệt thì hỏi lại máy chủ 8 giây một lần
+  clearInterval(S.namePoll);
+  S.namePoll = setInterval(async () => {
+    if (!$("land").classList.contains("on")) return clearInterval(S.namePoll);
+    if (!S.me.nameReq || S.me.nameReq.state !== "pending" || document.hidden) return;
+    try { const me = await api("/api/me"); if (me.nameReq && me.nameReq.state !== "pending" || me.nick !== S.me.nick) onNameDecision({ nick: me.nick, nameReq: me.nameReq }); } catch (e) { /* thử lại lần sau */ }
+  }, 8000);
+}
+function renderNameReq() {
+  const el = $("nameSt"); if (!el) return;
+  const q = S.me.nameReq; $("nick").textContent = S.me.nick;
+  el.className = "nst";
+  if (q && q.state === "pending") { el.classList.add("wait"); el.innerHTML = "⏳ Tên <b>" + esc(q.name) + "</b> đang chờ ban tổ chức duyệt. Trong lúc chờ, bạn vẫn dùng tên <b>" + esc(S.me.nick) + "</b>. <button id=\"nameCancel\">Hủy</button>"; }
+  else if (q && q.state === "rejected") { el.classList.add("no"); el.innerHTML = "❌ Tên <b>" + esc(q.name) + "</b> chưa được duyệt" + (q.note ? ": " + esc(q.note) : "") + ". Bạn hãy đặt tên khác."; }
+  else if (q && q.state === "approved" && q.name === S.me.nick) { el.classList.add("ok"); el.innerHTML = "✅ Tên <b>" + esc(q.name) + "</b> đã được duyệt."; }
+  else el.textContent = "Tên riêng được ban tổ chức duyệt trước khi hiện cho mọi người. Không dùng số điện thoại, họ tên đầy đủ hay tên cơ quan.";
+  const c = $("nameCancel"); if (c) c.onclick = async () => { try { const r = await post("/api/me/profile", { cancelName: true }); S.me.nameReq = r.nameReq; renderNameReq(); } catch (e) { toast(e.message); } };
+}
+/** Quản trị viên vừa duyệt / từ chối / thu hồi tên của mình. */
+function onNameDecision(m) {
+  const before = S.me.nick; S.me.nick = m.nick; S.me.nameReq = m.nameReq;
+  const q = m.nameReq;
+  if (q && q.state === "approved") toast("✅ Tên “" + q.name + "” đã được duyệt");
+  else if (q && q.state === "rejected") toast("❌ Tên “" + q.name + "” chưa được duyệt" + (q.note ? ": " + q.note : ""));
+  if (before !== m.nick) { hub.renameSelf(m.nick); if ($("fair").classList.contains("on")) renderWho(); }
+  renderNameReq();
 }
 
 /* ---------- Sảnh hội chợ ---------- */
@@ -86,7 +146,9 @@ function onRealtime(m) {
   else if (m.t === "emote") hub.peerEmote(m.id, m.e);
   else if (m.t === "sit") { if (m.id !== S.myId) hub.peerSit(m.id, m.s); }
   else if (m.t === "sitno") { hub.sitRejected(m.s); toast(m.text); }
-  else if (m.t === "rename") hub.renamePeer(m.id, m.nick);
+  else if (m.t === "rename") { if (m.id !== S.myId) hub.renamePeer(m.id, m.nick); }
+  else if (m.t === "name") onNameDecision(m);
+  else if (m.t === "look") hub.lookPeer(m.id, m.gd);
   else if (m.t === "chat") chat.onChat(m.m);
   else if (m.t === "hide") chat.onHide(m.id);
   else if (m.t === "sys") chat.onSys(m.text, m.ok);

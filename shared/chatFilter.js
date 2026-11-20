@@ -33,3 +33,21 @@ export function cleanText(text) {
 export function normalize(text) {
   return String(text || "").replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, CHAT_MAX);
 }
+
+export const NAME_MIN = 2, NAME_MAX = 16;
+const NAME_RESERVED = ["admin", "quản trị", "quan tri", "công an", "cong an", "ubnd", "cán bộ", "can bo", "ban tổ chức", "ban to chuc", "zalo", "moderator", "hệ thống", "he thong"];
+/** Lý do không nhận tên người chơi xin đặt (chuỗi), hoặc null nếu được gửi duyệt. */
+export function nameReason(name) {
+  const n = String(name || "").replace(/\s+/g, " ").trim();
+  if (n.length < NAME_MIN) return "Tên cần ít nhất " + NAME_MIN + " ký tự";
+  if (n.length > NAME_MAX) return "Tên tối đa " + NAME_MAX + " ký tự";
+  if (!/^[\p{L}\p{M}0-9 ]+$/u.test(n)) return "Tên chỉ gồm chữ cái, chữ số và dấu cách";
+  if ((n.match(/\d/g) || []).length > 4) return "Tên có quá nhiều chữ số";
+  if (blockReason(n)) return "Tên không được chứa " + blockReason(n);
+  if (cleanText(n) !== n) return "Tên có từ ngữ không phù hợp";
+  const low = n.toLowerCase();
+  if (NAME_RESERVED.some(w => low.includes(w))) return "Tên không được giống tên cơ quan, cán bộ hoặc quản trị viên";
+  return null;
+}
+/** Gọn tên: gộp khoảng trắng. */
+export const tidyName = name => String(name || "").replace(/\s+/g, " ").trim();

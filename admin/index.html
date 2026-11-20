@@ -21,6 +21,9 @@
   table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px;border-bottom:1px solid #f0e6d8;vertical-align:top}
   .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
   .muted{color:#7a5c4d;font-size:13px}
+  .badge{background:#c8102e;color:#fff;border-radius:99px;padding:1px 9px;font-size:13px;vertical-align:2px}.badge:empty{display:none}
+  .tabs{margin-bottom:8px}.tabs button{padding:6px 12px}
+  .nm-big{font-size:16px;font-weight:800}
   #msg{position:fixed;right:16px;bottom:16px;background:#2b1a12;color:#fff;padding:10px 14px;border-radius:10px;display:none}
 </style>
 </head>
@@ -28,6 +31,12 @@
 <header><h1>🏮 Quản trị Hội chợ online</h1><input id="key" type="password" placeholder="Mã quản trị (ADMIN_KEY)" style="max-width:240px"><button id="login">Đăng nhập</button></header>
 <main>
   <section><h2>Tổng quan</h2><div class="grid" id="kpi"><div class="muted">Nhập mã quản trị để xem.</div></div></section>
+  <section>
+    <h2>🪪 Duyệt tên người chơi <span id="nmCount" class="badge"></span></h2>
+    <div class="row tabs" id="nmTabs"><button data-s="pending">Chờ duyệt</button><button class="ghost" data-s="approved">Đã duyệt</button><button class="ghost" data-s="rejected">Đã từ chối</button></div>
+    <table><thead><tr><th>Tên xin đặt</th><th>Tên đang dùng</th><th>Nhân vật</th><th>Thời gian</th><th>Xử lý</th></tr></thead><tbody id="names"><tr><td colspan="5" class="muted">Chưa tải.</td></tr></tbody></table>
+    <p class="muted">Người chơi đặt tên riêng ở màn hình mở đầu; máy chủ đã chặn sẵn số điện thoại, đường link, từ tục, tên cơ quan/cán bộ, tên trùng. Trong lúc chờ duyệt người chơi dùng biệt danh ngẫu nhiên. Duyệt xong tên đổi ngay cho mọi người đang online. “Thu hồi” đưa người chơi về biệt danh ngẫu nhiên.</p>
+  </section>
   <section>
     <h2>Đợt treo thưởng</h2>
     <div class="grid">
@@ -77,7 +86,7 @@
   </section>
   <section>
     <h2>Nội dung câu hỏi</h2>
-    <p class="muted">Sửa các file trong <code>server/content/</code> (cards.json, rebus.json) rồi bấm nút dưới để nạp lại mà không cần khởi động lại máy chủ.</p>
+    <p class="muted">Sửa các file trong <code>server/content/</code> (hacker.json, rebus.json, event.json) rồi bấm nút dưới để nạp lại mà không cần khởi động lại máy chủ.</p>
     <button class="ghost" id="reload">Nạp lại nội dung</button>
   </section>
 </main>
@@ -86,6 +95,7 @@
 const $ = id => document.getElementById(id);
 let KEY = sessionStorage.getItem("adminKey") || "";
 $("key").value = KEY;
+const showNote = t => note(t);
 const note = t => { const m = $("msg"); m.textContent = t; m.style.display = "block"; clearTimeout(m._t); m._t = setTimeout(() => m.style.display = "none", 2500); };
 const esc = t => String(t).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 async function call(path, opt = {}) {
@@ -97,7 +107,7 @@ const toLocal = iso => { const d = new Date(iso); const p = n => String(n).padSt
 async function load() {
   try {
     const s = await call("/api/admin/summary");
-    $("kpi").innerHTML = [["Người chơi", s.players], ["Lượt chơi", s.runs], ["Lượt chơi 24 giờ qua", s.runsToday], ["Báo cáo chờ xử lý", s.openReports], ["Đang dạo hội", s.khu.reduce((a, k) => a + k.online, 0)], ["Đợt thưởng", s.active ? "Đang diễn ra" : "Không diễn ra"]].map(k => '<div class="kpi">' + k[0] + "<b>" + k[1] + "</b></div>").join("");
+    $("kpi").innerHTML = [["Người chơi", s.players], ["Lượt chơi", s.runs], ["Lượt chơi 24 giờ qua", s.runsToday], ["Báo cáo chờ xử lý", s.openReports], ["Tên chờ duyệt", s.pendingNames], ["Đang dạo hội", s.khu.reduce((a, k) => a + k.online, 0)], ["Đợt thưởng", s.active ? "Đang diễn ra" : "Không diễn ra"]].map(k => '<div class="kpi">' + k[0] + "<b>" + k[1] + "</b></div>").join("");
     const e = s.event; $("evId").value = e.id; $("evName").value = e.name; $("evStart").value = toLocal(e.start); $("evEnd").value = toLocal(e.end);
     $("evPrizes").value = e.prizes.map(p => p.join(" | ")).join("\n"); $("evRules").value = e.rules || ""; $("evG1Day").value = e.g1DayCap ?? 1000; $("evG1Ev").value = e.g1EventCap ?? 3000;
     const r = await call("/api/admin/reports");
@@ -105,6 +115,34 @@ async function load() {
     document.querySelectorAll("#reports button").forEach(b => b.onclick = async () => { await call("/api/admin/reports/" + b.dataset.id, { method: "POST", body: JSON.stringify({ action: b.dataset.a }) }); note("Đã xử lý"); load(); });
   } catch (e) { note(e.message); }
 }
+/* ---------- Duyệt tên người chơi ---------- */
+let NM = "pending";
+const GENDER = { nam: "👦 Nam", nu: "👧 Nữ" };
+const REASONS = ["Tên chứa thông tin cá nhân (họ tên đầy đủ, số điện thoại…)", "Tên không phù hợp thuần phong mỹ tục", "Tên giả danh người khác hoặc cơ quan", "Tên quảng cáo"];
+async function loadNames() {
+  if (!KEY) return;
+  try {
+    const r = await call("/api/admin/names?state=" + NM);
+    $("nmCount").textContent = r.pending || "";
+    document.querySelectorAll("#nmTabs button").forEach(b => b.className = b.dataset.s === NM ? "" : "ghost");
+    const act = x => NM === "pending" ? '<button data-a="approve" data-id="' + esc(x.id) + '">✓ Duyệt</button> <button class="ghost" data-a="reject" data-id="' + esc(x.id) + '">✕ Từ chối</button>'
+      : NM === "approved" ? '<button class="ghost" data-a="revoke" data-id="' + esc(x.id) + '">Thu hồi</button>' : '<span class="muted">' + esc(x.note || "") + "</span>";
+    $("names").innerHTML = r.names.length ? r.names.map(x => '<tr><td class="nm-big">' + esc(x.name) + "</td><td>" + esc(x.nick) + '<div class="muted">' + esc(x.id) + "</div></td><td>" + (GENDER[x.gender] || "–") + "</td><td>" + new Date(x.at).toLocaleString("vi-VN") + '</td><td class="row">' + act(x) + "</td></tr>").join("")
+      : '<tr><td colspan="5" class="muted">' + (NM === "pending" ? "Không có tên nào chờ duyệt." : "Chưa có.") + "</td></tr>";
+    document.querySelectorAll("#names button").forEach(b => b.onclick = async () => {
+      let why = "";
+      if (b.dataset.a === "reject" || b.dataset.a === "revoke") {
+        why = prompt("Lý do (người chơi sẽ thấy). Gợi ý:\n" + REASONS.map((t, i) => (i + 1) + ". " + t).join("\n") + "\nGõ số 1–4 hoặc tự ghi:", "1");
+        if (why === null) return;
+        if (/^[1-4]$/.test(why.trim())) why = REASONS[Number(why) - 1];
+      }
+      try { await call("/api/admin/names", { method: "POST", body: JSON.stringify({ id: b.dataset.id, action: b.dataset.a, note: why }) }); showNote(b.dataset.a === "approve" ? "Đã duyệt" : b.dataset.a === "reject" ? "Đã từ chối" : "Đã thu hồi"); loadNames(); }
+      catch (e) { showNote(e.message); }
+    });
+  } catch (e) { showNote(e.message); }
+}
+document.querySelectorAll("#nmTabs button").forEach(b => b.onclick = () => { NM = b.dataset.s; loadNames(); });
+setInterval(() => { if (NM === "pending" && !document.hidden) loadNames(); }, 20000);
 /* ---------- Nhạc quán cà phê ---------- */
 async function loadMusic() {
   try {
@@ -160,7 +198,7 @@ $("mUp").onclick = async () => {
     note("Đã tải lên " + d.file); $("mFile").value = ""; loadMusic();
   } catch (e) { note(e.message); }
 };
-$("login").onclick = () => { KEY = $("key").value.trim(); sessionStorage.setItem("adminKey", KEY); load(); loadMusic(); loadBgm(); };
+$("login").onclick = () => { KEY = $("key").value.trim(); sessionStorage.setItem("adminKey", KEY); load(); loadMusic(); loadBgm(); loadNames(); };
 $("saveEv").onclick = async () => {
   try {
     const prizes = $("evPrizes").value.split("\n").map(l => l.split("|").map(s => s.trim())).filter(p => p[0]);
@@ -170,7 +208,7 @@ $("saveEv").onclick = async () => {
 };
 $("csv").onclick = async () => { try { const blob = await call("/api/admin/winners.csv?top=" + $("top").value); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "bang-vang.csv"; a.click(); } catch (e) { note(e.message); } };
 $("reload").onclick = async () => { try { await call("/api/admin/reload-content", { method: "POST" }); note("Đã nạp lại nội dung"); } catch (e) { note(e.message); } };
-if (KEY) { load(); loadMusic(); loadBgm(); }
+if (KEY) { load(); loadMusic(); loadBgm(); loadNames(); }
 </script>
 </body>
 </html>

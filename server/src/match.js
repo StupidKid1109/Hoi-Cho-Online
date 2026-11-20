@@ -41,7 +41,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   }
   /* ---------- Không gian riêng của gian hàng: ai đang chờ, đứng ở đâu ---------- */
   const live = new Set(); // các phòng chờ đang mở (cả phòng đã đủ người đang chờ bắt đầu)
-  const pub = p => ({ n: p.n, nick: p.nick, x: Math.round(p.x), y: Math.round(p.y), seat: p.seat ?? -1 });
+  const pub = p => ({ n: p.n, nick: p.nick, gd: p.c.gd || undefined, x: Math.round(p.x), y: Math.round(p.y), seat: p.seat ?? -1 });
   /** Ghế trong quán: mỗi ghế một người; s = -1 là đứng dậy. */
   function freeSeat(L, p) { if (p.seat >= 0 && L.seats.get(p.seat) === p.pid) L.seats.delete(p.seat); const had = p.seat >= 0; p.seat = -1; return had; }
   function sitInSpace(c, m) {

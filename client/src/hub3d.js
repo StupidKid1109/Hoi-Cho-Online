@@ -10,7 +10,7 @@ import {
   createRenderer, applyQuality, QualityWatch, setMaxAniso, canvasTex, emojiSprite, blobTex, glowTex,
   rrect, fitText, mergeParts, disposeTree, waitFonts, FONT
 } from "./gfx/kit.js";
-import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
+import { setMyGender, characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
 import { loadKit, hasKit, model } from "./gfx/models.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK as WORLD_BLOCK, BENCHES, TABLES, SEATS, PLAZA_R, FAIR_R, PAVILION, standPoint } from "../../shared/world.js";
@@ -921,7 +921,7 @@ function blobs() {
   m.count = 0; m.frustumCulled = false; m.renderOrder = 1; G.scene.add(m);
   return (G.blobs = m);
 }
-function addAvatar(id, name, seed, mine) {
+function addAvatar(id, name, seed, mine, gd) {
   blobs();
   const root = new THREE.Group(), mat = characterMaterial();
   // Dựng hình nhân vật dần dần (vài người mỗi khung hình) để vào khu đông người không bị khựng
@@ -933,7 +933,7 @@ function addAvatar(id, name, seed, mine) {
   }
   G.scene.add(root);
   const el = addLabel(id, '<div class="avt' + (mine ? " mine" : "") + '" id="' + id + '"><span class="bub"></span><span class="nm">' + esc(name) + "</span></div>", root, new THREE.Vector3(0, 1.45, 0), "av");
-  const a = { id, root, body, mat, el, seed, phase: Math.random() * 6, walk: false, hop: 0, face: mine ? Math.PI : 0, wave: 0 }; // của mình: quay lưng về máy quay lúc mới vào
+  const a = { id, root, body, mat, el, seed, gd, phase: Math.random() * 6, walk: false, hop: 0, face: mine ? Math.PI : 0, wave: 0 }; // của mình: quay lưng về máy quay lúc mới vào
   G.avatars.set(id, a);
   if (!body) (G.buildQ || (G.buildQ = [])).push(a);
   return a;
@@ -944,7 +944,7 @@ function buildPending(maxPerFrame = 4) {
   if (q.length > maxPerFrame) q.sort((a, b) => a.root.position.distanceToSquared(G.camera.position) - b.root.position.distanceToSquared(G.camera.position));
   for (const a of q.splice(0, maxPerFrame)) {
     if (!G.avatars.has(a.id) || a.body) continue;
-    a.body = new THREE.Mesh(characterGeometry(a.seed, false), a.mat); a.root.add(a.body);
+    a.body = new THREE.Mesh(characterGeometry(a.seed, false, a.gd), a.mat); a.root.add(a.body);
   }
 }
 /** Đặt bóng tròn cho mọi nhân vật đang hiện. */
@@ -975,12 +975,21 @@ export function addPeer(p) {
   const q = { ...p, tx: p.x, ty: p.y, walk: false, seat: -1 };
   peers.set(p.id, q);
   if (p.seat >= 0) peerSit(p.id, p.seat);
-  const a = addAvatar("p_" + p.id, p.nick, hash(p.id), false);
+  const a = addAvatar("p_" + p.id, p.nick, hash(p.id), false, p.gd);
   a.root.position.set(wx(p.x), 0, wz(p.y));
   if (hidden.has(p.id)) { a.root.visible = false; a.el.style.display = "none"; }
 }
 export function removePeer(id) { clearOcc(id); peers.delete(id); removeAvatar("p_" + id); }
 export function movePeer(id, x, y) { const p = peers.get(id); if (p) { p.tx = x; p.ty = y; } }
+/** Người khác đổi nhân vật nam/nữ: dựng lại hình. */
+export function lookPeer(id, gd) {
+  const p = peers.get(id), a = G && G.avatars.get("p_" + id); if (!p || !a) return;
+  p.gd = gd; a.gd = gd;
+  if (a.body) { a.root.remove(a.body); a.body.geometry.dispose(); a.body = null; (G.buildQ || (G.buildQ = [])).push(a); }
+}
+export function setGender(g) { setMyGender(g); }
+/** Tên của mình đổi (quản trị viên duyệt tên). */
+export function renameSelf(nick) { const el = $("avo"); if (el) el.querySelector(".nm").textContent = nick + " (bạn)"; }
 export function renamePeer(id, nick) { const p = peers.get(id); if (p) { p.nick = nick; const el = $("p_" + id); if (el) el.querySelector(".nm").textContent = nick; } }
 export function peerEmote(id, e) { if (!hidden.has(id) && EMOTES[e]) { bubble("p_" + id, EMOTES[e][0]); hop("p_" + id); } }
 export function peerSay(id, text) { if (!hidden.has(id)) bubble("p_" + id, '<span style="font-size:13px;font-weight:700">' + esc(text.length > 34 ? text.slice(0, 33) + "…" : text) + "</span>"); }

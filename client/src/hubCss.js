@@ -80,6 +80,8 @@ function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s
 export function addPeer(p) { const q = { ...p, tx: p.x, ty: p.y, walk: false }; peers.set(p.id, q); const el = peerEl(q); el.style.display = hidden.has(p.id) ? "none" : ""; }
 export function removePeer(id) { peers.delete(id); const el = $("p_" + id); if (el) el.remove(); }
 export function movePeer(id, x, y) { const p = peers.get(id); if (p) { p.tx = x; p.ty = y; } }
+export function lookPeer() {} // bản CSS 3D vẽ nhân vật bằng biểu tượng, không phân biệt nam nữ
+export function renameSelf(nick) { const el = $("avo"); if (el) el.querySelector(".nm").textContent = nick + " (bạn)"; }
 export function renamePeer(id, nick) { const p = peers.get(id); if (p) { p.nick = nick; const el = $("p_" + id); if (el) el.querySelector(".nm").textContent = nick; } }
 export function peerEmote(id, e) { if (!hidden.has(id) && EMOTES[e]) bubble("p_" + id, EMOTES[e][0]); }
 export function peerSay(id, text) { if (!hidden.has(id)) bubble("p_" + id, '<span style="font-size:13px;font-weight:700">' + esc(text.length > 34 ? text.slice(0, 33) + "…" : text) + "</span>"); }

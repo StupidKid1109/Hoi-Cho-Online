@@ -143,11 +143,22 @@ export function createApp(config) {
 
       if (path === "/api/me" && method === "GET") {
         const b = store.bests(pid), lb = store.leaderboard("all", pid, 0);
-        return send(res, 200, { nick: player.nick, banned: !!player.banned, bests: b, total: b.g1 + b.g2 + b.g3, rank: lb.me ? lb.me.rank : null, event: publicEvent() });
+        return send(res, 200, { nick: player.nick, gender: player.gender || null, nameReq: store.nameInfo(player), banned: !!player.banned, bests: b, total: b.g1 + b.g2 + b.g3, rank: lb.me ? lb.me.rank : null, event: publicEvent() });
       }
       if (path === "/api/me/nickname" && method === "POST") {
         const nick = store.rerollNick(pid); if (!nick) return send(res, 429, { error: "Hôm nay bạn đã đổi biệt danh nhiều lần" });
         rt.rename(pid, nick); return send(res, 200, { nick });
+      }
+      if (path === "/api/me/profile" && method === "POST") { // chọn nhân vật nam/nữ và/hoặc xin đặt tên (chờ quản trị viên duyệt)
+        const b = await readBody(req), out = {};
+        if (b.gender !== undefined) { if (!store.setGender(pid, b.gender)) return send(res, 400, { error: "Hãy chọn nhân vật nam hoặc nữ" }); rt.relook(pid, b.gender); out.gender = b.gender; }
+        if (b.name !== undefined && b.name !== null && String(b.name).trim() !== "") {
+          if (player.banned) return send(res, 403, { error: "Tài khoản đang bị khóa chat nên không đặt tên được" });
+          const r = store.requestName(pid, b.name); if (r.error) return send(res, 400, { error: r.error, ...out });
+        }
+        if (b.cancelName) store.cancelName(pid);
+        const p = store.ensurePlayer(pid);
+        return send(res, 200, { nick: p.nick, gender: p.gender || null, nameReq: store.nameInfo(p) });
       }
       if (path === "/api/leaderboard" && method === "GET") {
         const tab = url.searchParams.get("tab") || "all";
@@ -189,7 +200,7 @@ export function createApp(config) {
       if (path === "/api/admin/summary") {
         const n = sql => db.prepare(sql).get().n;
         return send(res, 200, { event: store.event(), active: store.eventActive(), players: n("SELECT COUNT(*) n FROM players"), runs: n("SELECT COUNT(*) n FROM runs"),
-          runsToday: db.prepare("SELECT COUNT(*) n FROM runs WHERE started > ?").get(Date.now() - 864e5).n, openReports: n("SELECT COUNT(*) n FROM reports WHERE status = 'open'"), khu: rt.khuList() });
+          runsToday: db.prepare("SELECT COUNT(*) n FROM runs WHERE started > ?").get(Date.now() - 864e5).n, pendingNames: n("SELECT COUNT(*) n FROM players WHERE name_state = 'pending'"), openReports: n("SELECT COUNT(*) n FROM reports WHERE status = 'open'"), khu: rt.khuList() });
       }
       if (path === "/api/admin/event" && method === "PUT") {
         const e = await readBody(req);
@@ -198,6 +209,18 @@ export function createApp(config) {
         store.setEvent({ id: String(e.id), name: String(e.name), start: e.start, end: e.end, prizes: e.prizes, rules: String(e.rules || ""),
           g1DayCap: num(e.g1DayCap, old.g1DayCap ?? 1000), g1EventCap: num(e.g1EventCap, old.g1EventCap ?? 3000) }); // giới hạn điểm Gian 1 mỗi ngày và cả đợt
         return send(res, 200, { ok: true, event: store.event() });
+      }
+      if (path === "/api/admin/names" && method === "GET") { // tên người chơi xin đặt
+        const state = ["pending", "approved", "rejected"].includes(url.searchParams.get("state")) ? url.searchParams.get("state") : "pending";
+        return send(res, 200, { names: store.nameList(state), pending: db.prepare("SELECT COUNT(*) n FROM players WHERE name_state = 'pending'").get().n });
+      }
+      if (path === "/api/admin/names" && method === "POST") { // { id, action: approve | reject | revoke, note }
+        const { id, action, note } = await readBody(req), r = store.decideName(String(id || ""), action, note);
+        if (r.error) return send(res, 400, { error: r.error });
+        const p = r.player;
+        if (action === "approve" || action === "revoke") rt.rename(p.id, p.nick);
+        rt.tell(p.id, { t: "name", nick: p.nick, nameReq: store.nameInfo(p) });
+        return send(res, 200, { ok: true, nick: p.nick, nameReq: store.nameInfo(p) });
       }
       if (path === "/api/admin/reports") {
         return send(res, 200, { reports: db.prepare(`SELECT c.id, c.khu, c.player, c.nick, c.text, c.ts, c.hidden, COUNT(r.id) AS reports, MAX(r.ts) AS last
