@@ -57,7 +57,7 @@ for (let k = 0; k < TABLE_N; k++) {
 }
 
 // Gian hàng lớn (nhà triển lãm mái ngói): nửa bề ngang, nửa bề sâu (px), tính cả bậc thềm phía trước
-export const PAVILION = { hw: 510, hd: 345, scale: 1.5 };
+export const PAVILION = { hw: 640, hd: 345, scale: 1.5 }; // hw: nửa bề ngang vùng cản (quầy chợ đêm rộng khoảng 12 m)
 
 /** Chỗ người chơi đứng trước một gian (hoặc Bảng vàng) để mở gian đó. */
 export function standPoint(id) {

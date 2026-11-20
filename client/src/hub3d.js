@@ -12,6 +12,7 @@ import {
 } from "./gfx/kit.js";
 import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
 import { loadKit, hasKit, model } from "./gfx/models.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK as WORLD_BLOCK, BENCHES, TABLES, SEATS, PLAZA_R, FAIR_R, PAVILION, standPoint } from "../../shared/world.js";
 
 export { EMOTES };
@@ -44,7 +45,7 @@ let mySeat = -1; const seatOcc = new Map(); // chỗ ngồi -> "me" hoặc mã n
 let G = null; // mọi thứ thuộc về cảnh Three.js hiện tại
 
 /** Nạp trước phông chữ để vẽ biển hiệu. main.js gọi qua hub.prepareHub() lúc đang tải. */
-export function preload() { return Promise.all([waitFonts(), loadKit()]); }
+export function preload() { return Promise.all([waitFonts(), loadKit(), loadPavModel()]); }
 
 /* =====================================================================
    DỰNG CẢNH
@@ -503,7 +504,9 @@ function buildPavilion(scene, b, kit) {
   const sp = SPOTS[b.id], g = new THREE.Group(), M = pavMats(), col = new THREE.Color(b.c);
   g.position.set(wx(sp.x), 0, wz(sp.y)); g.rotation.y = -sp.r * DEG; g.scale.setScalar(PAVILION.scale);
   const W = 6.4, D = 3.4, PH = 0.36, CH = 2.9; // bề ngang, bề sâu, cao nền, cao cột
-  const add = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); g.add(m); return m; };
+  // "old": nhà triển lãm tự dựng; nạp được mô hình quầy chợ đêm thì bỏ đi (giữ thảm, cờ, chậu cây, biển tên, nhãn kỷ lục)
+  const old = new THREE.Group(); g.add(old);
+  const add = (geo, mat, x, y, z, parent = old) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); parent.add(m); return m; };
   const accent = new THREE.MeshStandardMaterial({ color: col, roughness: 0.55 });
   const carpet = layer(new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.75), roughness: 0.95 }), 4);
 
@@ -514,7 +517,7 @@ function buildPavilion(scene, b, kit) {
   // hai bậc thềm, thảm đỏ chạy ra sân
   add(new THREE.BoxGeometry(3.0, PH * 0.66, 0.4), M.stone, 0, PH * 0.33, D / 2 + 0.4);
   add(new THREE.BoxGeometry(3.0, PH * 0.33, 0.4), M.stone, 0, PH * 0.165, D / 2 + 0.8);
-  const cp = add(new THREE.PlaneGeometry(1.5, 2.6), carpet, 0, 0.03, D / 2 + 2.1); cp.rotation.x = -Math.PI / 2;
+  const cp = add(new THREE.PlaneGeometry(1.5, 2.6), carpet, 0, 0.03, D / 2 + 2.1, g); cp.rotation.x = -Math.PI / 2;
   const cp2 = add(new THREE.PlaneGeometry(1.5, D * 0.9), carpet, 0, PH + 0.105, 0.1); cp2.rotation.x = -Math.PI / 2;
 
   // vách sau và hai vách bên thấp, dải màu của gian, tranh cổ động trên vách sau
@@ -541,10 +544,10 @@ function buildPavilion(scene, b, kit) {
   for (let i = 0; i < 12; i++) { const x = -W / 2 + 0.55 + i * (W - 1.1) / 11; const v = add(new THREE.ConeGeometry(0.09, 0.22, 4), M.gold, x, yb - 0.12, D / 2 - 0.12); v.rotation.x = Math.PI; }
 
   // mái ngói hai tầng, đầu đao cong, bờ nóc có "lưỡng long chầu nguyệt" giản lược (ngọc ở giữa)
-  const r1 = hipRoof(W / 2 + 0.75, D / 2 + 0.75, W / 2 - 0.5, D / 2 - 0.35, 0.95, M.tile); r1.position.set(0, yb + 0.3 + 0.475, 0); g.add(r1);
+  const r1 = hipRoof(W / 2 + 0.75, D / 2 + 0.75, W / 2 - 0.5, D / 2 - 0.35, 0.95, M.tile); r1.position.set(0, yb + 0.3 + 0.475, 0); old.add(r1);
   add(new THREE.BoxGeometry(W + 1.4, 0.1, D + 1.4), M.tileDark, 0, yb + 0.3, 0);
   add(new THREE.BoxGeometry(W - 1.0, 0.45, D - 0.7), accent, 0, yb + 1.25 + 0.2, 0); // cổ diêm giữa hai tầng mái
-  const r2 = hipRoof(W / 2 - 0.1, D / 2 + 0.05, W / 2 - 1.3, 0.12, 0.85, M.tile); r2.position.set(0, yb + 1.7 + 0.425, 0); g.add(r2);
+  const r2 = hipRoof(W / 2 - 0.1, D / 2 + 0.05, W / 2 - 1.3, 0.12, 0.85, M.tile); r2.position.set(0, yb + 1.7 + 0.425, 0); old.add(r2);
   add(new THREE.BoxGeometry(W - 1.9, 0.16, 0.32), M.tileDark, 0, yb + 2.6, 0); // bờ nóc
   add(new THREE.BoxGeometry(W - 1.9, 0.04, 0.34), M.gold, 0, yb + 2.69, 0);
   const pearl = add(new THREE.SphereGeometry(0.2, 16, 12), M.gold, 0, yb + 2.95, 0);
@@ -552,28 +555,28 @@ function buildPavilion(scene, b, kit) {
   for (const sx of [-1, 1]) { const end = add(new THREE.BoxGeometry(0.22, 0.4, 0.34), M.tileDark, sx * (W / 2 - 0.95), yb + 2.75, 0); end.rotation.z = sx * 0.3; }
   for (const [sx, sz, yy, dx, dz] of [[1, 1, yb + 0.3, W / 2 + 0.75, D / 2 + 0.75], [-1, 1, yb + 0.3, W / 2 + 0.75, D / 2 + 0.75], [1, -1, yb + 0.3, W / 2 + 0.75, D / 2 + 0.75], [-1, -1, yb + 0.3, W / 2 + 0.75, D / 2 + 0.75],
     [1, 1, yb + 1.7, W / 2 - 0.1, D / 2 + 0.05], [-1, 1, yb + 1.7, W / 2 - 0.1, D / 2 + 0.05], [1, -1, yb + 1.7, W / 2 - 0.1, D / 2 + 0.05], [-1, -1, yb + 1.7, W / 2 - 0.1, D / 2 + 0.05]]) {
-    const h = roofHorn(M.tileDark); h.position.set(sx * (dx - 0.1), yy + 0.02, sz * (dz - 0.1)); h.rotation.y = Math.atan2(-sz, sx); g.add(h);
+    const h = roofHorn(M.tileDark); h.position.set(sx * (dx - 0.1), yy + 0.02, sz * (dz - 0.1)); h.rotation.y = Math.atan2(-sz, sx); old.add(h);
   }
 
   // hoành phi (biển tên lớn) giữa hai tầng mái, nhìn ra trước
   const smat = new THREE.MeshStandardMaterial({ map: signTex(b), roughness: 0.45, emissive: 0x221100 });
-  const sign = add(new THREE.BoxGeometry(2.9, 1.08, 0.1), [M.gold, M.gold, M.gold, M.gold, smat, M.gold], 0, yb + 1.12, D / 2 + 0.62);
+  const sign = add(new THREE.BoxGeometry(2.9, 1.08, 0.1), [M.gold, M.gold, M.gold, M.gold, smat, M.gold], 0, yb + 1.12, D / 2 + 0.62, g);
   sign.rotation.x = -0.12;
 
   // bên trong: quầy hàng (mô hình Kenney nếu có), đồ trưng bày nổi
-  if (kit) { const stall = model(b.id === "g2" ? "stall-green" : "stall-red", 2.2, { own: true, tint: b.id === "g3" ? "blue" : null }); stall.rotation.y = Math.PI / 2; stall.position.set(0, y0, -0.1); g.add(stall); }
+  if (kit) { const stall = model(b.id === "g2" ? "stall-green" : "stall-red", 2.2, { own: true, tint: b.id === "g3" ? "blue" : null }); stall.rotation.y = Math.PI / 2; stall.position.set(0, y0, -0.1); old.add(stall); }
   else {
     const ctex = counterTex(b.goods), cmat = new THREE.MeshStandardMaterial({ map: ctex, roughness: 0.8 });
     add(new THREE.BoxGeometry(2.6, 0.9, 0.6), [M.wood, M.wood, M.wood, M.wood, cmat, M.wood], 0, y0 + 0.45, 0.2);
     add(new THREE.BoxGeometry(2.7, 0.07, 0.7), M.wood, 0, y0 + 0.93, 0.2);
   }
-  const goods = emojiSprite(b.icons, 1.0); goods.position.set(0, y0 + 1.55, 0.45); g.add(goods); G.anim.push({ o: goods, k: "float", y: y0 + 1.55, p: sp.x / 200 });
+  const goods = emojiSprite(b.icons, 1.0); goods.position.set(0, y0 + 1.55, 0.45); old.add(goods); G.anim.push({ o: goods, k: "float", y: y0 + 1.55, p: sp.x / 200 });
   // hai bục trưng bày hai bên
   const icons = typeof Intl !== "undefined" && Intl.Segmenter ? [...new Intl.Segmenter().segment(b.icons)].map(s => s.segment) : [b.icons, b.icons];
   [-1, 1].forEach((sx, i) => {
     add(new THREE.CylinderGeometry(0.34, 0.4, 0.75, 16), M.wall, sx * 2.1, y0 + 0.375, 0.55);
     add(new THREE.CylinderGeometry(0.4, 0.4, 0.06, 16), M.gold, sx * 2.1, y0 + 0.76, 0.55);
-    const e = emojiSprite(icons[i % icons.length], 0.62); e.position.set(sx * 2.1, y0 + 1.15, 0.55); g.add(e); G.anim.push({ o: e, k: "float", y: y0 + 1.15, p: sx * 2 + sp.x });
+    const e = emojiSprite(icons[i % icons.length], 0.62); e.position.set(sx * 2.1, y0 + 1.15, 0.55); old.add(e); G.anim.push({ o: e, k: "float", y: y0 + 1.15, p: sx * 2 + sp.x });
   });
 
   // dây đèn lồng dưới xà trước, quầng sáng
@@ -585,17 +588,17 @@ function buildPavilion(scene, b, kit) {
   }
   const gg = new THREE.BufferGeometry(); gg.setAttribute("position", new THREE.BufferAttribute(new Float32Array(glowPts), 3));
   const glow = new THREE.Points(gg, new THREE.PointsMaterial({ map: glowTex(), color: 0xff9a3c, size: 1.1, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-  g.add(glow);
+  old.add(glow);
 
   // cột cờ hai bên thềm, chậu cây cảnh
   for (const sx of [-1, 1]) {
-    add(new THREE.CylinderGeometry(0.045, 0.06, 4.6, 8), M.gold, sx * (W / 2 + 0.75), 2.3, D / 2 + 0.9);
-    add(new THREE.SphereGeometry(0.09, 10, 8), M.gold, sx * (W / 2 + 0.75), 4.65, D / 2 + 0.9);
-    const flag = add(new THREE.PlaneGeometry(0.75, 1.9), new THREE.MeshStandardMaterial({ color: col, side: THREE.DoubleSide, roughness: 0.7 }), sx * (W / 2 + 0.75) + sx * 0.4, 3.55, D / 2 + 0.9);
+    add(new THREE.CylinderGeometry(0.045, 0.06, 4.6, 8), M.gold, sx * (W / 2 + 0.75), 2.3, D / 2 + 0.9, g);
+    add(new THREE.SphereGeometry(0.09, 10, 8), M.gold, sx * (W / 2 + 0.75), 4.65, D / 2 + 0.9, g);
+    const flag = add(new THREE.PlaneGeometry(0.75, 1.9), new THREE.MeshStandardMaterial({ color: col, side: THREE.DoubleSide, roughness: 0.7 }), sx * (W / 2 + 0.75) + sx * 0.4, 3.55, D / 2 + 0.9, g);
     G.anim.push({ o: flag, k: "flag", p: sx + sp.x });
-    add(new THREE.CylinderGeometry(0.3, 0.22, 0.45, 14), M.pot, sx * 1.95, 0.225, D / 2 + 0.75);
-    const bush = add(new THREE.IcosahedronGeometry(0.42, 1), M.leaf, sx * 1.95, 0.75, D / 2 + 0.75); bush.scale.y = 1.15;
-    add(new THREE.IcosahedronGeometry(0.2, 0), new THREE.MeshLambertMaterial({ color: 0xffd23a }), sx * 1.95 + 0.15, 1.05, D / 2 + 0.95);
+    add(new THREE.CylinderGeometry(0.3, 0.22, 0.45, 14), M.pot, sx * 1.95, 0.225, D / 2 + 0.75, old);
+    const bush = add(new THREE.IcosahedronGeometry(0.42, 1), M.leaf, sx * 1.95, 0.75, D / 2 + 0.75, old); bush.scale.y = 1.15;
+    add(new THREE.IcosahedronGeometry(0.2, 0), new THREE.MeshLambertMaterial({ color: 0xffd23a }), sx * 1.95 + 0.15, 1.05, D / 2 + 0.95, old);
   }
 
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; o.userData.pick = b.id; G.pick.push(o); } });
@@ -604,7 +607,40 @@ function buildPavilion(scene, b, kit) {
   scene.add(g);
   G.occ.push({ id: b.id, x: sp.x, y: sp.y, g, op: 1, w: PAVILION.hw + 60, near: 7 });
   const pill = textPlane("bb_" + b.id, 1.3, { bg: "#ffffff", fg: "#2b1a12", sprite: true });
-  pill.position.set(0, yb + 3.75, 0); g.add(pill); G.anim.push({ o: pill, k: "bob", y: yb + 3.75, p: sp.x / 300 });
+  const pa = { o: pill, k: "bob", y: yb + 3.75, p: sp.x / 300 };
+  pill.position.set(0, yb + 3.75, 0); g.add(pill); G.anim.push(pa);
+  usePavModel(b, g, old, sign, pa);
+}
+
+/* ---------- Mô hình gian hàng: "Night market stall" (alen60303, Sketchfab, CC BY 4.0) ---------- */
+// Nén sẵn ở client/public/models/gian-hang/cho-dem.glb. Mặt quầy của mô hình quay về +x, dài theo z, cao khoảng 6,1 m.
+// ?pav=0 hoặc nạp lỗi: giữ nhà triển lãm tự dựng.
+let pavModel = null;
+const PAV_MODEL_SCALE = 1.3, PAV_BACK = 1.15; // phóng mô hình 1,3 lần (rộng khoảng 12 m); lùi 1,15 đơn vị mô hình để bàn ghế trước quầy không lấn chỗ đứng
+function loadPavModel() {
+  if (!pavModel) pavModel = new GLTFLoader().loadAsync(new URL("models/gian-hang/cho-dem.glb", document.baseURI).href).catch(e => { console.warn("Không nạp được mô hình gian hàng, dùng nhà triển lãm tự dựng", e); return null; });
+  return pavModel;
+}
+function usePavModel(b, g, old, sign, pillAnim) {
+  if (new URLSearchParams(location.search).get("pav") === "0") return;
+  loadPavModel().then(gl => {
+    if (!gl || !G || !g.parent) return;
+    const S = PAV_MODEL_SCALE / PAVILION.scale, m = gl.scene.clone(true); // nhóm g đã phóng 1,5 lần: chia lại cho đúng cỡ trong sân
+    m.traverse(o => {
+      if (!o.isMesh) return;
+      const s = o.material; // vật liệu riêng từng gian: gian này mờ đi khi che máy quay không làm mờ gian khác
+      o.material = new THREE.MeshLambertMaterial({ map: s.map, color: s.color.clone().multiplyScalar(1.45), alphaTest: s.alphaTest || (s.transparent ? 0.4 : 0), side: s.side }); // mô hình gốc tông tối: sáng lên cho hợp sân
+      o.castShadow = true; o.receiveShadow = true; o.userData.pick = b.id; G.pick.push(o);
+    });
+    m.rotation.y = -Math.PI / 2; m.scale.setScalar(S); m.position.set(0, 0, -PAV_BACK * S); // quầy quay ra sân, lùi về sau
+    old.traverse(o => { const i = G.pick.indexOf(o); if (i >= 0) G.pick.splice(i, 1); });
+    G.anim = G.anim.filter(a => { let p = a.o; while (p) { if (p === old) return false; p = p.parent; } return true; });
+    g.remove(old); g.add(m);
+    // biển tên tiếng Việt che băng rôn chữ nước ngoài phía trên quầy; nhãn kỷ lục trên nóc
+    sign.position.set(1.3 * S, 3.0 * S, (1.95 - PAV_BACK) * S); sign.rotation.x = 0;
+    pillAnim.y = 5.6 * S; pillAnim.o.position.y = pillAnim.y;
+    const occ = G.occ.find(o => o.id === b.id); if (occ && occ.op < 1) setOpacity(occ, occ.op);
+  });
 }
 
 function buildLockedKit(scene, x, y, r, name, id) {

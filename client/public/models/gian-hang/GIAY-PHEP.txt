@@ -1,0 +1,6 @@
+Mô hình: "Night market stall" của alen60303
+Nguồn: https://sketchfab.com/3d-models/ffaabf87bb024b48b240909632e0b524
+Tác giả: https://sketchfab.com/alen60303
+Giấy phép: CC BY 4.0 (http://creativecommons.org/licenses/by/4.0/) - được dùng cả mục đích thương mại, bắt buộc ghi tên tác giả.
+
+Thay đổi so với bản gốc: bỏ mảng đất dưới chân, nén ảnh kết cấu (JPG, PNG 512 px), đổi tên file; trong game phóng 1,3 lần, làm sáng màu, che băng rôn phía trên quầy bằng biển tên gian hàng tiếng Việt.
