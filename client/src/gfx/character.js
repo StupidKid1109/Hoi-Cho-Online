@@ -36,6 +36,14 @@ function part(list, geo, color, limb, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 
   g.setAttribute("limb", new THREE.BufferAttribute(lb, 1));
   list.push(g);
 }
+/** Ngôi sao 5 cánh nổi (dày d), mặt quay về +z, một cánh chĩa lên. */
+function starGeo(r, d = 0.012) {
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 10; i++) { const a = Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r; const x = Math.cos(a) * rr, y = Math.sin(a) * rr; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); }
+  sh.closePath();
+  const g = new THREE.ExtrudeGeometry(sh, { depth: d, bevelEnabled: false }); g.translate(0, 0, -d / 2);
+  return g;
+}
 const Sph = (r, w = 14, h = 12, ...a) => new THREE.SphereGeometry(r, w, h, ...a);
 const Cap = (r, l, s = 8) => new THREE.CapsuleGeometry(r, l, 4, s);
 const Cyl = (rt, rb, h, s = 14, open = false) => new THREE.CylinderGeometry(rt, rb, h, s, 1, open);
@@ -84,7 +92,10 @@ export function characterGeometry(seed, mine) {
     part(L, Sph(0.12, 10, 8), top, BODY, 0, 0.68, -0.12, 0, 0, 0, 1.2, 0.8, 0.7);
     part(L, Cyl(0.01, 0.01, 0.12, 4), "#ffffff", BODY, -0.04, 0.6, 0.145); part(L, Cyl(0.01, 0.01, 0.12, 4), "#ffffff", BODY, 0.04, 0.6, 0.145);
   }
-  if (outfit === "tee" && mine) part(L, new THREE.CircleGeometry(0.055, 5), "#ffd23f", BODY, 0, 0.56, 0.141, 0, 0, Math.PI / 2); // sao vàng trên áo đỏ
+  if (outfit === "tee" && mine) { // sao vàng 5 cánh trên ngực áo đỏ (viền vàng đậm phía sau cho nổi)
+    part(L, starGeo(0.092, 0.01), "#e0a800", BODY, 0, 0.56, 0.142, -0.12);
+    part(L, starGeo(0.08, 0.016), "#ffe14d", BODY, 0, 0.56, 0.148, -0.12);
+  }
   // tay (tay áo cùng màu áo, bàn tay màu da)
   for (const [s, limb] of [[-1, ARM_L], [1, ARM_R]]) {
     part(L, Cap(0.052, 0.17), top, limb, s * 0.215, 0.49, 0, 0, 0, s * 0.18);
@@ -125,7 +136,10 @@ export function characterGeometry(seed, mine) {
     part(L, Sph(0.29, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), cc, BODY, 0, 0.96, 0);
     part(L, Cyl(0.17, 0.17, 0.02, 14), cc, BODY, 0, 1.03, 0.25, 0.15, 0, 0, 1, 1, 0.8);
     part(L, Sph(0.03, 6, 4), look ? look.cap : "#ffffff", BODY, 0, 1.25, 0);
-    if (look && look.star) part(L, new THREE.CircleGeometry(0.065, 5), "#ffd23f", BODY, 0, 1.085, 0.27, -0.45, 0, Math.PI / 2); // sao vàng trước mũ
+    if (look && look.star) { // sao vàng 5 cánh trước mũ
+      part(L, starGeo(0.088, 0.01), "#e0a800", BODY, 0, 1.09, 0.262, -0.42);
+      part(L, starGeo(0.076, 0.016), "#ffe14d", BODY, 0, 1.092, 0.268, -0.42);
+    }
   }
 
   const g = mergeGeometries(L, false);
