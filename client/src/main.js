@@ -213,8 +213,8 @@ document.addEventListener("keydown", e => {
   if (S.cur === "g1") { if (e.key === "ArrowLeft") swipe.decide(true); if (e.key === "ArrowRight") swipe.decide(false); }
   if (S.cur === "g3") {
     if (e.key === "ArrowLeft" || e.key === "a") runner.move(-1); if (e.key === "ArrowRight" || e.key === "d") runner.move(1);
-    if (e.key === "w" || e.key === "W") { e.preventDefault(); runner.jump(); } // máy tính: W nhảy
-    if (e.key === "s" || e.key === "S") { e.preventDefault(); runner.duck(); } // máy tính: S cúi
+    if (e.key === "w" || e.key === "W" || e.key === "ArrowUp" || (e.code === "Space" && runner.running())) { e.preventDefault(); runner.jump(); } // máy tính: Space, W hoặc ↑ nhảy
+    if (e.key === "s" || e.key === "S" || e.key === "ArrowDown") { e.preventDefault(); runner.duck(); } // máy tính: S hoặc ↓ cúi
   }
 });
 window.__hoicho = { S, inZalo }; // hỗ trợ kiểm thử

@@ -4,7 +4,7 @@
 
 export const FPS = 60;
 export const DT = 1 / FPS;
-export const MAX_FRAMES = FPS * 60 * 10; // tối đa 10 phút một lượt
+export const MAX_FRAMES = FPS * 60 * 120; // chạy vô hạn tới khi hết mạng; chặn 2 giờ để máy chủ chạy lại không quá nặng
 export const ROAD = { L: 2400, PY: 2230, SPAWN: 260, GAP: 560, LANES: [216, 320, 424] };
 
 // [emoji, tên, lời nhắc, cách vượt]: "low" = rào thấp, nhảy qua được; "high" = biển treo, cúi qua được;

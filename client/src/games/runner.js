@@ -8,7 +8,7 @@ import { hasWebGL } from "../gfx/webgl.js";
 import { createSim, step, act, score, ROAD, OBSTACLES, FPS, DT, ACT } from "../../../shared/runnerSim.js";
 import * as cssView from "./runnerCss.js";
 
-export const pre = ["🛵", "Đường về an toàn", [["👆", "Vuốt hoặc chạm trái, phải để đổi làn"], ["⬆️", "Vuốt lên (máy tính: W) để nhảy qua rào thấp: két bia, rào thi công"], ["⬇️", "Vuốt xuống (máy tính: S) để cúi qua biển treo: cấm ngược chiều, cờ đua"], ["🚦", "Cột đèn đỏ, điện thoại: phải đổi làn"], ["⛑️", "Nhặt mũ bảo hiểm để được bảo vệ 1 lần · có 3 mạng"]]];
+export const pre = ["🛵", "Đường về an toàn", [["👆", "Vuốt hoặc chạm trái, phải để đổi làn"], ["⬆️", "Vuốt lên (máy tính: phím Space) để nhảy qua rào thấp: két bia, rào thi công"], ["⬇️", "Vuốt xuống (máy tính: S hoặc ↓) để cúi qua biển treo: cấm ngược chiều, cờ đua"], ["🚦", "Cột đèn đỏ, điện thoại: phải đổi làn"], ["⛑️", "Nhặt mũ bảo hiểm để được bảo vệ 1 lần · có 3 mạng"], ["♾️", "Đường chạy không có điểm kết thúc, càng xa càng nhanh: chạy tới khi hết mạng"]]];
 let g = null, view3d = null, tried3d = false;
 
 /** Chọn phần vẽ: Three.js nếu được, không thì CSS 3D. */
@@ -39,6 +39,7 @@ export function stop() { if (g) { g.running = false; cancelAnimationFrame(g.raf)
 /** Thao tác: -1 / 1 đổi làn, 2 nhảy, -2 cúi (ACT). Được ghi theo số khung hình để máy chủ chạy lại đúng như vậy. */
 export function move(d) { if (!g || !g.running || g.sim.over) return; g.pending.push(d); }
 export const jump = () => move(ACT.JUMP);
+export const running = () => !!(g && g.running && !g.sim.over);
 export const duck = () => move(ACT.DUCK);
 
 function hud() { const s = g.sim; $("g3sc").textContent = score(s).toLocaleString("vi-VN"); $("g3m").textContent = Math.floor(s.dist) + " m" + (s.shield ? " · ⛑️" : ""); $("g3hp").textContent = "❤️".repeat(Math.max(0, s.lives)) + "🤍".repeat(3 - Math.max(0, s.lives)); }
