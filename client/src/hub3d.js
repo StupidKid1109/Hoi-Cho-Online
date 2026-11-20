@@ -845,12 +845,12 @@ function buildSeatPrompt(scene) {
 const NEAR_BOOTH = 300; // px quanh chỗ đứng trước gian: nút to lên, phím E để vào
 function buildEnterButtons(scene) {
   G.enter = [...BOOTHS, CAFE].map(b => {
-    const sp = SPOTS[b.id], r = sp.r * DEG, d = b.id === "cafe" ? 260 : PAVILION.hd + 110;
-    const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 0.05, wz(sp.y + Math.cos(r) * d)); scene.add(anchor); // trên thảm, nút treo xuống dưới điểm này
+    const sp = SPOTS[b.id], r = sp.r * DEG, d = b.id === "cafe" ? 200 : PAVILION.hd + 10;
+    const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 1.5, wz(sp.y + Math.cos(r) * d)); scene.add(anchor); // trước quầy, ngang tầm mắt (đứng trước gian nhìn thấy rõ, không bị che dưới chân)
     const solo = b.id === "g3", cafe = b.id === "cafe";
     const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (cafe ? "☕ Vào quán" : solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (cafe ? " · nghe nhạc, trò chuyện" : solo ? " · chơi một mình" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
     const btn = el.querySelector("button");
-    btn.addEventListener("click", e => { e.stopPropagation(); goTo(b.id); });
+    btn.addEventListener("click", e => { e.stopPropagation(); enterNear(b.id); }); // chỉ vào được khi đang đứng trước gian
     btn.addEventListener("pointerdown", e => e.stopPropagation());
     return { id: b.id, el, btn, small: btn.querySelector("small"), stand: standPoint(b.id), near: false };
   });
@@ -871,7 +871,7 @@ function updateEnterButtons() {
 /** Bấm nút gợi ý (hoặc phím E): vào gian đang đứng trước; ngồi vào ghế đang được gợi ý, hoặc đứng dậy nếu đang ngồi. */
 function promptAction() {
   if (!G || !G.prompt) return;
-  if (G.nearBooth && mySeat < 0) return goTo(G.nearBooth);
+  if (G.nearBooth && mySeat < 0) return enterNear(G.nearBooth);
   if (mySeat >= 0) return standUp();
   if (G.prompt.seat >= 0) sitAt(G.prompt.seat);
 }
@@ -1047,14 +1047,22 @@ export function sitRejected(s) {
 /* =====================================================================
    ĐIỀU KHIỂN
    ===================================================================== */
+/** Đi tới trước gian (chạm vào gian hoặc nút ở thanh dưới). Gian hàng, quán: chỉ đi tới, đứng trước rồi bấm nút "Vào" (hoặc phím E) mới vào; Bảng vàng thì mở luôn. */
 export function goTo(id) {
   standUp();
   const p = standPoint(id);
   walkTo(p.x, p.y, () => {
     camT.yaw = -SPOTS[id].r;
     if (id === "board") ctx.onBoard();
-    else { lookPitch = 10; zoomCb = () => ctx.onBooth(id); zoomAt = performance.now(); } // ngẩng lên nhìn gian rồi bước vào
   });
+}
+/** Vào gian / quán: chỉ khi đang đứng trước (trong NEAR_BOOTH quanh chỗ đứng), quay mặt nhìn gian rồi bước vào. */
+function enterNear(id) {
+  if (!G || zoomCb) return;
+  const p = standPoint(id);
+  if (Math.hypot(p.x - me.x, p.y - me.y) >= NEAR_BOOTH) return;
+  standUp(); target = null;
+  camT.yaw = -SPOTS[id].r; lookPitch = 10; zoomCb = () => ctx.onBooth(id); zoomAt = performance.now();
 }
 export function zoomOut() { lookPitch = -6; }
 /** Đổi góc nhìn thứ nhất / thứ ba (nhớ cho lần sau). */

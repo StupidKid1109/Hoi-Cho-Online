@@ -455,6 +455,9 @@ button{font:inherit;color:inherit;cursor:pointer;border:0;background:none;paddin
 .entb b{font-size:14px;font-weight:900}
 .entb small{font-size:10.5px;font-weight:700;opacity:.92}
 .entb kbd{display:none;margin-left:6px;font:inherit;font-size:11px;background:#fff;color:#5a3a00;border-radius:5px;padding:0 5px}
+.entb:not(.near){pointer-events:none;opacity:.55;filter:saturate(.6);transform:translateX(-50%) scale(.85)} /* đứng xa: không bấm được, phải đến trước gian */
+.entb:not(.near) b::after{content:" · lại gần để vào";font-size:11px;font-weight:700}
+.entb:not(.near) kbd{display:none !important}
 .entb.near{transform:translateX(-50%) scale(1.1);animation:entPulse 1.4s ease-in-out infinite}
 @media (hover:hover){.entb.near kbd{display:inline-block}}
 .entb:active{transform:translateX(-50%) translateY(3px)}
