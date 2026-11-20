@@ -72,7 +72,7 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
     '<div class="sp-rules"></div>';
   scr.appendChild(el);
   const $q = s => el.querySelector(s);
-  let room = null, myN = -1, closed = false, queue = [], lastLobby = null, cd = 0;
+  let room = null, myN = -1, closed = false, queue = [], lastLobby = null, cd = 0, ext = null; // ext: trạng thái do trò chơi tự vẽ lên màn hình phòng (Gian 1)
   const st = $q(".sp-st"), log = $q(".sp-log"), form = $q(".sp-chat"), input = form.querySelector("input");
 
   function showRules(first) {
@@ -222,7 +222,9 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
   }
 
   function drawLobby() {
-    const m = lastLobby; if (!m && !cafe) return;
+    const m = lastLobby;
+    if (ext) { clearInterval(cd); if (room) room.setScreen(ext.big, ext.l1, ext.l2); st.innerHTML = ext.st; return; }
+    if ((!m && !cafe) || (m && m.social)) return;
     clearInterval(cd);
     if (cafe && room && ytOnWall && mstate && mstate.yt && !ytHidden && !ytBox.hidden) { room.setScreenVideo(); st.innerHTML = "☕ <b>" + (m ? m.n : 1) + "</b> người trong quán"; }
     else if (cafe) {
@@ -267,6 +269,10 @@ export function createSpace({ game, title, tag, color, nick, solo, cafe, send, r
       if (room) handle(m); else if (use3d) queue.push(m);
       return true;
     },
+    /** Trò chơi tự vẽ trạng thái lên màn hình lớn trong phòng và góc trên (Gian 1: hàng chờ, phòng bạn bè). */
+    status(big, l1, l2, stHtml) { ext = { big, l1, l2, st: stHtml }; drawLobby(); },
+    /** Khung nổi trên phòng chờ (Gian 1: chọn chế độ, hàng chờ, phòng bạn bè). */
+    panel() { let p = $q(".sp-panel"); if (!p) { p = document.createElement("div"); p.className = "sp-panel"; el.insertBefore(p, $q(".sp-fade")); } return p; },
     /** Ẩn khi ván bắt đầu, hiện lại khi chơi lại. */
     hide() { clearInterval(cd); el.classList.remove("on"); form.classList.remove("on"); if (room) room.setActive(false); },
     show() { el.classList.add("on"); if (room) { room.setActive(true); drawLobby(); } if (!solo && !cafe) st.textContent = "Đang vào phòng chờ…"; },

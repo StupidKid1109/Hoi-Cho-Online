@@ -9,7 +9,7 @@ const EMOTES = 4, HIDE_AFTER_REPORTS = 3;
 const TICK_MS = 100;
 const SLOW_BUFFER = 256 * 1024; // người đang dồn ứ dữ liệu: bỏ qua gói vị trí lần này (gói sau vẫn có vị trí mới nhất)
 
-export function makeRealtime({ db, store, auth, config, matches }) {
+export function makeRealtime({ db, store, auth, config, matches, hacker }) {
   const rooms = new Map(); // khu -> Map(playerId -> client)
   for (let k = 1; k <= config.khuCount; k++) rooms.set(k, new Map());
   const insChat = db.prepare("INSERT INTO chat (khu, player, nick, text, ts) VALUES (?, ?, ?, ?, ?)");
@@ -63,7 +63,8 @@ export function makeRealtime({ db, store, auth, config, matches }) {
     conn.on("message", raw => {
       let m; try { m = JSON.parse(raw); } catch (e) { return; }
       const now = Date.now();
-      if (matches && typeof m.t === "string" && m.t[0] === "m") return matches.onMessage(c, m); // đấu phòng Gian 1, Gian 2
+      if (hacker && typeof m.t === "string" && m.t.startsWith("hk:")) return hacker.onMessage(c, m); // Gian 1: Ai là Hacker?
+      if (matches && typeof m.t === "string" && m.t[0] === "m") return matches.onMessage(c, m); // phòng chờ Gian 1, đấu phòng Gian 2, quán cà phê
       if (m.t === "pos") {
         if (now - c.lastPos < 60) return; // tối đa khoảng 16 lần/giây
         const x = Number(m.x), y = Number(m.y);
@@ -103,6 +104,7 @@ export function makeRealtime({ db, store, auth, config, matches }) {
     conn.on("close", () => {
       c.open = false; dirty.get(khu).delete(c);
       if (matches) matches.onClose(c);
+      if (hacker) hacker.onClose(c);
       // nhả ghế (trừ khi người này vừa mở lại ở máy khác và đang ngồi đúng ghế đó)
       const now = room.get(pid);
       if (c.seat >= 0 && (!now || now === c || now.seat !== c.seat)) standUp(c, false);

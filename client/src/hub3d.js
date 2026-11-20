@@ -848,7 +848,7 @@ function buildEnterButtons(scene) {
     const sp = SPOTS[b.id], r = sp.r * DEG, d = b.id === "cafe" ? 200 : PAVILION.hd + 10;
     const anchor = new THREE.Object3D(); anchor.position.set(wx(sp.x - Math.sin(r) * d), 1.5, wz(sp.y + Math.cos(r) * d)); scene.add(anchor); // trước quầy, ngang tầm mắt (đứng trước gian nhìn thấy rõ, không bị che dưới chân)
     const solo = b.id === "g3", cafe = b.id === "cafe";
-    const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (cafe ? "☕ Vào quán" : solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (cafe ? " · nghe nhạc, trò chuyện" : solo ? " · chơi một mình" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
+    const el = addLabel("enter_" + b.id, '<button class="entb" type="button" style="--c:' + b.c + '"><b>' + (cafe ? "☕ Vào quán" : solo ? "▶ Vào chơi" : "🚪 Vào phòng chờ") + '<kbd>E</kbd></b><small>' + esc(b.tag) + (cafe ? " · nghe nhạc, trò chuyện" : solo ? " · chơi một mình" : b.id === "g1" ? " · 4–8 người, tìm Hacker" : " · đấu phòng 20–50 người") + "</small></button>", anchor, new THREE.Vector3(0, 0, 0), "eb");
     const btn = el.querySelector("button");
     btn.addEventListener("click", e => { e.stopPropagation(); enterNear(b.id); }); // chỉ vào được khi đang đứng trước gian
     btn.addEventListener("pointerdown", e => e.stopPropagation());

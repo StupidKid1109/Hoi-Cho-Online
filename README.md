@@ -4,7 +4,7 @@ Hội chợ 3D có 3 gian trò chơi tuyên truyền, Bảng vàng chung để t
 
 | Gian | Trò chơi | Chủ đề |
 | --- | --- | --- |
-| Gian 1 | Thật hay giả? (vuốt trái/phải) · **đấu phòng 20–50 người** | Phòng chống lừa đảo |
+| Gian 1 | **Ai là Hacker?** · 4–8 người, kiểu “Ai là gián điệp”: mô tả từ khóa, bỏ phiếu tìm Hacker | An toàn thông tin, phòng chống lừa đảo |
 | Gian 2 | Đuổi hình bắt chữ · **đấu phòng 20–50 người** | Địa danh, văn hóa |
 | Gian 3 | Đường về an toàn (chạy vô tận 3D: đổi làn, nhảy, cúi) | An toàn giao thông |
 
@@ -26,7 +26,7 @@ hoi-cho-online/
 │     ├─ hub3d.js     Sảnh hội chợ bằng Three.js
 │     ├─ hubCss.js    Sảnh hội chợ bằng CSS 3D (dự phòng)
 │     ├─ gfx/         Phát hiện WebGL, mức chất lượng, công cụ Three.js dùng chung
-│     └─ games/       swipe.js (Gian 1), rebus.js (Gian 2), runner.js (Gian 3:
+│     └─ games/       hacker.js (Gian 1), rebus.js (Gian 2), runner.js (Gian 3:
 │                     mô phỏng) + runner3d.js / runnerCss.js (Gian 3: phần vẽ)
 ├─ shared/            Code dùng chung cho cả máy chủ và giao diện
 │  ├─ runnerSim.js    Mô phỏng Gian 3 (máy chủ chạy lại để chấm điểm)
@@ -93,14 +93,22 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 - Giữa là sân trống để trò chuyện, có **80 chỗ ngồi**: 16 ghế băng (mỗi ghế 3 chỗ) quay vào giữa và 8 bàn tròn (mỗi bàn 4 ghế đẩu). Sân rộng 7200×7200 (gấp 3 lần mỗi chiều so với bản đầu), có đèn lồng dọc các lối đi. Đi lại gần một ghế trống thì chỗ ngồi sáng viền vàng và hiện nút **🪑 Ngồi** ngay trên ghế (trên máy tính nhấn phím **E**); bấm là nhân vật ngồi vào đúng chỗ đó. Khi đang ngồi, trên đầu hiện nút **🚶 Đứng dậy** (hoặc nhấn E). Cũng có thể chạm thẳng vào ghế, hoặc bấm nút **🪑 Ngồi** ở dưới để đi tới ghế trống gần nhất; đi tiếp thì tự đứng dậy. Người khác trong khu thấy mình ngồi; mỗi ghế chỉ một người.
 - Bố cục nằm trong `shared/world.js`, dùng chung cho máy chủ và giao diện.
 
-## Gian 1, Gian 2: đấu phòng 20–50 người
+## Gian 1: Ai là Hacker?
+
+- Vào Gian 1 là vào phòng chờ 3D “Hacker Room”, chọn **🎲 Ghép ngẫu nhiên** (ghép với người đang chờ: đủ 8 người bắt đầu ngay, từ 4 người chờ 30 giây rồi bắt đầu; **tính điểm Bảng vàng**) hoặc **👥 Phòng bạn bè** (tạo phòng có mã 6 số, bấm **Mời bạn bè** để gửi qua Zalo, chủ phòng bấm Bắt đầu khi đủ 4–8 người; **không tính điểm**). Nhập mã phòng hoặc mở link mời là vào thẳng phòng.
+- Mỗi ván: Công dân cùng nhận một từ (ví dụ “Mã OTP”), Hacker nhận từ gần giống (“Mật khẩu”); đủ 8 người có 2 Hacker. Không ai biết vai của mình, chạm giữ thẻ để xem từ. Lần lượt mỗi người gõ một câu mô tả (30 giây, không được nói thẳng từ khóa, có bộ lọc như chat), rồi bỏ phiếu (20 giây) loại người nghi là Hacker; hòa thì bỏ phiếu lại một lần. Hacker bị loại được đoán từ của Công dân, đoán trúng là lật kèo. Hacker thắng khi chỉ còn 2 người. Tối đa 10 vòng.
+- Điểm: Công dân thắng +100, Hacker thắng +200 (đoán trúng từ +100 nữa), mỗi vòng Công dân chọn trúng Hacker +50, rời ván giữa chừng 0 điểm. Gian 1 **cộng dồn** điểm trong đợt: tối đa 1.000 điểm mỗi ngày, Bảng vàng chung tính tối đa 3.000 điểm Gian 1 (cán bộ đổi ở trang quản trị, mục Đợt treo thưởng). Tab “Gian 1” trên Bảng vàng hiện tổng thật.
+- Sau mỗi ván có thẻ **Góc kiến thức** giải thích hai từ khác nhau thế nào và lời khuyên an toàn. Bộ 20 cặp từ ở `server/content/hacker.json` (nội dung mẫu, cần công an phường duyệt), sửa xong bấm “Nạp lại nội dung” ở trang quản trị.
+- Câu mô tả có nút ⚑ để báo cáo, hiện trong mục Báo cáo của trang quản trị. Mỗi ván được lưu (bảng `hacker_games`) để xem lại khi có khiếu nại.
+- Không có người chơi ảo ở bản chạy thật. Khi chạy thử (`chay-thu.cmd`), chủ phòng bạn bè có nút “+ Thêm người ảo” để thử một mình.
+
+## Gian 2: đấu phòng 20–50 người
 
 - Trước thềm mỗi gian trên sảnh có nút **🚪 Vào phòng chờ** (Gian 3: **▶ Vào chơi**), hiện luôn số người đang chờ; đứng gần thì nút to lên, máy tính bấm phím E.
 - Mỗi gian là **một không gian 3D riêng**: bấm nút vào (hoặc bấm vào gian) trên sảnh thì máy quay phóng tới rồi bước vào phòng của gian đó (Gian 1 tông đỏ, Gian 2 tông xanh lá, Gian 3 mặt đường). Trong phòng thấy những người đang chờ cùng mình, đi lại (chạm sàn hoặc W A S D), bấm Chào hoặc Vỗ tay. Màn hình lớn trên tường báo số người và đếm ngược. Nút 📜 Luật chơi (lần đầu vào tự hiện), 🚪 Ra hội chợ.
 - Đủ **20 người** thì đếm ngược 15 giây để người khác kịp vào; đủ **50 người** thì đóng phòng và bắt đầu sau 3 giây, người đến sau vào phòng chờ mới. Ván bắt đầu thì chuyển sang màn hình chơi; "Chơi lại" đưa về phòng chờ của gian.
 - Gian 3 chơi một mình: phòng riêng có nút **🛵 Bắt đầu chạy**.
 - Máy không có WebGL: dùng thẻ luật chơi và phòng chờ 2D như cũ.
-- **Gian 1:** cả phòng cùng xem 10 tin nhắn, mỗi tin 10 giây chọn Lừa đảo hay An toàn. Đúng được 500 điểm cộng tối đa 500 điểm theo tốc độ, đúng liên tiếp thưởng thêm. Sau mỗi tin: đáp án, giải thích, tỉ lệ cả phòng chọn, 3 người dẫn đầu.
 - **Gian 2:** cả phòng cùng đoán 5 câu, mỗi câu 30 giây. Đúng được 300 điểm cộng tối đa 700 điểm theo tốc độ; ai đúng nhất, nhì, ba được thêm 200, 100, 50; mỗi gợi ý trừ 100.
 - Cuối ván: xếp hạng trong phòng; điểm vẫn tính vào Bảng vàng (điểm cao nhất của mỗi gian). Rời giữa ván vẫn giữ số điểm đã có.
 - Máy chủ ghép phòng, gửi đề, giữ đáp án, tính giờ và chấm điểm (`server/src/match.js`); hai gian này không chơi một mình được. Số người đổi bằng `MATCH_MIN`, `MATCH_MAX`, thời gian đếm ngược `MATCH_COUNTDOWN` (mili giây) trong `server/.env`.
@@ -152,7 +160,7 @@ Không vào được: kiểm tra mạng Wi-Fi trên máy tính đang để chế
 - Mỗi khu chứa tối đa **100 người** (`KHU_CAPACITY`), có 8 khu (`KHU_COUNT`), tổng cộng 800 người.
 - Vị trí người chơi được máy chủ **gom lại và gửi theo nhịp 0,1 giây** (một gói cho cả khu), thay vì chuyển từng bước đi. Người mạng chậm được bỏ qua gói vị trí khi đang dồn ứ, dồn quá 4 MB thì ngắt để kết nối lại.
 - Trên điện thoại: khu đông chỉ hiện tên 12 người gần nhất (người xa đang chat vẫn hiện bong bóng), bóng dưới chân mọi nhân vật gộp thành 1 lần vẽ, nhân vật được dựng dần vài người mỗi khung hình.
-- **Thử tải:** trong thư mục `server` chạy `npm run loadtest` (100 người ảo cùng một khu trong 30 giây: đi lại, chat, ngồi ghế, rồi cùng chơi Gian 1). Đổi số người, số giây: `node tools/loadtest.mjs 200 60`.
+- **Thử tải:** trong thư mục `server` chạy `npm run loadtest` (100 người ảo cùng một khu trong 30 giây: đi lại, chat, ngồi ghế, rồi cùng chơi đấu phòng Gian 2). Đổi số người, số giây: `node tools/loadtest.mjs 200 60`.
 
   Kết quả trên máy thử (1 nhân CPU), 100 người trong một khu:
 
@@ -170,7 +178,8 @@ Không vào được: kiểm tra mạng Wi-Fi trên máy tính đang để chế
 
 ## Cơ chế chống gian lận (quan trọng khi treo thưởng)
 
-- **Gian 1, Gian 2:** đáp án chỉ nằm trên máy chủ. Điện thoại gửi lựa chọn, máy chủ chấm và tính giờ theo đồng hồ của máy chủ.
+- **Gian 1:** vai và từ khóa chỉ nằm trên máy chủ, mỗi điện thoại chỉ nhận từ của chính mình; máy chủ tính giờ, đếm phiếu, tính điểm.
+- **Gian 2:** đáp án chỉ nằm trên máy chủ. Điện thoại gửi lựa chọn, máy chủ chấm và tính giờ theo đồng hồ của máy chủ.
 - **Gian 3:** điện thoại chỉ gửi mã lượt chơi (seed) và chuỗi thao tác đổi làn. Máy chủ chạy lại mô phỏng `shared/runnerSim.js` để tự tính điểm, và từ chối nếu thời gian chơi khai báo dài hơn thời gian thực.
 - Mỗi tài khoản Zalo là một người chơi. Bảng vàng tính điểm cao nhất của mỗi gian, bằng điểm thì ai đạt trước xếp trên.
 - Lượt chơi ngoài thời gian đợt thưởng vẫn chơi được nhưng không tính điểm.

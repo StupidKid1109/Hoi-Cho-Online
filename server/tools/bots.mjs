@@ -35,14 +35,10 @@ let matchInfo = { min: 20, max: 50, g1: { n: 0 }, g2: { n: 0 } };
 const heading = { g1: 0, g2: 0 };
 setInterval(() => fetch(BASE + "/api/match").then(r => r.json()).then(j => { matchInfo = j; }).catch(() => {}), 1500).unref();
 /** Chọn phòng như người chơi thật: dồn vào phòng sắp đủ người cho tới khi đủ tối thiểu, rồi sang phòng còn lại. */
+// Gian 1 "Ai là Hacker?" không có người ảo ở bản chính thức: người ảo chỉ ghé phòng chờ 3D của Gian 1 cho vui rồi đi; đấu phòng thật ở Gian 2
 function pickGame() {
-  const n = g => (matchInfo[g]?.n || 0) + heading[g], { min, max } = matchInfo;
-  const short = ["g1", "g2"].filter(g => n(g) < min).sort((a, c) => n(c) - n(a));
-  if (short.length && n(short[0]) > 0) return short[0];               // phòng đang gom người, nhiều người nhất
-  const counting = ["g1", "g2"].filter(g => n(g) >= min && n(g) < max);
-  if (counting.length && short.length) return short[0];               // một phòng đã đủ: gom người cho phòng còn lại
-  if (counting.length) return counting[0];                            // phòng đang đếm ngược, còn chỗ
-  return Math.random() < 0.5 ? "g1" : "g2";
+  if (Math.random() < 0.3) return "g1";
+  return "g2";
 }
 function nextGoal(b) {
   if (b.player) { const g = pickGame(), p = standPoint(g); heading[g]++; return { x: p.x + rnd(-150, 150), y: p.y + rnd(-60, 120), play: g }; }
@@ -99,9 +95,7 @@ function onMatch(b, m) {
   if (m.t === "mchat" && b.match.room && /chào|hello|hi\b/i.test(m.text) && !botNicks.has(m.nick) && Math.random() < 0.25) { // người thật chào thì vài người ảo chào lại
     setTimeout(() => send({ t: "mchat", text: pick(REPLIES) }), rnd(1200, 4000));
   }
-  if (m.t === "mround" && m.g === "g1") { // chọn sau 1,5–7 giây (đúng sai ngẫu nhiên)
-    const k = m.k; b.match.t = setTimeout(() => send({ t: "mans", k, a: Math.random() < 0.5 }), rnd(0.15, 0.7) * m.dur);
-  } else if (m.t === "mround" && m.g === "g2") { // dùng gợi ý dần, đủ chữ thì đoán; một số người bỏ cuộc
+  if (m.t === "mround" && m.g === "g2") { // dùng gợi ý dần, đủ chữ thì đoán; một số người bỏ cuộc
     const k = m.k, len = m.words.reduce((x, y) => x + y, 0);
     b.match.k = k; b.match.letters = Array(len).fill(""); b.match.giveUp = Math.random() < 0.35;
     const ask = () => { if (!b.match || b.match.k !== k || b.match.giveUp) return; send({ t: "mhint", k }); b.match.t = setTimeout(ask, rnd(1200, 3000) * m.dur / 30000); };
@@ -120,7 +114,7 @@ function stepRoom(b, now) {
   if (now > r.emote) { send({ t: "memote", e: Math.floor(Math.random() * 4) }); r.emote = now + rnd(8000, 30000); }
   if (r.chat == null) r.chat = now + rnd(5000, 40000);
   if (now > r.chat) { send({ t: "mchat", text: pick(b.match.g === "cafe" ? CAFE_LINES : ROOM_LINES) }); r.chat = now + rnd(25000, 90000); }
-  if (b.match.g === "cafe" && now > b.match.leaveAt) { send({ t: "mleave" }); b.match = null; b.until = now + rnd(1000, 4000); return; } // rời quán
+  if ((b.match.g === "cafe" || b.match.g === "g1") && now > b.match.leaveAt) { send({ t: "mleave" }); b.match = null; b.until = now + rnd(1000, 4000); return; } // rời quán
   if (r.sitAt && now > r.sitAt) { r.sitAt = 0; send({ t: "msit", s: Math.floor(Math.random() * CAFE_SEATS.length) }); }
   if (r.seated) return; // đang ngồi: ngồi yên tới khi rời quán
   if (now < r.wait) return;
@@ -150,7 +144,7 @@ function stepBot(b, now) {
     send({ t: "pos", x: Math.round(b.x), y: Math.round(b.y) });
     if (g.seat !== undefined) { b.seat = g.seat; seatOcc.set(g.seat, b.id); send({ t: "sit", s: g.seat }); b.until = now + rnd(15000, 45000); }
     else if (g.cafe) { b.match = { g: "cafe", leaveAt: now + rnd(30000, 100000) }; send({ t: "mjoin", g: "cafe" }); }
-    else if (g.play) { heading[g.play] = Math.max(0, heading[g.play] - 1); b.match = { g: g.play }; send({ t: "mjoin", g: g.play }); }
+    else if (g.play) { heading[g.play] = Math.max(0, heading[g.play] - 1); b.match = { g: g.play, leaveAt: now + rnd(20000, 60000) }; send({ t: "mjoin", g: g.play }); }
     else b.until = now + (g.idle || 2000);
     b.goal = null;
     return;

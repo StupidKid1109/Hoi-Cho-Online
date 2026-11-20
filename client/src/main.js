@@ -8,13 +8,13 @@ import * as bgm from "./bgm.js";
 import { mountSoundButton } from "./sound.js";
 import { createSpace } from "./games/lobby.js";
 import * as chat from "./chat.js";
-import * as swipe from "./games/swipe.js";
+import * as hacker from "./games/hacker.js";
 import * as rebus from "./games/rebus.js";
 import * as runner from "./games/runner.js";
 
-const GAMES = { g1: swipe, g2: rebus, g3: runner };
+const GAMES = { g1: hacker, g2: rebus, g3: runner };
 const PROVERBS = [["Ăn quả nhớ kẻ trồng cây.", "Tục ngữ"], ["Một cây làm chẳng nên non, ba cây chụm lại nên hòn núi cao.", "Ca dao"], ["Bán anh em xa, mua láng giềng gần.", "Tục ngữ"], ["Đi một ngày đàng, học một sàng khôn.", "Tục ngữ"]];
-const S = { me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null, space: null };
+const S = { hkInvite: /[?&]hk=\d{6}/.test(location.search), me: null, event: null, khu: 1, myId: null, myN: 0, byN: new Map(), conn: null, cur: null, space: null };
 const store = { get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* bỏ qua */ } } };
 
 /* ---------- Tải và đăng nhập ---------- */
@@ -75,6 +75,9 @@ function enterFair() {
   }
 }
 function onRealtime(m) {
+  if (m.t === "welcome" && S.cur === "g1") S.conn.send({ t: "hk:resume" }); // nối lại kết nối khi đang ở Gian 1: vào lại hàng chờ, phòng, ván dở
+  if (typeof m.t === "string" && m.t.startsWith("hk:")) { if (S.cur === "g1") hacker.onMsg(m); else if (m.t === "hk:deal") toast("Ván Ai là Hacker? đã bắt đầu, vào Gian 1 để chơi"); return; }
+  if (m.t === "welcome" && S.hkInvite && S.cur !== "g1") { S.hkInvite = false; setTimeout(() => enterBooth("g1"), 300); } // mở từ link mời phòng bạn bè (?hk=mã)
   if (m.t === "welcome") { S.myId = m.you.id; S.myN = m.you.n; S.byN = new Map(m.peers.map(p => [p.n, p.id])); hub.resetPeers(m.peers); chat.setHistory(m.history); renderWho(); }
   else if (m.t === "join") { S.byN.set(m.peer.n, m.peer.id); hub.addPeer(m.peer); renderWho(); }
   else if (m.t === "leave") { for (const [n, id] of S.byN) if (id === m.id) S.byN.delete(n); hub.removePeer(m.id); renderWho(); }
@@ -110,7 +113,8 @@ function pollMatch() {
     if (!$("fair").classList.contains("on") || document.hidden) return;
     api("/api/match").then(s => {
       bgm.setState(s.bgm); // nhạc nền do quản trị viên chọn
-      for (const id of ["g1", "g2"]) {
+      if (s.hk) hub.setBoothInfo("g1", s.hk.startIn != null ? "👥 " + s.hk.queue + " người · sắp bắt đầu!" : s.hk.queue ? "👥 " + s.hk.queue + "/" + s.hk.max + " người đang chờ ghép" : s.hk.playing ? "🕵️ " + s.hk.playing + " người đang chơi" : "4–8 người · mời bạn bè cùng chơi");
+      for (const id of ["g2"]) {
         const w = s[id];
         hub.setBoothInfo(id, w.startIn != null ? "👥 " + w.n + " người · sắp bắt đầu!" : w.n ? "👥 " + w.n + "/" + s.min + " người đang chờ" : "Chưa có ai chờ · cần " + s.min + " người");
       }
@@ -157,7 +161,8 @@ function openGame(id) {
   pre.querySelector("button").onclick = () => { pre.classList.remove("on"); play(id); };
 }
 // send: gửi tin qua kết nối của khu (đấu phòng Gian 1, Gian 2); space: không gian 3D của gian (nếu có)
-const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.send(o), get space() { return S.space; } };
+const gameCtx = { toast, result, leave: leaveGame, send: o => S.conn && S.conn.send(o), get space() { return S.space; },
+  updateMe: r => { S.me.bests = r.bests; S.me.total = r.total; S.me.rank = r.rank; }, board: tab => board(tab) };
 function play(id) { GAMES[id].start(gameCtx).catch(e => { toast(e.message); leaveGame(); }); }
 // Chơi lại: Gian 1, Gian 2 quay về phòng chờ trong không gian của gian; Gian 3 chạy lại ngay
 function again(id) { if (S.space && id === "g3") S.space.hide(); play(id); }
@@ -193,6 +198,7 @@ async function board(tab, fromResult) {
     '<div class="evc"><div class="t">' + esc(e.name) + (e.active ? "" : "<small>chưa diễn ra hoặc đã kết thúc</small>") + '</div><div class="cd">' + (e.active ? "Kết thúc sau <b>" + eventLeft() + "</b>" : "Từ " + new Date(e.start).toLocaleDateString("vi-VN") + " đến " + new Date(e.end).toLocaleDateString("vi-VN")) +
     '</div><div class="prz">' + e.prizes.map(p => "<div><b>" + esc(p[0]) + "</b>" + esc(p[1]) + "</div>").join("") + "</div></div>" +
     '<div class="tabs">' + tabs.map(t => '<button data-t="' + t[0] + '" class="' + (t[0] === tab ? "on" : "") + '">' + t[1] + "</button>").join("") + '</div><ol class="lb">' + list + "</ol>" +
+    (tab === "g1" ? '<p class="note">Gian 1 “Ai là Hacker?” tính <b>tổng điểm tích lũy</b> trong đợt (tối đa 1.000 điểm mỗi ngày, chỉ ván Ghép ngẫu nhiên). Bảng vàng chung tính tối đa 3.000 điểm Gian 1.</p>' : "") +
     '<p class="note">' + esc(e.rules || "") + "</p>" +
     (fromResult ? '<div class="acts" style="margin-top:12px"><button class="btn" id="bAgain">Chơi lại</button><button class="btn ghost" id="bBack">Về hội chợ</button></div>' : ""), { dismiss: !fromResult, onClose: fromResult ? null : () => hub.zoomOut() });
   $("sheet").querySelectorAll(".tabs button").forEach(b => b.onclick = () => board(b.dataset.t, fromResult));
@@ -200,9 +206,8 @@ async function board(tab, fromResult) {
 }
 
 /* ---------- Gắn nút trong gian hàng ---------- */
-document.querySelectorAll("[data-back]").forEach(b => b.onclick = leaveGame);
+document.querySelectorAll("[data-back]").forEach(b => b.onclick = () => { if (S.cur === "g1" && hacker.inGame() && !confirm("Rời ván bây giờ sẽ không được điểm ván này. Bạn vẫn muốn rời?")) return; leaveGame(); });
 $("lbBtn").onclick = () => board("all");
-$("g1no").onclick = () => swipe.decide(true); $("g1yes").onclick = () => swipe.decide(false);
 $("g2hint").onclick = () => rebus.hint(); $("g2skip").onclick = () => rebus.skip();
 const road = $("road"); let rx = null;
 let ry = null;
@@ -212,7 +217,6 @@ road.onpointerup = e => { if (rx == null) return; const dx = e.clientX - rx, dy 
   if (Math.abs(dx) > 30) runner.move(dx > 0 ? 1 : -1); else { const p = $("g3p"), r = p ? p.querySelector(".e").getBoundingClientRect() : road.getBoundingClientRect(); runner.move(e.clientX < r.left + r.width / 2 ? -1 : 1); } };
 document.addEventListener("keydown", e => {
   if (e.target.tagName === "INPUT") return;
-  if (S.cur === "g1") { if (e.key === "ArrowLeft") swipe.decide(true); if (e.key === "ArrowRight") swipe.decide(false); }
   if (S.cur === "g3") {
     if (e.key === "ArrowLeft" || e.key === "a") runner.move(-1); if (e.key === "ArrowRight" || e.key === "d") runner.move(1);
     if (e.key === "w" || e.key === "W" || e.key === "ArrowUp" || (e.code === "Space" && runner.running())) { e.preventDefault(); runner.jump(); } // máy tính: Space, W hoặc ↑ nhảy

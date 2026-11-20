@@ -1,9 +1,10 @@
-// Đấu phòng cho Gian 1 (Thật hay giả) và Gian 2 (Đuổi hình bắt chữ).
-// Người chơi vào phòng chờ của gian; đủ MIN người thì đếm ngược rồi bắt đầu, đủ MAX thì bắt đầu ngay.
+// Đấu phòng Gian 2 (Đuổi hình bắt chữ), phòng chờ 3D của Gian 1 và quán cà phê.
+// Gian 2: vào phòng chờ; đủ MIN người thì đếm ngược rồi bắt đầu, đủ MAX thì bắt đầu ngay.
+// Gian 1 (Ai là Hacker?) chỉ dùng phần không gian ở đây (đi lại, chào, chat) như quán cà phê; ghép ván ở hacker.js.
 // Mọi người trong phòng chơi cùng một đề, cùng lúc. Máy chủ giữ đáp án, tính giờ và chấm điểm.
 // Tin nhắn đi qua kết nối WebSocket của khu hội chợ (realtime.js chuyển các tin bắt đầu bằng "m" sang đây).
 //
-// Điện thoại gửi:  {t:"mjoin", g} · {t:"mleave"} · {t:"mans", k, a} (Gian 1, a = true nếu cho là lừa đảo)
+// Điện thoại gửi:  {t:"mjoin", g} · {t:"mleave"}
 //                  {t:"mguess", k, text} · {t:"mhint", k} (Gian 2)
 //                  {t:"mpos", x, y} · {t:"memote", e} (đi lại, chào nhau trong không gian riêng của gian)
 //                  {t:"mchat", text} (chat trong phòng chờ và quán cà phê; g = "cafe" khi vào quán)
@@ -15,7 +16,6 @@ import { CAFE_MAX, CAFE_SEATS, roomOf, inPoly } from "../../shared/world.js";
 import { blockReason, cleanText, normalize, CHAT_GAP_MS } from "../../shared/chatFilter.js";
 import { encodeFrame } from "./ws.js";
 
-const G1_CARDS = 10, G1_MS = 10000, G1_REVEAL_MS = 4500;
 const G2_MS = 30000, G2_REVEAL_MS = 6000, G2_HINT_COST = 100, G2_PLACE_BONUS = [200, 100, 50];
 const START_DELAY_MS = 2500, FULL_START_MS = 3000;
 
@@ -36,7 +36,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   /* ---------- Phòng chờ ---------- */
   function lobbyOf(game) {
     let L = lobbies.get(game);
-    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, cafe: game === "cafe", seats: new Map(), nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
+    if (!L) { L = { id: nextRoom++, game, players: new Map(), startAt: null, timer: null, lobby: true, cafe: game === "cafe", social: game === "cafe" || game === "g1", seats: new Map(), nextN: 1, dirty: new Set() }; lobbies.set(game, L); live.add(L); }
     return L;
   }
   /* ---------- Không gian riêng của gian hàng: ai đang chờ, đứng ở đâu ---------- */
@@ -114,11 +114,12 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   }
   function lobbyState(L) {
     if (L.cafe) return toAll(L, { t: "mlobby", g: "cafe", n: L.players.size, max: CAFE_MAX, cafe: true, names: [] });
+    if (L.social) return toAll(L, { t: "mlobby", g: L.game, n: L.players.size, social: true, names: [] }); // phòng chờ Gian 1: chỉ để gặp nhau
     const names = [...L.players.values()].map(p => p.nick);
     toAll(L, { t: "mlobby", g: L.game, n: L.players.size, min: MIN, max: MAX, startIn: L.startAt ? Math.max(0, L.startAt - Date.now()) : null, names });
   }
   function schedule(L) {
-    if (L.cafe) { if (L.players.size >= CAFE_MAX && lobbies.get("cafe") === L) lobbies.delete("cafe"); return; } // quán không bắt đầu ván; đầy thì mở phòng mới
+    if (L.social) { if (L.players.size >= CAFE_MAX && lobbies.get(L.game) === L) lobbies.delete(L.game); return; } // quán, phòng chờ Gian 1 không bắt đầu ván; đầy thì mở phòng mới
     clearTimeout(L.timer); L.timer = null;
     const n = L.players.size;
     if (n < MIN) { L.startAt = null; return; }
@@ -134,7 +135,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     if (cur && cur.lobby && cur.game === game) { const p = cur.players.get(c.pid); send(c, { t: "mspace", g: game, you: pub(p), peers: [...cur.players.values()].filter(q => q !== p).map(pub) }); if (cur.cafe) send(c, musicMsg()); return lobbyState(cur); } // đã ở phòng chờ này
     if (cur && !cur.lobby && cur.game === game && !cur.players.get(c.pid).left) return send(c, { t: "mstart", g: game, room: cur.id, n: cur.players.size, total: cur.set.length, in: 0, rejoin: true });
     if (cur) leave(c);
-    const why = game === "cafe" ? null : canPlay(c.pid); if (why) return send(c, { t: "merr", g: game, text: why });
+    const why = game === "g2" ? canPlay(c.pid) : null; if (why) return send(c, { t: "merr", g: game, text: why });
     const L = lobbyOf(game);
     const p = { c, pid: c.pid, nick: c.nick, joinAt: Date.now(), score: 0, seat: -1 };
     L.players.set(c.pid, p);
@@ -148,7 +149,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     where.delete(c.pid);
     if (R.lobby) {
       const p = R.players.get(c.pid); R.players.delete(c.pid); if (p) { if (R.seats) freeSeat(R, p); toAll(R, { t: "mpleave", g: R.game, n: p.n }); }
-      if (R.cafe && !R.players.size && lobbies.get("cafe") !== R) { live.delete(R); return; } // phòng quán phụ đã vắng: đóng
+      if (R.social && !R.players.size && lobbies.get(R.game) !== R) { live.delete(R); return; } // phòng phụ đã vắng: đóng
       schedule(R); lobbyState(R); return;
     }
     const p = R.players.get(c.pid); if (p) p.left = true; // rời giữa ván: vẫn tính điểm đã có khi ván kết thúc
@@ -169,8 +170,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     }
     const R = { id: L.id, game: L.game, players: L.players, lobby: false, k: -1, open: false, timer: null, startedAt: Date.now() };
     const c = content();
-    if (R.game === "g1") R.set = shuffle([...c.cards.cards.keys()]).slice(0, G1_CARDS);
-    else R.set = shuffle([...c.rebus.puzzles.keys()]).slice(0, c.rebus.perRound || 5);
+    R.set = shuffle([...c.rebus.puzzles.keys()]).slice(0, c.rebus.perRound || 5);
     for (const p of R.players.values()) {
       Object.assign(p, { score: 0, ok: 0, streak: 0, top: 0, miss: [], hints: 0, solved: 0, runId: beginRun(p.pid, R.game, { room: R.id }) });
       where.set(p.pid, R);
@@ -183,11 +183,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     R.k++;
     if (R.k >= R.set.length) return endRoom(R);
     const c = content(); R.open = true; R.openAt = Date.now(); R.answers = new Map(); R.placed = 0;
-    if (R.game === "g1") {
-      const card = c.cards.cards[R.set[R.k]];
-      R.dur = ms(G1_MS);
-      toAll(R, { t: "mround", g: "g1", k: R.k, total: R.set.length, card: { icon: card.icon, from: card.from, text: card.text }, dur: R.dur });
-    } else {
+    {
       const pz = c.rebus.puzzles[R.set[R.k]];
       R.ans = strip(pz.name); R.dur = ms(G2_MS);
       for (const p of R.players.values()) { p.lock = []; p.rHints = 0; p.rGain = 0; p.rOk = false; }
@@ -197,13 +193,6 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   }
   const active = R => [...R.players.values()].filter(p => !p.left && p.c.open);
   const left = R => Math.max(0, 1 - (Date.now() - R.openAt) / R.dur);
-
-  /* ---------- Gian 1: trả lời ---------- */
-  function answerG1(c, m) {
-    const R = where.get(c.pid); if (!R || R.lobby || R.game !== "g1" || !R.open || m.k !== R.k || R.answers.has(c.pid)) return;
-    R.answers.set(c.pid, { scam: !!m.a, left: left(R) });
-    if (active(R).every(p => R.answers.has(p.pid))) { clearTimeout(R.timer); reveal(R); } // ai cũng đã trả lời
-  }
 
   /* ---------- Gian 2: đoán, gợi ý ---------- */
   function guessG2(c, m) {
@@ -230,22 +219,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     if (!R.open) return;
     R.open = false; clearTimeout(R.timer);
     const c = content(), n = R.players.size;
-    if (R.game === "g1") {
-      const card = c.cards.cards[R.set[R.k]]; let nScam = 0, nAns = 0;
-      for (const p of R.players.values()) {
-        const a = R.answers.get(p.pid);
-        if (a) { nAns++; if (a.scam) nScam++; }
-        const ok = !!a && a.scam === card.scam;
-        p.rGain = 0;
-        if (ok) { p.streak++; p.ok++; p.top = Math.max(p.top, p.streak); p.rGain = 500 + Math.round(500 * a.left) + 50 * Math.min(5, p.streak - 1); p.score += p.rGain; }
-        else { p.streak = 0; if (!p.miss.includes(R.set[R.k])) p.miss.push(R.set[R.k]); }
-        p.rOk = ok; p.rAns = a ? a.scam : null;
-      }
-      const ranked = ranking(R), t3 = ranked.slice(0, 3).map(p => ({ nick: p.nick, score: p.score }));
-      ranked.forEach((p, i) => send(p.c, { t: "mreveal", g: "g1", k: R.k, last: R.k >= R.set.length - 1, scam: card.scam, why: card.why,
-        you: { ok: p.rOk, answered: p.rAns !== null, gain: p.rGain, score: p.score, streak: p.streak }, pctScam: nAns ? Math.round(100 * nScam / nAns) : 0, answered: nAns, top: t3, rank: i + 1, n, next: ms(G1_REVEAL_MS) }));
-      R.timer = setTimeout(() => nextRound(R), ms(G1_REVEAL_MS));
-    } else {
+    {
       const pz = c.rebus.puzzles[R.set[R.k]], solved = [...R.players.values()].filter(p => p.rOk).length;
       const ranked = ranking(R), t3 = ranked.slice(0, 3).map(p => ({ nick: p.nick, score: p.score }));
       ranked.forEach((p, i) => send(p.c, { t: "mreveal", g: "g2", k: R.k, last: R.k >= R.set.length - 1, name: pz.name, info: pz.info, pics: pz.pics,
@@ -261,9 +235,7 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
     ranked.forEach((p, i) => {
       if (where.get(p.pid) === R) where.delete(p.pid);
       let res;
-      if (R.game === "g1") res = { score: p.score, stats: { ok: p.ok, n: R.set.length, top: p.top },
-        review: p.miss.map(j => ({ icon: c.cards.cards[j].icon, text: c.cards.cards[j].text, scam: c.cards.cards[j].scam, why: c.cards.cards[j].why })) };
-      else res = { score: p.score, stats: { ok: p.ok, total: R.set.length, hints: p.hints },
+      res = { score: p.score, stats: { ok: p.ok, total: R.set.length, hints: p.hints },
         review: R.set.map(j => ({ pics: c.rebus.puzzles[j].pics, name: c.rebus.puzzles[j].name, info: c.rebus.puzzles[j].info })) };
       const out = finishRun(p.runId, R.game, res);
       if (!abandoned) send(p.c, { t: "mend", g: R.game, rank: i + 1, n, top: t10, result: out });
@@ -273,7 +245,6 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   function onMessage(c, m) {
     if (m.t === "mjoin") join(c, m.g);
     else if (m.t === "mleave") leave(c);
-    else if (m.t === "mans") answerG1(c, m);
     else if (m.t === "mguess") guessG2(c, m);
     else if (m.t === "mhint") hintG2(c, m);
     else if (m.t === "mpos") moveInSpace(c, m);

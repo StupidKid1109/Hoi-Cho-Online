@@ -95,11 +95,11 @@ let ends = 0, rounds = 0, starts = 0; const roomSizes = [];
 for (const b of bots) b.ws.addEventListener("message", e => {
   const m = JSON.parse(e.data);
   if (m.t === "mstart") { starts++; if (b.i % 50 === 0) roomSizes.push(m.n); }
-  else if (m.t === "mround") { rounds++; setTimeout(() => b.ws.readyState === 1 && b.ws.send(JSON.stringify({ t: "mans", k: m.k, a: Math.random() < 0.5 })), Math.random() * m.dur * 0.8); }
+  else if (m.t === "mround") { rounds++; setTimeout(() => b.ws.readyState === 1 && b.ws.send(JSON.stringify({ t: "mguess", k: m.k, text: "HA NOI" })), Math.random() * m.dur * 0.8); } // đấu phòng Gian 2
   else if (m.t === "mend") ends++;
 });
 const m0 = performance.now(), mc0 = cpuTicks();
-for (const b of bots) b.ws.send(JSON.stringify({ t: "mjoin", g: "g1" }));
+for (const b of bots) b.ws.send(JSON.stringify({ t: "mjoin", g: "g2" }));
 while (ends < N && performance.now() - m0 < 120000) await wait(200);
 const mdt = (performance.now() - m0) / 1000, mc1 = cpuTicks();
 console.log("\nĐấu phòng Gian 1:     " + starts + " người vào " + Math.ceil(starts / 50) + " phòng (cỡ phòng: " + [...new Set(roomSizes)].join(", ") + " người), " + ends + "/" + N + " người nhận kết quả");

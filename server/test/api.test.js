@@ -10,7 +10,6 @@ import { blockReason, cleanText } from "../../shared/chatFilter.js";
 const cfg = { port: 0, host: "127.0.0.1", sessionSecret: "test-secret", sessionDays: 1, devLogin: true, zaloAppSecret: "", adminKey: "admin-test", dbFile: ":memory:", corsOrigin: "*", khuCount: 2, khuCapacity: 5, serveClient: true };
 let app, base;
 const rebusContent = JSON.parse(readFileSync(new URL("../content/rebus.json", import.meta.url)));
-const cards = JSON.parse(readFileSync(new URL("../content/cards.json", import.meta.url))).cards;
 
 async function call(path, { token, method = "GET", body, admin } = {}) {
   const res = await fetch(base + path, { method, headers: { "content-type": "application/json", ...(token ? { authorization: "Bearer " + token } : {}), ...(admin ? { "x-admin-key": admin } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -179,7 +178,7 @@ test("Chỗ ngồi: ngồi được, người khác thấy, không ngồi chồn
   for (const x of [a, c]) x.ws.close();
 });
 
-test("Đấu phòng Gian 1, Gian 2: đủ người mới bắt đầu, chơi cùng đề, chấm và xếp hạng ở máy chủ", async () => {
+test("Phòng chờ 3D Gian 1 (chỉ để gặp nhau); đấu phòng Gian 2: đủ người mới bắt đầu, chơi cùng đề, chấm và xếp hạng ở máy chủ", async () => {
   // Phòng nhỏ, chạy nhanh để thử: tối thiểu 3, tối đa 4 người
   const mapp = createApp({ ...cfg, matchMin: 3, matchMax: 4, matchCountdown: 250, matchSpeed: 0.025 });
   await new Promise(r => mapp.server.listen(0, "127.0.0.1", r));
@@ -193,7 +192,6 @@ test("Đấu phòng Gian 1, Gian 2: đủ người mới bắt đầu, chơi cù
     return { ws, inbox, waitFor, send: o => ws.send(JSON.stringify(o)) };
   };
   const wait = ms => new Promise(r => setTimeout(r, ms));
-  const cards = JSON.parse(readFileSync(new URL("../content/cards.json", import.meta.url))).cards;
   const puzzles = JSON.parse(readFileSync(new URL("../content/rebus.json", import.meta.url))).puzzles;
   const [a, b, c, d, e] = [await open("match-a"), await open("match-b"), await open("match-c"), await open("match-d"), await open("match-e")];
   try {
@@ -208,32 +206,11 @@ test("Đấu phòng Gian 1, Gian 2: đủ người mới bắt đầu, chơi cù
   const mv = b.inbox.find(m => m.t === "mposes");
   assert.ok(mv && mv.p.some(q => q[1] === 300 && q[2] === roomOf("g1").h - roomOf("g1").margin), "đi lại được, giới hạn trong phòng");
   assert.ok(b.inbox.find(m => m.t === "memote" && m.e === 0), "chào nhau trong gian");
-  const l2 = [...b.inbox].reverse().find(m => m.t === "mlobby");
-  assert.equal(l2.n, 2); assert.equal(l2.min, 3); assert.equal(l2.startIn, null, "2 người: chưa đếm ngược");
-  c.send({ t: "mjoin", g: "g1" });
-  const l3 = await c.waitFor(m => m.t === "mlobby" && m.n === 3);
-  assert.ok(l3.startIn > 0, "đủ 3 người: bắt đầu đếm ngược");
-  await a.waitFor(m => m.t === "mstart");
-  d.send({ t: "mjoin", g: "g1" });
-  const ld = await d.waitFor(m => m.t === "mlobby");
-  assert.equal(ld.n, 1, "người đến sau vào phòng chờ mới");
-  // A trả lời đúng mọi câu, B trả lời sai mọi câu, C không trả lời
-  const answered = new Set();
-  const play = setInterval(() => {
-    for (const m of a.inbox) if (m.t === "mround" && m.g === "g1" && !answered.has(m.k)) {
-      answered.add(m.k); const card = cards.find(x => x.text === m.card.text);
-      assert.ok(!("scam" in m.card), "đáp án không được gửi xuống trước");
-      a.send({ t: "mans", k: m.k, a: card.scam }); b.send({ t: "mans", k: m.k, a: !card.scam });
-    }
-  }, 10);
-  const [ea, eb, ec] = await Promise.all([a.waitFor(m => m.t === "mend", 20000), b.waitFor(m => m.t === "mend", 20000), c.waitFor(m => m.t === "mend", 20000)]);
-  clearInterval(play);
-  assert.equal(ea.n, 3); assert.equal(ea.rank, 1); assert.ok(ea.result.score >= 10 * 500, "A đúng 10/10");
-  assert.equal(eb.result.score, 0); assert.equal(ec.result.score, 0);
-  assert.equal(ea.result.stats.ok, 10); assert.equal(eb.result.stats.ok, 0);
-  assert.ok(ea.top[0].score === ea.result.score && ea.result.counted, "ghi vào Bảng vàng");
-  const rv = a.inbox.find(m => m.t === "mreveal" && m.g === "g1");
-  assert.ok(typeof rv.why === "string" && rv.top.length === 3 && rv.pctScam >= 0, "mỗi câu có đáp án, giải thích, tỉ lệ chọn, top 3");
+  c.send({ t: "mjoin", g: "g1" }); await wait(300);
+  const l3 = [...c.inbox].reverse().find(m => m.t === "mlobby");
+  assert.ok(l3 && l3.social && l3.n === 3, "phòng chờ Gian 1 chỉ để gặp nhau (ghép ván Ai là Hacker? ở hacker.js)");
+  assert.ok(!a.inbox.some(m => m.t === "mstart"), "phòng chờ Gian 1 không tự bắt đầu ván đấu phòng");
+  for (const x of [a, b, c]) x.send({ t: "mleave" }); await wait(80);
 
   // --- Phòng đủ tối đa (4) thì đóng cửa: người thứ 5 vào phòng chờ mới ---
   for (const x of [a, b, c, d, e]) x.inbox.length = 0;

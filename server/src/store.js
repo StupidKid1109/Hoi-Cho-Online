@@ -22,7 +22,11 @@ export function makeStore(db, defaultEvent) {
     runsToday: q("SELECT COUNT(*) AS n FROM runs WHERE player = ? AND started > ?"),
     getBest: q("SELECT score FROM bests WHERE event = ? AND player = ? AND game = ?"),
     putBest: q("INSERT INTO bests (event, player, game, score, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(event, player, game) DO UPDATE SET score = excluded.score, at = excluded.at WHERE excluded.score > bests.score"),
-    myBests: q("SELECT game, score FROM bests WHERE event = ? AND player = ?")
+    myBests: q("SELECT game, score FROM bests WHERE event = ? AND player = ?"),
+    setBest: q("INSERT INTO bests (event, player, game, score, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(event, player, game) DO UPDATE SET score = excluded.score, at = excluded.at"),
+    g1Day: q("SELECT points FROM g1_points WHERE event = ? AND player = ? AND day = ?"),
+    g1Add: q("INSERT INTO g1_points (event, player, day, points, raw, games) VALUES (?, ?, ?, ?, ?, 1) ON CONFLICT(event, player, day) DO UPDATE SET points = points + excluded.points, raw = raw + excluded.raw, games = games + 1"),
+    g1Total: q("SELECT COALESCE(SUM(points), 0) AS s FROM g1_points WHERE event = ? AND player = ?")
   };
 
   function event() {
@@ -62,6 +66,24 @@ export function makeStore(db, defaultEvent) {
     const best = Math.max(score, prev ? prev.score : 0);
     return { counted: true, best, newBest: !prev || score > prev.score };
   }
+  /**
+   * Gian 1 "Ai là Hacker?": điểm cộng dồn trong đợt. Tối đa g1DayCap điểm mỗi ngày (mặc định 1.000);
+   * Bảng vàng chung chỉ tính tối đa g1EventCap điểm cả đợt (mặc định 3.000), tab "Gian 1" hiện tổng thật.
+   * counted = false (phòng bạn bè, ngoài đợt, rời ván): vẫn báo điểm ván nhưng không cộng.
+   */
+  const caps = () => { const e = event(); return { day: Number(e.g1DayCap ?? 1000), event: Number(e.g1EventCap ?? 3000) }; };
+  function addG1(player, points, counted) {
+    const ev = event(), active = eventActive(), cap = caps();
+    if (!counted || !active || points <= 0) {
+      const t = active ? st.g1Total.get(ev.id, player).s : 0;
+      return { counted: false, added: 0, points, today: active ? ((st.g1Day.get(ev.id, player, today()) || {}).points || 0) : 0, total: t, board: Math.min(cap.event, t), caps: cap };
+    }
+    const d = today(), had = (st.g1Day.get(ev.id, player, d) || {}).points || 0, added = Math.max(0, Math.min(points, cap.day - had));
+    st.g1Add.run(ev.id, player, d, added, points);
+    const total = st.g1Total.get(ev.id, player).s, board = Math.min(cap.event, total);
+    st.setBest.run(ev.id, player, "g1", board, Date.now());
+    return { counted: true, added, points, today: had + added, dayFull: had + added >= cap.day, total, board, eventFull: total >= cap.event, caps: cap };
+  }
   function bests(player) {
     const out = { g1: 0, g2: 0, g3: 0 };
     for (const r of st.myBests.all(event().id, player)) out[r.game] = r.score;
@@ -70,7 +92,10 @@ export function makeStore(db, defaultEvent) {
 
   function leaderboard(tab, player, limit = 50) {
     const ev = event().id, byGame = GAMES.includes(tab);
-    const rows = db.prepare(`
+    const rows = tab === "g1" ? db.prepare(` -- tab Gian 1: tổng tích lũy thật (không giới hạn cả đợt)
+      SELECT g.player AS id, p.nick AS nick, SUM(g.points) AS score, 0 AS last
+      FROM g1_points g JOIN players p ON p.id = g.player
+      WHERE g.event = ? AND p.banned = 0 GROUP BY g.player HAVING score > 0 ORDER BY score DESC`).all(ev) : db.prepare(`
       SELECT b.player AS id, p.nick AS nick, SUM(b.score) AS score, MAX(b.at) AS last
       FROM bests b JOIN players p ON p.id = b.player
       WHERE b.event = ? AND p.banned = 0 ${byGame ? "AND b.game = ?" : ""}
@@ -80,5 +105,5 @@ export function makeStore(db, defaultEvent) {
     return { tab, rows: ranked.slice(0, limit).map(r => ({ rank: r.rank, nick: r.nick, score: r.score, me: r.id === player })), me: me ? { rank: me.rank, score: me.score } : null, players: ranked.length, ranked };
   }
 
-  return { st, event, setEvent, eventActive, ensurePlayer, rerollNick, createRun, loadRun, saveRun, finishRun, runsSince, recordBest, bests, leaderboard, setBan: (id, b) => st.setBan.run(b ? 1 : 0, id) };
+  return { st, event, setEvent, eventActive, ensurePlayer, rerollNick, createRun, loadRun, saveRun, finishRun, runsSince, recordBest, bests, leaderboard, addG1, caps, setBan: (id, b) => st.setBan.run(b ? 1 : 0, id) };
 }

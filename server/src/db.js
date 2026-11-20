@@ -31,6 +31,15 @@ export function openDb(file) {
       status TEXT NOT NULL DEFAULT 'open', UNIQUE (chat_id, reporter)
     );
     CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+    -- Gian 1 "Ai là Hacker?": từng ván (để tính điểm, cán bộ xem lại khi có khiếu nại) và điểm tích lũy theo ngày trong đợt
+    CREATE TABLE IF NOT EXISTS hacker_games (
+      id TEXT PRIMARY KEY, mode TEXT NOT NULL, civ TEXT NOT NULL, hacker TEXT NOT NULL, players TEXT NOT NULL, rounds TEXT NOT NULL,
+      result TEXT NOT NULL, started INTEGER NOT NULL, ended INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS g1_points (
+      event TEXT NOT NULL, player TEXT NOT NULL, day TEXT NOT NULL, points INTEGER NOT NULL, raw INTEGER NOT NULL DEFAULT 0, games INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (event, player, day)
+    );
   `);
   return db;
 }

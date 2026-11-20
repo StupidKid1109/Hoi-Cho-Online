@@ -21,10 +21,10 @@ export async function loginPayload() {
   return { devId: id };
 }
 
-/** Chia sẻ lời thách đấu. Trong Zalo mở bảng chia sẻ, ngoài Zalo thì sao chép vào bộ nhớ tạm. */
-export async function share(title, text) {
+/** Chia sẻ lời thách đấu, lời mời. Trong Zalo mở bảng chia sẻ (path: đường dẫn mở thẳng vào trong Mini App, ví dụ "?hk=123456"), ngoài Zalo thì sao chép vào bộ nhớ tạm. */
+export async function share(title, text, path) {
   if (sdk) {
-    try { await sdk.openShareSheet({ type: "zmp_deep_link", data: { title, description: text } }); return "shared"; } catch (e) { /* tiếp tục bên dưới */ }
+    try { await sdk.openShareSheet({ type: "zmp_deep_link", data: { title, description: text, ...(path ? { path } : {}) } }); return "shared"; } catch (e) { /* tiếp tục bên dưới */ }
   }
   try { await navigator.clipboard.writeText(text); return "copied"; } catch (e) { return "failed"; }
 }

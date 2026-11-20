@@ -36,6 +36,8 @@
       <div><label>Bắt đầu</label><input id="evStart" type="datetime-local"></div>
       <div><label>Kết thúc</label><input id="evEnd" type="datetime-local"></div>
     </div>
+    <div class="row"><div><label>Gian 1: điểm tối đa mỗi ngày</label><input id="evG1Day" type="number" min="0" step="100" value="1000"></div><div><label>Gian 1: tối đa cả đợt (Bảng vàng chung)</label><input id="evG1Ev" type="number" min="0" step="100" value="3000"></div></div>
+    <p class="muted" style="margin:2px 0 8px">Gian 1 “Ai là Hacker?” cộng dồn điểm các ván Ghép ngẫu nhiên. Vượt mức ngày thì vẫn chơi nhưng không cộng thêm hôm đó; tab “Gian 1” trên Bảng vàng hiện tổng thật.</p>
     <label>Giải thưởng (mỗi dòng: Hạng | Phần quà)</label><textarea id="evPrizes"></textarea>
     <label>Thể lệ hiển thị cho người chơi</label><textarea id="evRules"></textarea>
     <div class="row" style="margin-top:10px"><button id="saveEv">Lưu đợt thưởng</button><span class="muted">Giờ theo múi giờ của máy tính đang dùng.</span></div>
@@ -97,7 +99,7 @@ async function load() {
     const s = await call("/api/admin/summary");
     $("kpi").innerHTML = [["Người chơi", s.players], ["Lượt chơi", s.runs], ["Lượt chơi 24 giờ qua", s.runsToday], ["Báo cáo chờ xử lý", s.openReports], ["Đang dạo hội", s.khu.reduce((a, k) => a + k.online, 0)], ["Đợt thưởng", s.active ? "Đang diễn ra" : "Không diễn ra"]].map(k => '<div class="kpi">' + k[0] + "<b>" + k[1] + "</b></div>").join("");
     const e = s.event; $("evId").value = e.id; $("evName").value = e.name; $("evStart").value = toLocal(e.start); $("evEnd").value = toLocal(e.end);
-    $("evPrizes").value = e.prizes.map(p => p.join(" | ")).join("\n"); $("evRules").value = e.rules || "";
+    $("evPrizes").value = e.prizes.map(p => p.join(" | ")).join("\n"); $("evRules").value = e.rules || ""; $("evG1Day").value = e.g1DayCap ?? 1000; $("evG1Ev").value = e.g1EventCap ?? 3000;
     const r = await call("/api/admin/reports");
     $("reports").innerHTML = r.reports.length ? r.reports.map(x => "<tr><td>" + esc(x.text) + (x.hidden ? ' <span class="muted">(đã ẩn)</span>' : "") + '<div class="muted">Khu ' + x.khu + " · " + new Date(x.ts).toLocaleString("vi-VN") + "</div></td><td>" + esc(x.nick) + '<div class="muted">' + esc(x.player) + "</div></td><td>" + x.reports + '</td><td class="row"><button class="ghost" data-a="dismiss" data-id="' + x.id + '">Bỏ qua</button><button class="ghost" data-a="hide" data-id="' + x.id + '">Ẩn tin</button><button data-a="ban" data-id="' + x.id + '">Ẩn và khóa chat</button></td></tr>').join("") : '<tr><td colspan="4" class="muted">Không có báo cáo nào.</td></tr>';
     document.querySelectorAll("#reports button").forEach(b => b.onclick = async () => { await call("/api/admin/reports/" + b.dataset.id, { method: "POST", body: JSON.stringify({ action: b.dataset.a }) }); note("Đã xử lý"); load(); });
@@ -162,7 +164,7 @@ $("login").onclick = () => { KEY = $("key").value.trim(); sessionStorage.setItem
 $("saveEv").onclick = async () => {
   try {
     const prizes = $("evPrizes").value.split("\n").map(l => l.split("|").map(s => s.trim())).filter(p => p[0]);
-    await call("/api/admin/event", { method: "PUT", body: JSON.stringify({ id: $("evId").value.trim(), name: $("evName").value.trim(), start: new Date($("evStart").value).toISOString(), end: new Date($("evEnd").value).toISOString(), prizes, rules: $("evRules").value }) });
+    await call("/api/admin/event", { method: "PUT", body: JSON.stringify({ id: $("evId").value.trim(), name: $("evName").value.trim(), start: new Date($("evStart").value).toISOString(), end: new Date($("evEnd").value).toISOString(), prizes, rules: $("evRules").value, g1DayCap: Number($("evG1Day").value), g1EventCap: Number($("evG1Ev").value) }) });
     note("Đã lưu đợt thưởng"); load();
   } catch (e) { note(e.message); }
 };

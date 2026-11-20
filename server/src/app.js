@@ -7,9 +7,10 @@ import { makeAuth } from "./auth.js";
 import { makeStore, GAMES } from "./store.js";
 import { makeRealtime } from "./realtime.js";
 import { makeMatches } from "./match.js";
+import { makeHacker } from "./hacker.js";
 import { makeMusic, MUSIC_MAX_BYTES, youtubeId } from "./music.js";
 import { attachWebSocket } from "./ws.js";
-import { swipe, rebus, runner, GameError } from "./games.js";
+import { rebus, runner, GameError } from "./games.js";
 import { ROOT_DIR, SERVER_DIR } from "./config.js";
 
 const RUN_TTL = 15 * 60 * 1000, RUNS_PER_DAY = 300;
@@ -18,7 +19,7 @@ const MIME = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; cha
 
 function loadContent() {
   const read = f => JSON.parse(readFileSync(join(SERVER_DIR, "content", f), "utf8"));
-  return { cards: read("cards.json"), rebus: read("rebus.json"), event: read("event.json") };
+  return { hacker: read("hacker.json"), rebus: read("rebus.json"), event: read("event.json") };
 }
 
 export function createApp(config) {
@@ -33,7 +34,19 @@ export function createApp(config) {
     beginRun: (pid, game, state) => store.createRun(pid, game, state),
     finishRun: (runId, game, res) => finishResponse(store.loadRun(runId), game, res)
   });
-  const rt = makeRealtime({ db, store, auth, config, matches });
+  // Gian 1 "Ai là Hacker?": hàng chờ ghép ngẫu nhiên, phòng bạn bè, ván 4–8 người (server/src/hacker.js)
+  const repChat = db.prepare("INSERT INTO chat (khu, player, nick, text, ts, hidden) VALUES (0, ?, ?, ?, ?, 1)"), repAdd = db.prepare("INSERT OR IGNORE INTO reports (chat_id, reporter, ts) VALUES (?, ?, ?)");
+  const hacker = makeHacker({
+    config, db, content: () => content,
+    onScore: (pid, points, counted) => {
+      const g1 = store.addG1(pid, points, counted), b = store.bests(pid), lb = store.leaderboard("all", pid, 0);
+      if (g1.added >= 200) { const p = store.ensurePlayer(pid); rt.feed("🕵️ " + p.nick + " vừa thắng một ván Ai là Hacker? (+" + g1.added + ")"); }
+      return { ...g1, bests: b, total: b.g1 + b.g2 + b.g3, rank: lb.me ? lb.me.rank : null };
+    },
+    // báo cáo câu mô tả: lưu như một tin chat ẩn (khu 0) để hiện trong mục Báo cáo của trang quản trị
+    report: (reporter, author, nick, text) => { const id = Number(repChat.run(author, nick, "[Ai là Hacker?] " + text, Date.now()).lastInsertRowid); repAdd.run(id, reporter, Date.now()); }
+  });
+  const rt = makeRealtime({ db, store, auth, config, matches, hacker });
   // Nhạc trong quán cà phê: nhớ bài đang phát qua các lần khởi động lại
   const music = makeMusic(config);
   { const st = music.loadState(); if (st && ((st.file && music.has(st.file)) || st.yt)) matches.setMusic(st); }
@@ -120,7 +133,7 @@ export function createApp(config) {
 
     if (path === "/api/event" && method === "GET") return send(res, 200, publicEvent());
     if (path === "/api/khu" && method === "GET") return send(res, 200, { khu: rt.khuList() });
-    if (path === "/api/match" && method === "GET") return send(res, 200, { ...matches.status(), bgm }); // số người đang chờ ở phòng đấu Gian 1, Gian 2; nhạc nền hiện tại
+    if (path === "/api/match" && method === "GET") return send(res, 200, { ...matches.status(), hk: hacker.status(), bgm }); // số người đang chờ ở phòng đấu Gian 1, Gian 2; nhạc nền hiện tại
 
     // Các API dưới đây cần đăng nhập
     if (path.startsWith("/api/") && !path.startsWith("/api/admin/")) {
@@ -144,10 +157,10 @@ export function createApp(config) {
       if (path === "/api/runs" && method === "POST") {
         const { game } = await readBody(req);
         if (!GAMES.includes(game)) return send(res, 400, { error: "Gian không tồn tại" });
-        // Gian 1, Gian 2 chỉ chơi theo phòng (đủ người mới bắt đầu, qua WebSocket): không cho chơi một mình để lấy điểm
+        // Gian 1 (Ai là Hacker?), Gian 2 chỉ chơi theo phòng qua WebSocket: không cho chơi một mình để lấy điểm
         if (game === "g1" || game === "g2") return send(res, 400, { error: "Gian này chơi theo phòng: vào phòng chờ để chơi cùng mọi người" });
         if (store.runsSince(pid, Date.now() - 864e5) >= RUNS_PER_DAY) return send(res, 429, { error: "Bạn đã chơi rất nhiều hôm nay, nghỉ ngơi rồi quay lại nhé!" });
-        const started = game === "g1" ? swipe.start(content.cards) : game === "g2" ? rebus.start(content.rebus) : runner.start();
+        const started = game === "g2" ? rebus.start(content.rebus) : runner.start();
         const id = store.createRun(pid, game, started.state);
         return send(res, 200, { runId: id, game, counted: store.eventActive(), ...started.view });
       }
@@ -158,10 +171,7 @@ export function createApp(config) {
         if (run.finished) return send(res, 409, { error: "Lượt chơi đã kết thúc" });
         if (now - run.started > RUN_TTL) return send(res, 410, { error: "Lượt chơi đã quá hạn" });
         const body = await readBody(req), action = m[2];
-        if (run.game === "g1") {
-          if (action === "answer") { const r = swipe.answer(run, body, content.cards, now); store.saveRun(run); return send(res, 200, r); }
-          if (action === "finish") return send(res, 200, finishResponse(run, "g1", swipe.result(run, content.cards)));
-        } else if (run.game === "g2") {
+        if (run.game === "g2") {
           if (action === "finish") return send(res, 200, finishResponse(run, "g2", rebus.result(run, content.rebus)));
           const r = rebus.act(run, action, body, content.rebus, now); store.saveRun(run); return send(res, 200, r);
         } else if (run.game === "g3" && action === "finish") {
@@ -184,7 +194,9 @@ export function createApp(config) {
       if (path === "/api/admin/event" && method === "PUT") {
         const e = await readBody(req);
         if (!e.id || !e.name || isNaN(Date.parse(e.start)) || isNaN(Date.parse(e.end)) || !Array.isArray(e.prizes)) return send(res, 400, { error: "Thiếu id, tên, thời gian hoặc giải thưởng" });
-        store.setEvent({ id: String(e.id), name: String(e.name), start: e.start, end: e.end, prizes: e.prizes, rules: String(e.rules || "") });
+        const num = (v, d) => Number.isFinite(Number(v)) && Number(v) >= 0 ? Math.round(Number(v)) : d, old = store.event();
+        store.setEvent({ id: String(e.id), name: String(e.name), start: e.start, end: e.end, prizes: e.prizes, rules: String(e.rules || ""),
+          g1DayCap: num(e.g1DayCap, old.g1DayCap ?? 1000), g1EventCap: num(e.g1EventCap, old.g1EventCap ?? 3000) }); // giới hạn điểm Gian 1 mỗi ngày và cả đợt
         return send(res, 200, { ok: true, event: store.event() });
       }
       if (path === "/api/admin/reports") {

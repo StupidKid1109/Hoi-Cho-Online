@@ -6,8 +6,8 @@ const env = (import.meta && import.meta.env) || {};
 export const API_BASE = (env.VITE_API_BASE || "").replace(/\/$/, "");
 
 export const BOOTHS = [
-  { id: "g1", c: "#c8102e", tag: "Gian 1", name: "Thật hay giả?", icons: "🕵️📱", topic: "Phòng chống lừa đảo", goods: "Soi tin · bắt lừa",
-    desc: "Đọc tin nhắn rồi vuốt trái nếu là lừa đảo, vuốt phải nếu an toàn. 60 giây, đúng liên tiếp được thưởng thêm, sai bị trừ 3 giây." },
+  { id: "g1", c: "#c8102e", tag: "Gian 1", name: "Ai là Hacker?", icons: "🕵️💻", topic: "An toàn thông tin", goods: "Đoán từ · bắt Hacker",
+    desc: "4–8 người, mỗi người nhận một từ về an toàn thông tin; Hacker nhận từ gần giống. Lần lượt mô tả, bỏ phiếu tìm ra Hacker." },
   { id: "g2", c: "#0f8a5f", tag: "Gian 2", name: "Đuổi hình bắt chữ", icons: "🖼️🔤", topic: "Văn hóa, địa danh", goods: "Nhìn hình · đoán chữ",
     desc: "Nhìn các hình ghép lại và đoán tên địa danh. Mỗi lượt 5 câu, 40 giây mỗi câu, trả lời càng nhanh càng nhiều điểm." },
   { id: "g3", c: "#2563eb", tag: "Gian 3", name: "Đường về an toàn", icons: "🛵🚦", topic: "An toàn giao thông", goods: "Lái xe · né vi phạm",
