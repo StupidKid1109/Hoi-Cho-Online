@@ -71,7 +71,7 @@ export function buildHub(context) {
 /* ---------- Người chơi khác ---------- */
 function peerEl(p) {
   if (!$("p_" + p.id)) {
-    const wrap = document.createElement("div"); wrap.innerHTML = avHTML("p_" + p.id, p.nick, PEOPLE[Math.abs(hash(p.id)) % PEOPLE.length], false);
+    const wrap = document.createElement("div"); wrap.innerHTML = avHTML("p_" + p.id, p.nick, GD_EMO[p.gd] || PEOPLE[Math.abs(hash(p.id)) % PEOPLE.length], false);
     $("cam").appendChild(wrap.firstChild);
   }
   return $("p_" + p.id);
@@ -80,7 +80,9 @@ function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s
 export function addPeer(p) { const q = { ...p, tx: p.x, ty: p.y, walk: false }; peers.set(p.id, q); const el = peerEl(q); el.style.display = hidden.has(p.id) ? "none" : ""; }
 export function removePeer(id) { peers.delete(id); const el = $("p_" + id); if (el) el.remove(); }
 export function movePeer(id, x, y) { const p = peers.get(id); if (p) { p.tx = x; p.ty = y; } }
-export function lookPeer() {} // bản CSS 3D vẽ nhân vật bằng biểu tượng, không phân biệt nam nữ
+const GD_EMO = { nam: "👦", nu: "👧" };
+/** Người khác đổi nhân vật nam/nữ: đổi biểu tượng. */
+export function lookPeer(id, gd) { const p = peers.get(id), el = $("p_" + id); if (p) p.gd = gd; if (el && GD_EMO[gd]) el.querySelector(".me").textContent = GD_EMO[gd]; }
 export function renameSelf(nick) { const el = $("avo"); if (el) el.querySelector(".nm").textContent = nick + " (bạn)"; }
 export function renamePeer(id, nick) { const p = peers.get(id); if (p) { p.nick = nick; const el = $("p_" + id); if (el) el.querySelector(".nm").textContent = nick; } }
 export function peerEmote(id, e) { if (!hidden.has(id) && EMOTES[e]) bubble("p_" + id, EMOTES[e][0]); }

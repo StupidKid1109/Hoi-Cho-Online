@@ -10,7 +10,7 @@ import {
   createRenderer, applyQuality, QualityWatch, setMaxAniso, canvasTex, emojiSprite, blobTex, glowTex,
   rrect, fitText, mergeParts, disposeTree, waitFonts, FONT
 } from "./gfx/kit.js";
-import { setMyGender, characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
+import { setMyGender, peerLook, characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
 import { loadKit, hasKit, model } from "./gfx/models.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { WORLD, CENTER, GATE, SPAWN, SPOTS, LOCKED, BLOCK as WORLD_BLOCK, BENCHES, TABLES, SEATS, PLAZA_R, FAIR_R, PAVILION, standPoint } from "../../shared/world.js";
@@ -944,7 +944,7 @@ function buildPending(maxPerFrame = 4) {
   if (q.length > maxPerFrame) q.sort((a, b) => a.root.position.distanceToSquared(G.camera.position) - b.root.position.distanceToSquared(G.camera.position));
   for (const a of q.splice(0, maxPerFrame)) {
     if (!G.avatars.has(a.id) || a.body) continue;
-    a.body = new THREE.Mesh(characterGeometry(a.seed, false, a.gd), a.mat); a.root.add(a.body);
+    a.body = new THREE.Mesh(characterGeometry(a.seed, peerLook(a.gd), a.gd), a.mat); a.root.add(a.body);
   }
 }
 /** Đặt bóng tròn cho mọi nhân vật đang hiện. */

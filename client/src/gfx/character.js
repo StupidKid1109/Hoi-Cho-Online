@@ -28,6 +28,8 @@ export const MINE_LOOK = "mu-do";
 export const LOOK_OF = { nam: "mu-do", nu: "nu-do" };
 let myLook = MINE_LOOK;
 export function setMyGender(g) { myLook = LOOK_OF[g] || MINE_LOOK; }
+/** Kiểu nhân vật của người khác: đã chọn nam/nữ thì dùng đúng mô hình nam/nữ như của mình, chưa chọn thì ngẫu nhiên. */
+export const peerLook = gd => LOOK_OF[gd] || false;
 export const myGender = () => myLook === "nu-do" ? "nu" : "nam";
 
 /* ---------- Dựng hình ---------- */

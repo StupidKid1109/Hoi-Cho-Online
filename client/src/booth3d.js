@@ -6,7 +6,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { esc } from "./ui.js";
 import { initialQuality } from "./gfx/webgl.js";
 import { createRenderer, setMaxAniso, canvasTex, emojiSprite, glowTex, blobTex, rrect, fitText, disposeTree, FONT } from "./gfx/kit.js";
-import { characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
+import { peerLook, characterGeometry, characterMaterial, animateCharacter } from "./gfx/character.js";
 import { CAFE_SEATS, roomOf, inPoly } from "../../shared/world.js";
 
 const U = 100;
@@ -347,7 +347,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   const people = new Map(); // khoá: "me" hoặc số thứ tự n
   function addPerson(key, name, x, y, mine, gd) {
     if (people.has(key)) removePerson(key);
-    const root = new THREE.Group(), m = characterMaterial(), body = new THREE.Mesh(characterGeometry(mine ? 7 : hash(name), mine, gd), m), sh = new THREE.Mesh(shadowGeo, shadowMat);
+    const root = new THREE.Group(), m = characterMaterial(), body = new THREE.Mesh(characterGeometry(mine ? 7 : hash(name), mine || peerLook(gd), gd), m), sh = new THREE.Mesh(shadowGeo, shadowMat);
     sh.position.y = 0.05; root.add(sh, body); root.scale.setScalar(K); scene.add(root);
     const el = document.createElement("div"); el.className = "l3 av";
     el.innerHTML = '<div class="avt' + (mine ? " mine" : "") + '"><span class="bub"></span><span class="nm">' + esc(name) + (mine ? " (bạn)" : "") + "</span></div>";

@@ -58,6 +58,8 @@ async function makeBot(i) {
     .catch(() => { throw new Error("Không kết nối được máy chủ " + BASE + ". Hãy chạy chay-thu.cmd trước và để cửa sổ máy chủ mở."); });
   const data = await r.json().catch(() => ({}));
   if (!data.token) throw new Error(r.status === 401 ? "Máy chủ chưa bật chế độ thử (cần DEV_LOGIN=1, ví dụ chạy bằng chay-thu.cmd)" : "Đăng nhập lỗi: " + (data.error || r.status));
+  // người ảo cũng chọn nhân vật nam/nữ như người thật
+  await fetch(BASE + "/api/me/profile", { method: "POST", headers: { "content-type": "application/json", authorization: "Bearer " + data.token }, body: JSON.stringify({ gender: i % 2 ? "nu" : "nam" }) }).catch(() => {});
   const ws = new WebSocket(BASE.replace(/^http/, "ws") + "/ws?khu=" + KHU + "&token=" + encodeURIComponent(data.token));
   const a = rnd(0, Math.PI * 2), d = rnd(0, PLAZA_R * 1.4);
   const b = { i, ws, id: null, x: CENTER.x + Math.cos(a) * d, y: CENTER.y + Math.sin(a) * d, goal: null, until: Date.now() + rnd(0, 4000), seat: -1, player: i % 5 !== 0, match: null, nextChat: Date.now() + rnd(20000, 180000), nextEmote: Date.now() + rnd(8000, 40000) };
