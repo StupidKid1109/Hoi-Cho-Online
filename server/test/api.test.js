@@ -1,6 +1,6 @@
 // Kiểm thử máy chủ: chạy bằng `npm test` trong thư mục server.
 import { test, before, after } from "node:test";
-import { SPAWN, SEATS, WORLD, BOOTH_ROOM, CAFE_SEATS } from "../../shared/world.js";
+import { SPAWN, SEATS, WORLD, roomOf, CAFE_SEATS } from "../../shared/world.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
@@ -206,7 +206,7 @@ test("Đấu phòng Gian 1, Gian 2: đủ người mới bắt đầu, chơi cù
   assert.ok(a.inbox.find(m => m.t === "mpjoin" && m.peer.n === sp.you.n), "người cũ được báo có người mới vào");
   a.send({ t: "mpos", x: 300, y: 99999 }); a.send({ t: "memote", e: 0 }); await wait(180);
   const mv = b.inbox.find(m => m.t === "mposes");
-  assert.ok(mv && mv.p.some(q => q[1] === 300 && q[2] === BOOTH_ROOM.h - BOOTH_ROOM.margin), "đi lại được, giới hạn trong phòng");
+  assert.ok(mv && mv.p.some(q => q[1] === 300 && q[2] === roomOf("g1").h - roomOf("g1").margin), "đi lại được, giới hạn trong phòng");
   assert.ok(b.inbox.find(m => m.t === "memote" && m.e === 0), "chào nhau trong gian");
   const l2 = [...b.inbox].reverse().find(m => m.t === "mlobby");
   assert.equal(l2.n, 2); assert.equal(l2.min, 3); assert.equal(l2.startIn, null, "2 người: chưa đếm ngược");

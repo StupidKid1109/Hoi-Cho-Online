@@ -29,8 +29,8 @@ const hash = s => { let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + 
  * Toạ độ mô hình: cx, cz (tâm đặt vào giữa phòng), floor (mặt sàn), đơn vị gốc của mô hình; scale đổi ra mét. Nạp lỗi thì giữ phòng tự dựng.
  */
 const ROOM_MODELS = {
-  g1: { url: "models/phong-cho/hacker.glb", scale: 3.2, rotY: -Math.PI / 2, k: 1.6, posters: true, hide: ["texttype"], walls: true, ceil: 6.8, light: 0x9a7cff, bg: 0x0b0b10, screen: { xAbs: 4.95, zAbs: 0.25, rot: -Math.PI / 2, cy: 4.3, w: 6.8, h: 2.7 } },
-  g2: { url: "models/phong-cho/tron.glb", scale: 0.4, cx: 0, cz: 0, floor: 0, z: -6.2, basic: true, bg: 0x00030a, screen: { zAbs: -7.15, cy: 2.4, w: 7.2, h: 3.4 } },
+  g1: { url: "models/phong-cho/hacker.glb", scale: 3.2, rotY: -Math.PI / 2, k: 1.6, widen: 1.414, posters: true, hide: ["texttype"], walls: true, ceil: 6.8, light: 0x9a7cff, bg: 0x0b0b10, screen: { xAbs: 7.4, zAbs: 0.35, rot: -Math.PI / 2, cy: 4.3, w: 6.8, h: 2.7 } },
+  g2: { url: "models/phong-cho/tron.glb", scale: 0.56, cx: 0, cz: 0, floor: 0, z: -8.3, basic: true, bg: 0x00030a, screen: { zAbs: -9.75, cy: 3.4, w: 10, h: 4.7 } },
   g3: { url: "models/phong-cho/pho.glb", scale: 0.012, cx: -435, cz: -454, floor: -115, bg: 0xbfe3f2, billboard: true, clearSpawn: true, screen: { zAbs: -4.2, cy: 2.6, w: 5.6, h: 2.1 } }
 };
 const POSTER_MATS = ["giant_robot", "swaarden", "shower", "whale", "astronaut", "blood_forest"];
@@ -189,6 +189,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   if (RM) loadRoomModel(scene.children.slice(nProc).filter(o => o !== sg));
 
   /** Nạp mô hình phòng chờ của gian (ROOM_MODELS), thay phòng tự dựng; tính vật cản để không đi xuyên đồ đạc. */
+  const posterMeshes = [];
   function loadRoomModel(proc) {
     new GLTFLoader().load(new URL(RM.url, document.baseURI).href, gl => {
       if (closed) return;
@@ -202,15 +203,16 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
           ? new THREE.MeshBasicMaterial({ map: sm.emissiveMap || sm.map, color: sm.emissiveMap ? 0xffffff : sm.color, alphaTest: sm.alphaTest || 0, side: THREE.DoubleSide })
           : new THREE.MeshLambertMaterial({ map: sm.map, color: sm.color, alphaTest: sm.alphaTest || (sm.transparent ? 0.4 : 0), side: sm.side });
         const pi = RM.posters ? POSTER_MATS.findIndex(n => (sm.name || "").startsWith(n)) : -1;
-        if (pi >= 0) mat = new THREE.MeshLambertMaterial({ map: posterTex(ANTI_SCAM[pi], pi), side: THREE.DoubleSide }); // áp phích gốc: thay bằng áp phích chống lừa đảo
+        if (pi >= 0) { const pt = posterTex(ANTI_SCAM[pi], pi); mat = new THREE.MeshLambertMaterial({ map: pt, emissive: 0xffffff, emissiveMap: pt, emissiveIntensity: 0.35, side: THREE.DoubleSide }); } // áp phích gốc: thay bằng áp phích chống lừa đảo, hơi sáng như có đèn rọi
         if (RM.hide && RM.hide.some(h => (m.name || "").startsWith(h))) return;
-        const nm = new THREE.Mesh(g, mat); nm.name = m.name; root.add(nm); list.push(nm);
+        const nm = new THREE.Mesh(g, mat); nm.name = m.name; root.add(nm); list.push(nm); if (pi >= 0) posterMeshes.push(nm);
       });
       const k = RM.scale; root.scale.setScalar(k);
       if (RM.rotY != null) { // xoay rồi đặt tâm mô hình vào giữa phòng
         root.rotation.y = RM.rotY; root.updateMatrixWorld(true);
         const bx = new THREE.Box3().setFromObject(root), c = bx.getCenter(new THREE.Vector3());
         root.position.set(-c.x, 0, -c.z);
+        if (RM.widen) widenRoom(root, list, RM.widen);
       } else root.position.set(-RM.cx * k, -RM.floor * k, -RM.cz * k + (RM.z || 0));
       if (RM.walls) { // phòng gốc chỉ có hai vách (cắt bổ): dựng thêm vách trái; phía trước để trống
         const wm = new THREE.MeshLambertMaterial({ color: 0x15151c });
@@ -244,21 +246,72 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       }
     }, undefined, e => console.warn("Không nạp được mô hình phòng chờ, dùng phòng tự dựng", e));
   }
-  /** Áp phích chống lừa đảo (thay áp phích gốc trong phòng Hacker). */
+  /**
+   * Nới phòng rộng ra F lần theo chiều ngang mà không phóng to đồ đạc: tường, sàn kéo dãn; đồ đạc gom theo cụm chạm nhau,
+   * dời tâm cụm ra theo tỉ lệ; cụm sát tường (tranh, máy lạnh, màn hình treo) giữ nguyên khoảng cách tới tường.
+   */
+  function widenRoom(root, list, F) {
+    root.updateMatrixWorld(true);
+    for (const m of list) { m.geometry.applyMatrix4(root.matrixWorld); m.geometry.computeBoundingBox(); }
+    root.position.set(0, 0, 0); root.rotation.set(0, 0, 0); root.scale.setScalar(1);
+    const bb = list.map(m => m.geometry.boundingBox), all = new THREE.Box3(); bb.forEach(b => all.union(b));
+    const size = b => b.getSize(new THREE.Vector3());
+    const shell = bb.map(b => { const v = size(b); return (v.x > 5 && v.z > 5 && v.y < 1) || ((v.x > 5 || v.z > 5) && v.y > 5); });
+    const flat = bb.map(b => { const v = size(b); return Math.min(v.x, v.z) < 0.15 && v.y > 0.8; });
+    const par = list.map((_, i) => i), find = i => par[i] === i ? i : (par[i] = find(par[i]));
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      if (shell[i] || shell[j] || flat[i] || flat[j]) continue;
+      if (bb[i].clone().expandByScalar(0.08).intersectsBox(bb[j])) par[find(i)] = find(j);
+    }
+    // dời tâm cụm: cụm sát tường thì mặt sát tường đi theo mặt tường (tường giãn F lần nên mặt tường cũ ở p dời tới p·F)
+    const shift = (c, mn, mx, lo, hi) => mx > hi - 1.5 ? mx * (F - 1) : mn < lo + 1.5 ? mn * (F - 1) : c * (F - 1);
+    const groups = new Map();
+    list.forEach((m, i) => {
+      if (shell[i]) { m.geometry.scale(F, 1, F); return; }
+      const k = find(i); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(i);
+    });
+    for (const ids of groups.values()) {
+      const C = new THREE.Box3(); ids.forEach(i => C.union(bb[i])); const c = C.getCenter(new THREE.Vector3());
+      const dx = shift(c.x, C.min.x, C.max.x, all.min.x, all.max.x), dz = shift(c.z, C.min.z, C.max.z, all.min.z, all.max.z);
+      ids.forEach(i => list[i].geometry.translate(dx, 0, dz));
+    }
+  }
+  /** Áp phích chống lừa đảo (thay tranh gốc trong phòng): giấy in bóng, khung, minh hoạ, khẩu hiệu, ô thông tin. */
   function posterTex(text, i) {
-    const cols = ["#c8102e", "#1d4ed8", "#0f8a5f", "#b45309", "#7c3aed", "#be123c"];
-    const t = canvasTex(400, 560, (g, w, h) => {
-      g.fillStyle = "#fffaf0"; g.fillRect(0, 0, w, h);
-      g.fillStyle = cols[i % cols.length]; g.fillRect(0, 0, w, 120); g.fillRect(0, h - 26, w, 26);
-      g.fillStyle = "#fff"; g.textAlign = "center"; g.textBaseline = "middle"; g.font = "900 46px " + FONT; g.fillText("CẢNH GIÁC", w / 2, 62);
-      g.font = "110px " + FONT; g.fillText(["🔐", "📞", "🔗", "💸", "🪪", "👮"][i % 6], w / 2, 220);
-      g.fillStyle = cols[i % cols.length]; g.font = "900 44px " + FONT;
-      const words = text.split(" "), lines = []; let cur = "";
-      for (const wd of words) { const tt = cur ? cur + " " + wd : wd; if (g.measureText(tt).width > w - 50 && cur) { lines.push(cur); cur = wd; } else cur = tt; }
-      lines.push(cur); lines.forEach((ln, k) => fitText(g, ln, w / 2, 360 + k * 54 - (lines.length - 1) * 20, w - 40, 44));
+    const C = [["#b91c1c", "#ef4444"], ["#1e3a8a", "#3b82f6"], ["#065f46", "#10b981"], ["#9a3412", "#f97316"], ["#5b21b6", "#8b5cf6"], ["#9f1239", "#f43f5e"]][i % 6];
+    const ICON = ["🔐", "📞", "🔗", "💸", "🪪", "👮"][i % 6], SUB = ["Mã OTP là chìa khoá tài khoản của bạn", "Không làm theo người lạ qua điện thoại", "Tin nhắn trúng thưởng thường là bẫy", "Gọi lại người thân để xác minh", "Không gửi ảnh CCCD cho người lạ", "Gọi 113 hoặc đến công an phường"][i % 6];
+    const t = canvasTex(512, 720, (g, w, h) => {
+      // nền: dải màu đậm phía trên, giấy kem phía dưới, hoạ tiết sọc chéo mờ
+      const bg = g.createLinearGradient(0, 0, 0, h); bg.addColorStop(0, C[0]); bg.addColorStop(0.5, C[1]); bg.addColorStop(0.5, "#fff8ec"); bg.addColorStop(1, "#f3e6cf");
+      g.fillStyle = bg; g.fillRect(0, 0, w, h);
+      g.save(); g.globalAlpha = 0.08; g.strokeStyle = "#fff"; g.lineWidth = 18; for (let x = -h; x < w; x += 52) { g.beginPath(); g.moveTo(x, 0); g.lineTo(x + h * 0.5, h * 0.5); g.stroke(); } g.restore();
+      // biển cảnh báo tam giác
+      g.fillStyle = "#ffd23f"; g.beginPath(); g.moveTo(w / 2, 34); g.lineTo(w / 2 + 44, 108); g.lineTo(w / 2 - 44, 108); g.closePath(); g.fill();
+      g.fillStyle = "#1f1a17"; g.font = "900 46px " + FONT; g.textAlign = "center"; g.textBaseline = "middle"; g.fillText("!", w / 2, 84);
+      g.fillStyle = "#fff"; g.font = "900 54px " + FONT; g.fillText("CẢNH GIÁC", w / 2, 156);
+      g.font = "800 26px " + FONT; g.fillStyle = "rgba(255,255,255,.88)"; g.fillText("LỪA ĐẢO QUA MẠNG", w / 2, 200);
+      // vòng tròn minh hoạ nổi giữa hai nửa
+      g.save(); g.shadowColor = "rgba(0,0,0,.35)"; g.shadowBlur = 24; g.shadowOffsetY = 8; g.fillStyle = "#fff"; g.beginPath(); g.arc(w / 2, 330, 92, 0, Math.PI * 2); g.fill(); g.restore();
+      g.lineWidth = 10; g.strokeStyle = C[1]; g.beginPath(); g.arc(w / 2, 330, 84, 0, Math.PI * 2); g.stroke();
+      g.font = "100px " + FONT; g.fillText(ICON, w / 2, 336);
+      // khẩu hiệu
+      g.fillStyle = C[0]; g.font = "900 40px " + FONT;
+      const words = text.toUpperCase().split(" "), lines = []; let cur = "";
+      for (const wd of words) { const tt = cur ? cur + " " + wd : wd; if (g.measureText(tt).width > w - 60 && cur) { lines.push(cur); cur = wd; } else cur = tt; }
+      lines.push(cur); lines.forEach((ln, k) => fitText(g, ln, w / 2, 478 + k * 46, w - 50, 40));
+      g.fillStyle = "#5b4636"; g.font = "700 22px " + FONT; fitText(g, SUB, w / 2, 488 + lines.length * 46, w - 60, 22, 700);
+      // dải chân trang
+      g.fillStyle = C[0]; g.fillRect(0, h - 64, w, 64);
+      g.fillStyle = "#fff"; g.font = "800 20px " + FONT; g.fillText("Hội chợ online · Tuyên truyền phòng chống lừa đảo", w / 2, h - 32);
+      // viền khung gỗ và lớp bóng giấy in
+      g.lineWidth = 16; g.strokeStyle = "#3a2a1c"; g.strokeRect(8, 8, w - 16, h - 16);
+      g.lineWidth = 3; g.strokeStyle = "rgba(255,255,255,.5)"; g.strokeRect(19, 19, w - 38, h - 38);
+      const gl = g.createLinearGradient(0, 0, w, h); gl.addColorStop(0, "rgba(255,255,255,.18)"); gl.addColorStop(0.35, "rgba(255,255,255,0)"); gl.addColorStop(1, "rgba(0,0,0,.12)");
+      g.fillStyle = gl; g.fillRect(16, 16, w - 32, h - 32);
     });
     return t;
   }
+
 
   /** Quán cà phê: nội thất là mô hình "Low Poly Restaurant Interior Scene" (MarkoJantti, CC BY 4.0), ghế bấm được để ngồi. */
   function buildCafeModel() {
@@ -522,7 +575,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   raf = requestAnimationFrame(loop);
   // hỗ trợ chụp thử: đặt chỗ đứng, hướng nhìn, góc nhìn (giống window.__hubView ở sảnh)
   window.__roomSit = i => sitAt(i); // hỗ trợ kiểm thử: như chạm vào ghế i
-  window.__roomDbg = () => ({ mySeat, sitOk, me: [Math.round(me.x), Math.round(me.y)], peers: [...people].filter(([k]) => k !== "me").map(([k, a]) => [k, a.seat ?? -1, a.sitAmt || 0]) }); // hỗ trợ kiểm thử
+  window.__roomDbg = () => ({ posters: posterMeshes.map(m => { const b = new THREE.Box3().setFromObject(m), c = b.getCenter(new THREE.Vector3()); return [Math.round(c.x * U + R.w / 2), Math.round(c.z * U + R.h / 2), +c.y.toFixed(1)]; }), mySeat, sitOk, me: [Math.round(me.x), Math.round(me.y)], peers: [...people].filter(([k]) => k !== "me").map(([k, a]) => [k, a.seat ?? -1, a.sitAmt || 0]) }); // hỗ trợ kiểm thử
   window.__roomView = (x, y, yw, v, p) => { if (v === "top") { topView = true; renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), 5.0)]; return; } me.x = x; me.y = y; target = null; if (yw != null) yaw = yw; if (v) { view = v; viewBlend = v === "third" ? 1 : 0; drawView(); } if (p != null) lookPitch = p; };
 
   return {

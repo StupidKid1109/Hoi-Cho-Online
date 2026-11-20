@@ -80,6 +80,8 @@ export const BLOCK = [
 /* ---------- Không gian riêng của gian hàng (phòng chờ 3D) ---------- */
 // Mỗi phòng chờ là một không gian riêng rộng ROOM.w × ROOM.h px (100 px = 1 đơn vị 3D), cửa ở cạnh dưới (phía máy quay).
 export const BOOTH_ROOM = { w: 1200, h: 900, door: { x: 600, y: 820 }, margin: 70 };
+// Phòng chờ đấu phòng Gian 1, Gian 2: rộng gấp đôi (mỗi cạnh ×1,41) cho 20–50 người
+export const MATCH_ROOM = { w: 1700, h: 1270, door: { x: 850, y: 1185 }, margin: 70 };
 // Quán cà phê: tối đa bao nhiêu người một phòng (đông hơn thì mở thêm phòng)
 export const CAFE_MAX = 50;
 // Quán cà phê dùng mô hình "Low Poly Restaurant Interior Scene" (MarkoJantti, CC BY 4.0, client/public/models/cafe).
@@ -138,4 +140,4 @@ for (const G of CAFE_GROUPS) {
   }
 }
 /** Không gian (kích thước, cửa) của phòng: quán cà phê hoặc phòng chờ các gian. */
-export const roomOf = game => game === "cafe" ? CAFE_ROOM : BOOTH_ROOM;
+export const roomOf = game => game === "cafe" ? CAFE_ROOM : game === "g1" || game === "g2" ? MATCH_ROOM : BOOTH_ROOM;
