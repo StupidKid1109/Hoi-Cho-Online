@@ -57,7 +57,8 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   const RM = CAFE ? null : ROOM_MODELS[game] || null, OBST = []; // mô hình phòng chờ; vật cản (hình chữ nhật px) tính từ mô hình khi nạp xong
   const K = CAFE ? R.model.scale : RM && RM.k ? RM.k : 1; // mô hình nội thất phóng to nên nhân vật, tầm mắt, tốc độ cũng phóng theo cho cân
   /** Điểm (x, y) px có đứng được không: trong phòng; quán thì trong sàn đi lại hoặc ngay cạnh một ghế. */
-  const walkable = (x, y) => x >= M && x <= R.w - M && y >= M && y <= R.h - M && (!R.walk || inPoly(x, y, R.walk) || CAFE_SEATS.some(se => Math.hypot(se.x - x, se.y - y) < 40)) && !TABLES.some(tb => Math.hypot(tb.x - x, tb.y - y) < tb.r) && !POSTS.some(c => Math.hypot(c.x - x, c.y - y) < c.r) && !OBST.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3]);
+  const nearSeat = (x, y) => CAFE_SEATS.some(se => Math.hypot(se.x - x, se.y - y) < 45);
+  const walkable = (x, y) => (CAFE && nearSeat(x, y)) || x >= M && x <= R.w - M && y >= M && y <= R.h - M && (!R.walk || inPoly(x, y, R.walk) || CAFE_SEATS.some(se => Math.hypot(se.x - x, se.y - y) < 40)) && !TABLES.some(tb => Math.hypot(tb.x - x, tb.y - y) < tb.r) && !POSTS.some(c => Math.hypot(c.x - x, c.y - y) < c.r) && !OBST.some(r => x > r[0] && x < r[2] && y > r[1] && y < r[3]);
   const q = initialQuality(), renderer = createRenderer(Math.min(q, 1), { alpha: game === "cafe" }); // phòng nhỏ: không cần mức cao; quán: nền trong suốt được để khoét chỗ video
   renderer.shadowMap.enabled = false; setMaxAniso(renderer);
   container.appendChild(renderer.domElement);
@@ -340,7 +341,39 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
 
   /* ---------- Ghế (quán cà phê) ---------- */
   const canSit = game === "cafe" && !solo;
-  function sitAt(i) { if (!canSit || i < 0) return; const o = seatOcc.get(i); if (o && o !== "me") return; pendingSeat = i; const se = CAFE_SEATS[i]; target = { x: se.x, y: se.y, seat: i }; }
+  let sitOk = false, sitSentAt = 0; // máy chủ đã xác nhận mình ngồi chưa (chưa thì gửi lại)
+  function sitAt(i) { if (!canSit || i < 0) return; const o = seatOcc.get(i); if (o && o !== "me") return; pendingSeat = i; const se = CAFE_SEATS[i]; target = { x: se.x, y: se.y, seat: i, path: findPath(me.x, me.y, se.x, se.y) }; }
+  /* Tìm đường vòng qua bàn, cột, đồ đạc (A* trên lưới 20 px), để chạm ghế hoặc chạm sàn ở xa không bị kẹt sau vật cản. */
+  const GS = 20, GW = Math.ceil(R.w / GS), GH = Math.ceil(R.h / GS);
+  let grid = null, gridObst = -1;
+  function findPath(sx, sy, tx, ty) {
+    if (!grid || gridObst !== OBST.length) { grid = new Uint8Array(GW * GH); gridObst = OBST.length; for (let j = 0; j < GH; j++) for (let i = 0; i < GW; i++) grid[j * GW + i] = walkable(i * GS + GS / 2, j * GS + GS / 2) ? 1 : 0; }
+    const cell = (x, y) => Math.max(0, Math.min(GW - 1, Math.floor(x / GS))) + Math.max(0, Math.min(GH - 1, Math.floor(y / GS))) * GW;
+    const s0 = cell(sx, sy), t0 = cell(tx, ty);
+    if (s0 === t0) return [];
+    const g = new Float32Array(GW * GH).fill(1e9), from = new Int32Array(GW * GH).fill(-1), open = [s0], closed = new Uint8Array(GW * GH);
+    const h = c => Math.hypot(c % GW - t0 % GW, ((c / GW) | 0) - ((t0 / GW) | 0));
+    g[s0] = 0; let n = 0;
+    while (open.length && n++ < 20000) {
+      let bi = 0; for (let k = 1; k < open.length; k++) if (g[open[k]] + h(open[k]) < g[open[bi]] + h(open[bi])) bi = k;
+      const c = open.splice(bi, 1)[0]; if (c === t0) break; if (closed[c]) continue; closed[c] = 1;
+      const cx = c % GW, cy = (c / GW) | 0;
+      for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+        const x = cx + dx, y = cy + dy; if (x < 0 || y < 0 || x >= GW || y >= GH) continue;
+        const nc = y * GW + x; if (!grid[nc] && nc !== t0) continue;
+        if (dx && dy && (!grid[cy * GW + x] || !grid[y * GW + cx])) continue; // không lách chéo qua góc vật cản
+        const ng = g[c] + (dx && dy ? 1.414 : 1); if (ng < g[nc]) { g[nc] = ng; from[nc] = c; open.push(nc); }
+      }
+    }
+    if (from[t0] < 0) return [];
+    const pts = []; for (let c = from[t0]; c !== s0 && c >= 0; c = from[c]) pts.push({ x: (c % GW) * GS + GS / 2, y: ((c / GW) | 0) * GS + GS / 2 });
+    pts.reverse();
+    // rút gọn: bỏ các điểm đi thẳng tới được
+    const clear = (a, b) => { const d = Math.hypot(b.x - a.x, b.y - a.y), st = Math.ceil(d / 10); for (let k = 1; k < st; k++) if (!walkable(a.x + (b.x - a.x) * k / st, a.y + (b.y - a.y) * k / st)) return false; return true; };
+    const out = []; let cur = { x: sx, y: sy };
+    for (let k = 0; k < pts.length; k++) { const nx = pts[k + 1] || { x: tx, y: ty }; if (!clear(cur, nx)) { out.push(pts[k]); cur = pts[k]; } }
+    return out;
+  }
   function standUp() { if (mySeat < 0) return; seatOcc.delete(mySeat); mySeat = -1; send({ t: "msit", s: -1 }); }
   function nearestFreeSeat() { let best = -1, bd = 110; CAFE_SEATS.forEach((se, i) => { if (seatOcc.has(i)) return; const d = Math.hypot(se.x - me.x, se.y - me.y); if (d < bd) { bd = d; best = i; } }); return best; }
   sitBtn.onclick = e => { e.stopPropagation(); if (mySeat >= 0) standUp(); else sitAt(nearestFreeSeat()); };
@@ -360,7 +393,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     ndc.set((e.clientX - r.left) / r.width * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     ray.setFromCamera(ndc, camera);
     if (canSit) { const h = ray.intersectObjects(seatPick, false)[0]; if (h) return sitAt(h.object.userData.seat); }
-    if (ray.ray.intersectPlane(plane, hit)) { standUp(); pendingSeat = -1; target = { x: Math.max(M, Math.min(R.w - M, hit.x * U + R.w / 2)), y: Math.max(M, Math.min(R.h - M, hit.z * U + R.h / 2)) }; }
+    if (ray.ray.intersectPlane(plane, hit)) { standUp(); pendingSeat = -1; const tx = Math.max(M, Math.min(R.w - M, hit.x * U + R.w / 2)), ty = Math.max(M, Math.min(R.h - M, hit.z * U + R.h / 2)); target = { x: tx, y: ty, path: walkable(tx, ty) ? findPath(me.x, me.y, tx, ty) : [] }; }
   };
   const onKey = e => {
     if (!active || e.target.tagName === "INPUT") return;
@@ -406,15 +439,22 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
       const sp = SPEED * K * (keys.shift ? 1.6 : 1) * Math.min(1, n);
       me.x += (rx * kx - fx * ky) / n * sp * dt; me.y += (ry * kx - fy * ky) / n * sp * dt;
     } else if (target) {
+      if (target.path && target.path.length) { // đi theo đường vòng
+        const w = target.path[0], wd = Math.hypot(w.x - me.x, w.y - me.y);
+        if (wd < 8) target.path.shift(); else { const k = Math.min(wd, SPEED * K * dt) / wd; me.x += (w.x - me.x) * k; me.y += (w.y - me.y) * k; }
+      } else {
       const dx = target.x - me.x, dy = target.y - me.y, d = Math.hypot(dx, dy);
-      if (d < 4) { if (target.seat != null && pendingSeat === target.seat && !seatOcc.has(target.seat)) { mySeat = target.seat; seatOcc.set(mySeat, "me"); send({ t: "msit", s: mySeat }); } target = null; pendingSeat = -1; }
+      if (d < 4) { if (target.seat != null && pendingSeat === target.seat && !seatOcc.has(target.seat)) { mySeat = target.seat; seatOcc.set(mySeat, "me"); sitOk = false; sitSentAt = ts; send({ t: "msit", s: mySeat }); } target = null; pendingSeat = -1; }
       else { const k = Math.min(d, SPEED * K * dt) / d; me.x += dx * k; me.y += dy * k; }
+      if (target && target.seat != null && d < 70) { me.x = target.x; me.y = target.y; } // gần tới ghế: vào thẳng chỗ ngồi (ghế sát bàn không bị bàn chặn)
+      }
     }
     me.x = Math.max(M, Math.min(R.w - M, me.x)); me.y = Math.max(M, Math.min(R.h - M, me.y));
     if (!walkable(me.x, me.y) && walkable(ox, oy)) { // chạm tường / quầy: trượt dọc theo một trục, không được thì đứng lại (đang kẹt trong vật cản thì cho đi ra)
       if (walkable(me.x, oy)) me.y = oy; else if (walkable(ox, me.y)) me.x = ox; else { me.x = ox; me.y = oy; }
       if (target && target.seat == null && Math.hypot(me.x - ox, me.y - oy) < 0.5) target = null;
     }
+    if (mySeat >= 0 && !sitOk && ts - sitSentAt > 1200) { sitSentAt = ts; send({ t: "msit", s: mySeat }); } // máy chủ chưa nhận lệnh ngồi: gửi lại
     if (!solo && (Math.abs(me.x - sentX) > 2 || Math.abs(me.y - sentY) > 2) && ts - sentAt > 110) { sentAt = ts; sentX = me.x; sentY = me.y; send({ t: "mpos", x: Math.round(me.x), y: Math.round(me.y) }); }
     // nút Ngồi / Đứng dậy
     if (canSit) {
@@ -481,6 +521,8 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   }
   raf = requestAnimationFrame(loop);
   // hỗ trợ chụp thử: đặt chỗ đứng, hướng nhìn, góc nhìn (giống window.__hubView ở sảnh)
+  window.__roomSit = i => sitAt(i); // hỗ trợ kiểm thử: như chạm vào ghế i
+  window.__roomDbg = () => ({ mySeat, sitOk, me: [Math.round(me.x), Math.round(me.y)], peers: [...people].filter(([k]) => k !== "me").map(([k, a]) => [k, a.seat ?? -1, a.sitAmt || 0]) }); // hỗ trợ kiểm thử
   window.__roomView = (x, y, yw, v, p) => { if (v === "top") { topView = true; renderer.clippingPlanes = [new THREE.Plane(new THREE.Vector3(0, -1, 0), 5.0)]; return; } me.x = x; me.y = y; target = null; if (yw != null) yaw = yw; if (v) { view = v; viewBlend = v === "third" ? 1 : 0; drawView(); } if (p != null) lookPitch = p; };
 
   return {
@@ -494,7 +536,7 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     removePeer(n) { for (const [s, k] of seatOcc) if (k === n) seatOcc.delete(s); removePerson(n); },
     /** Tin "msit": người số n ngồi ghế s (-1: đứng dậy). */
     sit(n, s, myN) {
-      if (n === myN) { if (s < 0 && mySeat >= 0) { seatOcc.delete(mySeat); mySeat = -1; } return; }
+      if (n === myN) { if (s >= 0 && s === mySeat) sitOk = true; if (s < 0 && mySeat >= 0 && sitOk) { seatOcc.delete(mySeat); mySeat = -1; } return; }
       const a = people.get(n); if (!a) return;
       if (a.seat >= 0 && seatOcc.get(a.seat) === n) seatOcc.delete(a.seat);
       a.seat = s; if (s >= 0) { seatOcc.set(s, n); if (mySeat === s) { mySeat = -1; } if (pendingSeat === s) { pendingSeat = -1; target = null; } }

@@ -47,8 +47,8 @@ export function makeMatches({ config, content, canPlay, beginRun, finishRun }) {
   function sitInSpace(c, m) {
     const L = where.get(c.pid); if (!L || !L.lobby || !L.cafe) return;
     const p = L.players.get(c.pid), s = Number(m.s); if (!p || !Number.isInteger(s)) return;
-    const now = Date.now(); if (now - (p.lastSit || 0) < 300) return; p.lastSit = now;
-    if (s === -1) { if (freeSeat(L, p)) toAll(L, { t: "msit", g: L.game, n: p.n, s: -1 }); return; }
+    if (s === -1) { if (freeSeat(L, p)) toAll(L, { t: "msit", g: L.game, n: p.n, s: -1 }); return; } // đứng dậy: không giới hạn
+    const now = Date.now(); if (now - (p.lastSit || 0) < 150 && p.seat !== s) return; p.lastSit = now; // chống bấm dồn (ngồi lại đúng ghế đang ngồi thì luôn trả lời)
     const se = CAFE_SEATS[s]; if (!se) return;
     const who = L.seats.get(s);
     if (who && who !== p.pid) return send(c, { t: "msitno", g: L.game, s, text: "Ghế này có người ngồi rồi, bạn chọn ghế khác nhé." });
