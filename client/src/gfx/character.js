@@ -14,6 +14,15 @@ const COLORS = ["#e63946", "#2a9d8f", "#3a86ff", "#ff9f1c", "#8338ec", "#06d6a0"
 const AODAI = ["#ffffff", "#f7c6d0", "#ffd166", "#a8dadc", "#c8102e", "#9b5de5"];
 const PANTS = ["#264653", "#3d405b", "#1d3557", "#4a3b2f", "#2b2d42"];
 
+/** Các kiểu nhân vật của mình (tóc sáng màu để nhìn từ sau lưng không thấy cả đầu đen). */
+export const MINE_LOOKS = {
+  "non-la": { hat: "nonla", hair: "#1c1714", style: "short" },                 // kiểu cũ
+  "mu-do": { hat: "cap", cap: "#d62839", star: true, hair: "#8b5a2b", style: "short" },
+  "toc-nau": { hat: "none", hair: "#a0683a", style: "spiky" },
+  "mu-vang": { hat: "cap", cap: "#ffc533", hair: "#8b5a2b", style: "short" }
+};
+export const MINE_LOOK = "mu-do";
+
 /* ---------- Dựng hình ---------- */
 function part(list, geo, color, limb, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
   const g = geo.index ? geo.toNonIndexed() : geo.clone();
@@ -33,17 +42,19 @@ const Cyl = (rt, rb, h, s = 14, open = false) => new THREE.CylinderGeometry(rt, 
 
 /**
  * Tạo geometry nhân vật theo seed (cùng seed thì cùng ngoại hình trên mọi máy).
- * mine = true: nhân vật của mình, đội nón lá, áo đỏ để dễ nhận ra.
+ * mine: nhân vật của mình, áo đỏ sao vàng để dễ nhận ra; true = kiểu MINE_LOOK, hoặc tên một kiểu trong MINE_LOOKS.
  */
 export function characterGeometry(seed, mine) {
   let h = Math.abs(seed) || 1;
   const pick = arr => { h = (Math.imul(h, 1103515245) + 12345) >>> 0; return arr[(h >>> 8) % arr.length]; };
-  const skin = pick(SKIN), hair = pick(HAIR), pants = pick(PANTS);
+  const look = mine ? MINE_LOOKS[mine === true ? MINE_LOOK : mine] || MINE_LOOKS[MINE_LOOK] : null;
+  const skin = pick(SKIN), pants = pick(PANTS); let hair = pick(HAIR);
+  if (look) hair = look.hair;
   const outfit = mine ? "tee" : pick(["tee", "student", "aodai", "hoodie", "worker", "tee", "student"]);
   const top = mine ? "#d62839" : outfit === "student" ? "#ffffff" : outfit === "worker" ? "#2f6db5" : outfit === "aodai" ? pick(AODAI) : pick(COLORS);
-  const hat = mine ? "nonla" : outfit === "aodai" ? pick(["none", "nonla", "none", "none"]) : pick(["none", "none", "none", "none", "none", "cap", "cap", "nonla"]);
+  const hat = look ? look.hat : outfit === "aodai" ? pick(["none", "nonla", "none", "none"]) : pick(["none", "none", "none", "none", "none", "cap", "cap", "nonla"]);
   // kiểu tóc hợp với mũ: đội mũ lưỡi trai thì tóc gọn, đội nón lá thì không búi cao
-  const style = pick(hat === "cap" ? ["short", "ponytail"] : hat === "nonla" ? ["short", "bob", "long", "ponytail"]
+  const style = look ? look.style : pick(hat === "cap" ? ["short", "ponytail"] : hat === "nonla" ? ["short", "bob", "long", "ponytail"]
     : outfit === "aodai" ? ["long", "bun", "bob"] : ["short", "spiky", "bob", "ponytail", "buns", "short", "long"]);
   const L = [];
 
@@ -110,10 +121,11 @@ export function characterGeometry(seed, mine) {
     part(L, new THREE.TorusGeometry(0.44, 0.012, 4, 24), "#b8954a", BODY, 0, 1.11, 0, Math.PI / 2);
   }
   if (hat === "cap") {
-    const cc = pick(COLORS);
+    const cc = look ? look.cap : pick(COLORS);
     part(L, Sph(0.29, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), cc, BODY, 0, 0.96, 0);
     part(L, Cyl(0.17, 0.17, 0.02, 14), cc, BODY, 0, 1.03, 0.25, 0.15, 0, 0, 1, 1, 0.8);
-    part(L, Sph(0.03, 6, 4), "#ffffff", BODY, 0, 1.25, 0);
+    part(L, Sph(0.03, 6, 4), look ? look.cap : "#ffffff", BODY, 0, 1.25, 0);
+    if (look && look.star) part(L, new THREE.CircleGeometry(0.065, 5), "#ffd23f", BODY, 0, 1.085, 0.27, -0.45, 0, Math.PI / 2); // sao vàng trước mũ
   }
 
   const g = mergeGeometries(L, false);
