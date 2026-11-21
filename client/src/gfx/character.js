@@ -140,7 +140,7 @@ export function characterGeometry(seed, mine, gd) {
 
   // tóc
   const bangs = (...a) => { if (hat !== "cap" && hat !== "beanie") part(L, ...a); };
-  const cap = (r = 0.285) => part(L, Sph(hat === "cap" ? 0.262 : r, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), hair, BODY, 0, 0.94, -0.015, -0.22);
+  const cap = (r = 0.285) => part(L, Sph(hat === "cap" || hat === "beanie" ? 0.262 : r, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), hair, BODY, 0, 0.94, -0.015, -0.22);
   if (style === "short") { cap(); bangs(Sph(0.12, 10, 6), hair, BODY, -0.08, 1.07, 0.19, 0, 0, 0, 1.4, 0.55, 0.6); }
   if (style === "spiky") { cap(0.28); for (let i = 0; i < 6; i++) { const a = -0.9 + i * 0.36; part(L, new THREE.ConeGeometry(0.07, 0.17, 6), hair, BODY, Math.sin(a) * 0.17, 1.17 - Math.abs(a) * 0.06, Math.cos(a) * 0.05 - 0.02, -0.3 + Math.cos(a) * 0.1, 0, -a * 0.6); } }
   if (style === "bob") { cap(0.3); part(L, Sph(0.3, 18, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.4), hair, BODY, 0, 0.93, -0.03, 0, 0, 0, 1.02, 1, 1); bangs(Sph(0.13, 10, 6), hair, BODY, 0.06, 1.07, 0.2, 0, 0, 0, 1.6, 0.5, 0.6); }
