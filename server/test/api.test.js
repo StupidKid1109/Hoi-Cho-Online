@@ -349,7 +349,7 @@ test("Phòng chờ có chat (có lọc); quán cà phê: vào không gian riêng
   } finally { for (const x of [a, b]) x.ws.close(); }
 });
 
-test("Nhân vật nam/nữ và tên chờ quản trị viên duyệt", async () => {
+test("Nhân vật nam/nữ, mũ, màu áo và tên chờ quản trị viên duyệt", async () => {
   const t = await login("ten-a"), t2 = await login("ten-b");
   let me = (await call("/api/me", { token: t })).data;
   assert.equal(me.gender, null); assert.equal(me.nameReq, null);
@@ -357,6 +357,11 @@ test("Nhân vật nam/nữ và tên chờ quản trị viên duyệt", async () 
   assert.equal((await call("/api/me/profile", { token: t, method: "POST", body: { gender: "x" } })).status, 400);
   let r = await call("/api/me/profile", { token: t, method: "POST", body: { gender: "nu" } });
   assert.equal(r.status, 200); assert.equal(r.data.gender, "nu");
+  // trang phục: mũ + màu áo hợp lệ mới lưu
+  for (const bad of ["mu-do", "cap-xanhlo", "cap-do-x", "<b>"]) assert.equal((await call("/api/me/profile", { token: t, method: "POST", body: { look: bad } })).status, 400, bad);
+  r = await call("/api/me/profile", { token: t, method: "POST", body: { look: "beanie-tim" } });
+  assert.equal(r.status, 200); assert.equal(r.data.look, "beanie-tim"); assert.equal(r.data.gender, "nu");
+  assert.equal((await call("/api/me", { token: t })).data.look, "beanie-tim");
   // tên không hợp lệ: số điện thoại, link, từ tục, giả danh, ký tự lạ, quá dài
   for (const bad of ["0912345678", "abc.com", "vcl", "Công an phường", "<b>x</b>", "Tên rất là dài quá mức cho phép", "a"])
     assert.equal((await call("/api/me/profile", { token: t, method: "POST", body: { name: bad } })).status, 400, bad);

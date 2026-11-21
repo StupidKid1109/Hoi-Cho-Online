@@ -90,6 +90,7 @@ Chưa build vẫn chơi được: máy chủ phục vụ thẳng mã nguồn, s�
 ## Màn hình mở đầu: chọn nhân vật và đặt tên
 
 - **Chọn nhân vật Nam / Nữ** (bắt buộc trước khi vào hội chợ, đổi lại được mỗi lần mở game). Có WebGL thì xem trước hai nhân vật 3D, chạm vào nhân vật để chọn. Nhân vật của mình: nam đội mũ đỏ sao vàng, tóc ngắn; nữ đội mũ đỏ sao vàng, tóc đuôi ngựa, váy. Mọi người chơi khác cũng hiện đúng mô hình nam hoặc nữ mà họ đã chọn (chỉ khác màu da); nhân vật của mình có vòng vàng dưới chân và chữ "(bạn)" để dễ nhận ra.
+- **Chọn mũ và màu áo:** Mũ lưỡi trai, Nón lá, Mũ len hoặc Không đội; 8 màu áo (đỏ, cam, vàng, xanh lá, xanh dương, tím, hồng, đen). Mũ cùng màu áo, có sao vàng (áo vàng thì sao đỏ). Lưu ở máy chủ, mọi người đều thấy, đổi lại được mỗi lần mở game.
 - **Đặt tên riêng có duyệt:** người chơi gõ tên (2–16 ký tự, chỉ chữ, số, dấu cách), bấm "Gửi duyệt". Máy chủ chặn sẵn số điện thoại, link, từ tục, tên giống cơ quan/cán bộ/quản trị viên, tên trùng người khác; mỗi người gửi tối đa 5 lần một ngày. Trong lúc chờ duyệt vẫn dùng biệt danh ngẫu nhiên (🎲 Đổi).
 - **Quản trị viên duyệt** ở `/admin`, mục "🪪 Duyệt tên người chơi" (Chờ duyệt / Đã duyệt / Đã từ chối): Duyệt thì tên đổi ngay cho mọi người đang online; Từ chối kèm lý do (người chơi thấy lý do để đặt tên khác); Thu hồi tên đã duyệt thì người chơi về biệt danh ngẫu nhiên.
 

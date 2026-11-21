@@ -345,9 +345,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
   const shadowGeo = new THREE.PlaneGeometry(0.9, 0.9); shadowGeo.rotateX(-Math.PI / 2);
   const shadowMat = new THREE.MeshBasicMaterial({ map: blobTex(), transparent: true, depthWrite: false });
   const people = new Map(); // khoá: "me" hoặc số thứ tự n
-  function addPerson(key, name, x, y, mine, gd) {
+  function addPerson(key, name, x, y, mine, gd, lk) {
     if (people.has(key)) removePerson(key);
-    const root = new THREE.Group(), m = characterMaterial(), body = new THREE.Mesh(characterGeometry(mine ? 7 : hash(name), mine || peerLook(gd), gd), m), sh = new THREE.Mesh(shadowGeo, shadowMat);
+    const root = new THREE.Group(), m = characterMaterial(), body = new THREE.Mesh(characterGeometry(mine ? 7 : hash(name), mine || peerLook(gd, lk), gd), m), sh = new THREE.Mesh(shadowGeo, shadowMat);
     sh.position.y = 0.05; root.add(sh, body); root.scale.setScalar(K); scene.add(root);
     const el = document.createElement("div"); el.className = "l3 av";
     el.innerHTML = '<div class="avt' + (mine ? " mine" : "") + '"><span class="bub"></span><span class="nm">' + esc(name) + (mine ? " (bạn)" : "") + "</span></div>";
@@ -583,9 +583,9 @@ export async function openRoom({ container, game, title, nick, solo, send }) {
     setSpace(m) {
       for (const k of [...people.keys()]) if (k !== "me") removePerson(k);
       me.x = m.you.x; me.y = m.you.y; target = null; mySeat = -1; seatOcc.clear();
-      for (const p of m.peers) { const a = addPerson(p.n, p.nick, p.x, p.y, false, p.gd); a.seat = p.seat ?? -1; if (a.seat >= 0) seatOcc.set(a.seat, p.n); }
+      for (const p of m.peers) { const a = addPerson(p.n, p.nick, p.x, p.y, false, p.gd, p.lk); a.seat = p.seat ?? -1; if (a.seat >= 0) seatOcc.set(a.seat, p.n); }
     },
-    addPeer(p) { const a = addPerson(p.n, p.nick, p.x, p.y, false, p.gd); a.seat = p.seat ?? -1; },
+    addPeer(p) { const a = addPerson(p.n, p.nick, p.x, p.y, false, p.gd, p.lk); a.seat = p.seat ?? -1; },
     removePeer(n) { for (const [s, k] of seatOcc) if (k === n) seatOcc.delete(s); removePerson(n); },
     /** Tin "msit": người số n ngồi ghế s (-1: đứng dậy). */
     sit(n, s, myN) {

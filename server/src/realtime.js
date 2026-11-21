@@ -22,7 +22,7 @@ export function makeRealtime({ db, store, auth, config, matches, hacker }) {
   // đóng gói một lần, gửi cho cả khu
   const broadcast = (khu, msg, except) => { const f = encodeFrame(JSON.stringify(msg)); for (const c of rooms.get(khu).values()) if (c !== except) c.conn.sendFrame(f); };
   // n: số thứ tự ngắn của người chơi trong khu, dùng trong gói vị trí cho gọn
-  const pub = c => ({ id: c.pid, n: c.n, nick: c.nick, gd: c.gd || undefined, x: Math.round(c.x), y: Math.round(c.y), seat: c.seat });
+  const pub = c => ({ id: c.pid, n: c.n, nick: c.nick, gd: c.gd || undefined, lk: c.lk || undefined, x: Math.round(c.x), y: Math.round(c.y), seat: c.seat });
   const nextN = new Map(); for (const k of rooms.keys()) nextN.set(k, 1);
   const dirty = new Map(); for (const k of rooms.keys()) dirty.set(k, new Set()); // người đã di chuyển từ nhịp trước
   // Nhịp gửi vị trí: mỗi khu một gói [[n, x, y], ...] cho những người đã di chuyển
@@ -54,7 +54,7 @@ export function makeRealtime({ db, store, auth, config, matches, hacker }) {
     const player = store.ensurePlayer(pid);
     const old = room.get(pid); if (old) old.conn.close(4003); // mở ở máy khác: đóng kết nối cũ
     const n = nextN.get(khu); nextN.set(khu, n + 1);
-    const c = { conn, pid, khu, n, open: true, nick: player.nick, gd: player.gender || null, banned: !!player.banned, x: SPAWN.x, y: SPAWN.y, seat: -1, lastPos: 0, lastChat: 0, lastEmote: 0, lastSit: 0, posN: 0 };
+    const c = { conn, pid, khu, n, open: true, nick: player.nick, gd: player.gender || null, lk: player.look || null, banned: !!player.banned, x: SPAWN.x, y: SPAWN.y, seat: -1, lastPos: 0, lastChat: 0, lastEmote: 0, lastSit: 0, posN: 0 };
     room.set(pid, c);
     conn.sendJSON({ t: "welcome", you: pub(c), peers: [...room.values()].filter(x => x !== c).map(pub),
       history: recent.all(khu).reverse().map(m => ({ id: m.id, pid: m.player, nick: m.nick, text: m.text, ts: m.ts })) });
@@ -118,7 +118,7 @@ export function makeRealtime({ db, store, auth, config, matches, hacker }) {
   /** Gửi riêng cho một người chơi (mọi khu họ đang ở). */
   function tell(pid, msg) { for (const r of rooms.values()) { const c = r.get(pid); if (c) c.conn.sendJSON(msg); } }
   /** Đổi giới tính nhân vật: báo cho mọi người trong khu để vẽ lại. */
-  function relook(pid, g) { for (const [k, r] of rooms) { const c = r.get(pid); if (c) { c.gd = g; broadcast(k, { t: "look", id: pid, gd: g }, c); } } }
+  function relook(pid, g, lk) { for (const [k, r] of rooms) { const c = r.get(pid); if (c) { c.gd = g; c.lk = lk; broadcast(k, { t: "look", id: pid, gd: g, lk }, c); } } }
   function ban(pid, banned) { for (const r of rooms.values()) { const c = r.get(pid); if (c) c.banned = banned; } }
   function hide(chatId) { const row = getChat.get(chatId); if (row) broadcast(row.khu, { t: "hide", id: chatId }); }
 

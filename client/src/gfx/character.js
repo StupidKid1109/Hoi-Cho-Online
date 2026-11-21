@@ -3,6 +3,7 @@
 // và chuyển động ngay trong shader: vung tay chân khi đi, vẫy tay khi chào, chớp mắt.
 import * as THREE from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { parseLook } from "../../../shared/looks.js";
 
 // Mã bộ phận trong thuộc tính limb
 const BODY = 0, ARM_L = 1, ARM_R = 2, LEG_L = 3, LEG_R = 4, EYE = 5;
@@ -26,11 +27,17 @@ export const MINE_LOOKS = {
 export const MINE_LOOK = "mu-do";
 /** Kiểu nhân vật của mình theo giới tính người chơi chọn ở màn hình mở đầu. */
 export const LOOK_OF = { nam: "mu-do", nu: "nu-do" };
-let myLook = MINE_LOOK;
-export function setMyGender(g) { myLook = LOOK_OF[g] || MINE_LOOK; }
+/** Kiểu nhân vật theo giới tính + trang phục tự chọn (mã "mũ-màu", shared/looks.js). */
+export function buildLook(gd, lk) {
+  const base = MINE_LOOKS[LOOK_OF[gd] || MINE_LOOK], o = parseLook(lk);
+  const yellow = o.key === "vang"; // áo vàng thì sao đỏ cho nổi
+  return { ...base, hat: o.hat, cap: o.color, top: o.color, star: true, starCol: yellow ? "#d62839" : "#ffe14d", starEdge: yellow ? "#8f0b20" : "#e0a800" };
+}
+let myLook = buildLook("nam");
+export function setMyGender(g, lk) { myLook = buildLook(g, lk); }
 /** Kiểu nhân vật của người khác: đã chọn nam/nữ thì dùng đúng mô hình nam/nữ như của mình, chưa chọn thì ngẫu nhiên. */
-export const peerLook = gd => LOOK_OF[gd] || false;
-export const myGender = () => myLook === "nu-do" ? "nu" : "nam";
+export const peerLook = (gd, lk) => LOOK_OF[gd] ? buildLook(gd, lk) : false;
+export const myGender = () => myLook.female ? "nu" : "nam";
 
 /* ---------- Dựng hình ---------- */
 function part(list, geo, color, limb, x = 0, y = 0, z = 0, rx = 0, ry = 0, rz = 0, sx = 1, sy = 1, sz = 1) {
@@ -64,13 +71,13 @@ const Cyl = (rt, rb, h, s = 14, open = false) => new THREE.CylinderGeometry(rt, 
 export function characterGeometry(seed, mine, gd) {
   let h = Math.abs(seed) || 1;
   const pick = arr => { h = (Math.imul(h, 1103515245) + 12345) >>> 0; return arr[(h >>> 8) % arr.length]; };
-  const look = mine ? MINE_LOOKS[mine === true ? myLook : mine] || MINE_LOOKS[MINE_LOOK] : null;
+  const look = mine ? (mine === true ? myLook : typeof mine === "object" ? mine : MINE_LOOKS[mine] || MINE_LOOKS[MINE_LOOK]) : null;
   const skin = pick(SKIN), pants = pick(PANTS); let hair = pick(HAIR);
   if (look) hair = look.hair;
   // gd: giới tính người khác chọn ("nam" | "nu"); chưa chọn thì ngẫu nhiên như cũ
   const female = look ? !!look.female : gd === "nu", male = !look && gd === "nam";
   const outfit = mine ? "tee" : pick(female ? ["tee", "student", "aodai", "hoodie", "worker", "aodai", "student"] : male ? ["tee", "student", "hoodie", "worker", "tee", "student"] : ["tee", "student", "aodai", "hoodie", "worker", "tee", "student"]);
-  const top = mine ? "#d62839" : outfit === "student" ? "#ffffff" : outfit === "worker" ? "#2f6db5" : outfit === "aodai" ? pick(AODAI) : pick(COLORS);
+  const top = mine ? (look.top || "#d62839") : outfit === "student" ? "#ffffff" : outfit === "worker" ? "#2f6db5" : outfit === "aodai" ? pick(AODAI) : pick(COLORS);
   const hat = look ? look.hat : outfit === "aodai" ? pick(["none", "nonla", "none", "none"]) : pick(["none", "none", "none", "none", "none", "cap", "cap", "nonla"]);
   // kiểu tóc hợp với mũ: đội mũ lưỡi trai thì tóc gọn, đội nón lá thì không búi cao
   const style = look ? look.style : male ? pick(hat === "none" ? ["short", "spiky", "short"] : ["short"])
@@ -109,8 +116,8 @@ export function characterGeometry(seed, mine, gd) {
     part(L, Cyl(0.01, 0.01, 0.12, 4), "#ffffff", BODY, -0.04, 0.6, 0.145); part(L, Cyl(0.01, 0.01, 0.12, 4), "#ffffff", BODY, 0.04, 0.6, 0.145);
   }
   if (outfit === "tee" && mine) { // sao vàng 5 cánh trên ngực áo đỏ (viền vàng đậm phía sau cho nổi)
-    part(L, starGeo(0.092, 0.01), "#e0a800", BODY, 0, 0.56, 0.142, -0.12);
-    part(L, starGeo(0.08, 0.016), "#ffe14d", BODY, 0, 0.56, 0.148, -0.12);
+    part(L, starGeo(0.092, 0.01), look.starEdge || "#e0a800", BODY, 0, 0.56, 0.142, -0.12);
+    part(L, starGeo(0.08, 0.016), look.starCol || "#ffe14d", BODY, 0, 0.56, 0.148, -0.12);
   }
   // tay (tay áo cùng màu áo, bàn tay màu da)
   for (const [s, limb] of [[-1, ARM_L], [1, ARM_R]]) {
@@ -132,13 +139,13 @@ export function characterGeometry(seed, mine, gd) {
   part(L, new THREE.TorusGeometry(0.038, 0.011, 4, 10, Math.PI), "#9c3d33", BODY, 0, 0.85, 0.252, 0, 0, Math.PI);
 
   // tóc
-  const bangs = (...a) => { if (hat !== "cap") part(L, ...a); };
+  const bangs = (...a) => { if (hat !== "cap" && hat !== "beanie") part(L, ...a); };
   const cap = (r = 0.285) => part(L, Sph(hat === "cap" ? 0.262 : r, 20, 12, 0, Math.PI * 2, 0, Math.PI * 0.52), hair, BODY, 0, 0.94, -0.015, -0.22);
   if (style === "short") { cap(); bangs(Sph(0.12, 10, 6), hair, BODY, -0.08, 1.07, 0.19, 0, 0, 0, 1.4, 0.55, 0.6); }
   if (style === "spiky") { cap(0.28); for (let i = 0; i < 6; i++) { const a = -0.9 + i * 0.36; part(L, new THREE.ConeGeometry(0.07, 0.17, 6), hair, BODY, Math.sin(a) * 0.17, 1.17 - Math.abs(a) * 0.06, Math.cos(a) * 0.05 - 0.02, -0.3 + Math.cos(a) * 0.1, 0, -a * 0.6); } }
   if (style === "bob") { cap(0.3); part(L, Sph(0.3, 18, 12, 0, Math.PI * 2, Math.PI * 0.35, Math.PI * 0.4), hair, BODY, 0, 0.93, -0.03, 0, 0, 0, 1.02, 1, 1); bangs(Sph(0.13, 10, 6), hair, BODY, 0.06, 1.07, 0.2, 0, 0, 0, 1.6, 0.5, 0.6); }
   if (style === "ponytail") { cap(); part(L, Sph(0.06, 8, 6), "#e63946", BODY, 0, 1.0, -0.27);
-    if (female && hat === "cap") part(L, Cap(0.085, 0.32), hair, BODY, 0, 0.78, -0.33, 0.3); // đuôi ngựa dài luồn sau mũ
+    if (female && look) part(L, Cap(0.085, 0.32), hair, BODY, 0, 0.78, -0.33, 0.3); // đuôi ngựa dài luồn sau mũ
     else part(L, Cap(0.08, 0.22), hair, BODY, 0, 0.82, -0.32, 0.35); }
   if (style === "buns") { cap(); for (const s of [-1, 1]) part(L, Sph(0.1, 10, 8), hair, BODY, s * 0.19, 1.15, -0.05); }
   if (style === "long") { cap(0.29); part(L, Cap(0.2, 0.3, 10), hair, BODY, 0, 0.78, -0.13, 0, 0, 0, 1.25, 1, 0.55); bangs(Sph(0.12, 10, 6), hair, BODY, -0.05, 1.07, 0.2, 0, 0, 0, 1.6, 0.5, 0.6); }
@@ -150,14 +157,21 @@ export function characterGeometry(seed, mine, gd) {
     part(L, new THREE.ConeGeometry(0.49, 0.29, 24, 1, true), "#c9a85a", BODY, 0, 1.245, 0, 0, 0, 0, 1, 1, -1); // mặt trong nón (lật mặt)
     part(L, new THREE.TorusGeometry(0.44, 0.012, 4, 24), "#b8954a", BODY, 0, 1.11, 0, Math.PI / 2);
   }
+  if (hat === "beanie") { // mũ len: chỏm tròn, viền gập, quả bông trên đỉnh
+    const bc = look ? look.cap : pick(COLORS);
+    part(L, Sph(0.292, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), bc, BODY, 0, 0.95, -0.005, -0.12);
+    part(L, new THREE.TorusGeometry(0.272, 0.045, 6, 22), bc, BODY, 0, 0.985, 0.01, Math.PI / 2 - 0.12);
+    part(L, Sph(0.075, 10, 8), "#ffffff", BODY, 0, 1.27, -0.03);
+    if (look && look.star) { part(L, starGeo(0.07, 0.01), look.starEdge || "#e0a800", BODY, 0, 1.08, 0.27, -0.35); part(L, starGeo(0.06, 0.016), look.starCol || "#ffe14d", BODY, 0, 1.082, 0.276, -0.35); }
+  }
   if (hat === "cap") {
     const cc = look ? look.cap : pick(COLORS);
     part(L, Sph(0.29, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.45), cc, BODY, 0, 0.96, 0);
     part(L, Cyl(0.17, 0.17, 0.02, 14), cc, BODY, 0, 1.03, 0.25, 0.15, 0, 0, 1, 1, 0.8);
     part(L, Sph(0.03, 6, 4), look ? look.cap : "#ffffff", BODY, 0, 1.25, 0);
     if (look && look.star) { // sao vàng 5 cánh trước mũ
-      part(L, starGeo(0.088, 0.01), "#e0a800", BODY, 0, 1.09, 0.262, -0.42);
-      part(L, starGeo(0.076, 0.016), "#ffe14d", BODY, 0, 1.092, 0.268, -0.42);
+      part(L, starGeo(0.088, 0.01), look.starEdge || "#e0a800", BODY, 0, 1.09, 0.262, -0.42);
+      part(L, starGeo(0.076, 0.016), look.starCol || "#ffe14d", BODY, 0, 1.092, 0.268, -0.42);
     }
   }
 

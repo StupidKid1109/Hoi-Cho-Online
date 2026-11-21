@@ -1,9 +1,9 @@
 // Xem trước nhân vật nam / nữ ở màn hình mở đầu (một khung vẽ nhỏ, hai nhân vật đứng cạnh nhau).
 import * as THREE from "three";
-import { characterGeometry, characterMaterial, animateCharacter, LOOK_OF } from "./character.js";
+import { characterGeometry, characterMaterial, animateCharacter, buildLook } from "./character.js";
 
 /** Dựng khung xem trước trên canvas. onPick("nam" | "nu") khi chạm vào một nhân vật. */
-export function mountPreview(canvas, onPick) {
+export function mountPreview(canvas, onPick, lk) {
   const r = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
   r.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); r.outputColorSpace = THREE.SRGBColorSpace;
   const scene = new THREE.Scene(), cam = new THREE.PerspectiveCamera(30, 2, 0.1, 50);
@@ -15,13 +15,13 @@ export function mountPreview(canvas, onPick) {
   const people = {};
   for (const [g, x] of [["nam", -0.68], ["nu", 0.68]]) {
     const root = new THREE.Group(), mat = characterMaterial();
-    root.add(new THREE.Mesh(characterGeometry(7, LOOK_OF[g]), mat));
+    const body = new THREE.Mesh(characterGeometry(7, buildLook(g, lk)), mat); root.add(body);
     const ring = new THREE.Mesh(ringGeo, new THREE.MeshBasicMaterial({ color: 0xffc533, transparent: true, opacity: 0 }));
     ring.position.y = 0.02; root.add(ring);
     const pad = new THREE.Mesh(disc, new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.18, depthWrite: false }));
     pad.position.y = 0.01; root.add(pad);
     root.position.x = x; scene.add(root);
-    people[g] = { root, ring, mat, phase: 0, wave: 0, spin: 0 };
+    people[g] = { root, body, ring, mat, phase: 0, wave: 0, spin: 0 };
   }
   let sel = null, raf = 0, last = performance.now(), alive = true;
   function size() {
@@ -43,6 +43,8 @@ export function mountPreview(canvas, onPick) {
   raf = requestAnimationFrame(frame);
   canvas.addEventListener("click", e => { const b = canvas.getBoundingClientRect(); onPick && onPick(e.clientX - b.left < b.width / 2 ? "nam" : "nu"); });
   return {
+    /** Đổi mũ / màu áo: dựng lại cả hai nhân vật. */
+    setLook(l) { for (const [g, p] of Object.entries(people)) { p.body.geometry.dispose(); p.body.geometry = characterGeometry(7, buildLook(g, l)); } if (sel && people[sel]) people[sel].wave = 1.6; },
     set(g) { if (g !== sel && people[g]) { people[g].wave = 1.6; } sel = g; },
     stop() { alive = false; cancelAnimationFrame(raf); r.dispose(); r.forceContextLoss && r.forceContextLoss(); }
   };

@@ -4,6 +4,7 @@ import { api, post, setToken, connectKhu } from "./api.js";
 import { initPlatform, loginPayload, share, inZalo } from "./platform.js";
 import { BOOTHS, BOOTH, PLACE_NAME, CAFE, API_BASE } from "./config.js";
 import * as hub from "./hub.js";
+import { HATS, SHIRTS, DEFAULT_LOOK, parseLook } from "../../shared/looks.js";
 import * as bgm from "./bgm.js";
 import { mountSoundButton } from "./sound.js";
 import { createSpace } from "./games/lobby.js";
@@ -65,17 +66,31 @@ function setupProfile() {
   const mark = g => { btns.forEach(b => { const on = b.dataset.g === g; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); }); if (S.preview) S.preview.set(g); };
   const choose = async g => {
     if (g === S.me.gender) return mark(g);
-    const old = S.me.gender; S.me.gender = g; mark(g); hub.setGender(g); pick.classList.remove("need");
+    const old = S.me.gender; S.me.gender = g; mark(g); hub.setGender(g, S.me.look); pick.classList.remove("need");
     try { await post("/api/me/profile", { gender: g }); } catch (e) { S.me.gender = old; mark(old); toast(e.message); }
   };
   btns.forEach(b => b.onclick = () => choose(b.dataset.g));
   if (hub.mode === "3d" && !S.preview) {
     pick.classList.remove("flat");
-    import("./gfx/preview.js").then(m => { S.preview = m.mountPreview($("pv"), choose); S.preview.set(S.me.gender); })
+    import("./gfx/preview.js").then(m => { S.preview = m.mountPreview($("pv"), choose, S.me.look); S.preview.set(S.me.gender); })
       .catch(e => { console.warn("Không dựng được hình xem trước", e); pick.classList.add("flat"); });
   } else if (hub.mode !== "3d") pick.classList.add("flat");
-  if (S.me.gender) hub.setGender(S.me.gender);
+  if (S.me.gender) hub.setGender(S.me.gender, S.me.look);
   mark(S.me.gender);
+  // trang phục: kiểu mũ và màu áo (lưu ở máy chủ, người khác cũng thấy)
+  const cur = () => parseLook(S.me.look || DEFAULT_LOOK);
+  $("hats").innerHTML = HATS.map(h => '<button role="radio" data-h="' + h[0] + '" title="' + h[2] + '"><i>' + h[1] + "</i>" + h[2] + "</button>").join("");
+  $("shirts").innerHTML = SHIRTS.map(c => '<button role="radio" data-c="' + c[0] + '" title="Áo ' + c[2] + '" aria-label="Áo ' + c[2] + '" style="--c:' + c[1] + '"></button>').join("");
+  const markLook = () => { const o = cur(); $("hats").querySelectorAll("button").forEach(b => { const on = b.dataset.h === o.hat; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); }); $("shirts").querySelectorAll("button").forEach(b => { const on = b.dataset.c === o.key; b.classList.toggle("on", on); b.setAttribute("aria-checked", on); }); };
+  let saveT = 0;
+  const setLook = (hat, key) => {
+    const o = cur(), lk = (hat || o.hat) + "-" + (key || o.key); if (lk === S.me.look) return;
+    S.me.look = lk; markLook(); if (S.preview) S.preview.setLook(lk); if (S.me.gender) hub.setGender(S.me.gender, lk);
+    clearTimeout(saveT); saveT = setTimeout(() => post("/api/me/profile", { look: lk }).catch(e => toast(e.message)), 400);
+  };
+  $("hats").querySelectorAll("button").forEach(b => b.onclick = () => setLook(b.dataset.h, null));
+  $("shirts").querySelectorAll("button").forEach(b => b.onclick = () => setLook(null, b.dataset.c));
+  markLook();
   $("nameForm").onsubmit = async e => {
     e.preventDefault();
     const v = $("nameIn").value.trim(); if (!v) return $("nameIn").focus();
@@ -148,7 +163,7 @@ function onRealtime(m) {
   else if (m.t === "sitno") { hub.sitRejected(m.s); toast(m.text); }
   else if (m.t === "rename") { if (m.id !== S.myId) hub.renamePeer(m.id, m.nick); }
   else if (m.t === "name") onNameDecision(m);
-  else if (m.t === "look") hub.lookPeer(m.id, m.gd);
+  else if (m.t === "look") hub.lookPeer(m.id, m.gd, m.lk);
   else if (m.t === "chat") chat.onChat(m.m);
   else if (m.t === "hide") chat.onHide(m.id);
   else if (m.t === "sys") chat.onSys(m.text, m.ok);

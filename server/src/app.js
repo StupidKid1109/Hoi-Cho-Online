@@ -143,7 +143,7 @@ export function createApp(config) {
 
       if (path === "/api/me" && method === "GET") {
         const b = store.bests(pid), lb = store.leaderboard("all", pid, 0);
-        return send(res, 200, { nick: player.nick, gender: player.gender || null, nameReq: store.nameInfo(player), banned: !!player.banned, bests: b, total: b.g1 + b.g2 + b.g3, rank: lb.me ? lb.me.rank : null, event: publicEvent() });
+        return send(res, 200, { nick: player.nick, gender: player.gender || null, look: player.look || null, nameReq: store.nameInfo(player), banned: !!player.banned, bests: b, total: b.g1 + b.g2 + b.g3, rank: lb.me ? lb.me.rank : null, event: publicEvent() });
       }
       if (path === "/api/me/nickname" && method === "POST") {
         const nick = store.rerollNick(pid); if (!nick) return send(res, 429, { error: "Hôm nay bạn đã đổi biệt danh nhiều lần" });
@@ -151,14 +151,16 @@ export function createApp(config) {
       }
       if (path === "/api/me/profile" && method === "POST") { // chọn nhân vật nam/nữ và/hoặc xin đặt tên (chờ quản trị viên duyệt)
         const b = await readBody(req), out = {};
-        if (b.gender !== undefined) { if (!store.setGender(pid, b.gender)) return send(res, 400, { error: "Hãy chọn nhân vật nam hoặc nữ" }); rt.relook(pid, b.gender); out.gender = b.gender; }
+        if (b.gender !== undefined && !store.setGender(pid, b.gender)) return send(res, 400, { error: "Hãy chọn nhân vật nam hoặc nữ" });
+        if (b.look !== undefined && !store.setLook(pid, b.look)) return send(res, 400, { error: "Kiểu mũ hoặc màu áo không hợp lệ" });
+        if (b.gender !== undefined || b.look !== undefined) { const q = store.ensurePlayer(pid); rt.relook(pid, q.gender || null, q.look || null); out.gender = q.gender; }
         if (b.name !== undefined && b.name !== null && String(b.name).trim() !== "") {
           if (player.banned) return send(res, 403, { error: "Tài khoản đang bị khóa chat nên không đặt tên được" });
           const r = store.requestName(pid, b.name); if (r.error) return send(res, 400, { error: r.error, ...out });
         }
         if (b.cancelName) store.cancelName(pid);
         const p = store.ensurePlayer(pid);
-        return send(res, 200, { nick: p.nick, gender: p.gender || null, nameReq: store.nameInfo(p) });
+        return send(res, 200, { nick: p.nick, gender: p.gender || null, look: p.look || null, nameReq: store.nameInfo(p) });
       }
       if (path === "/api/leaderboard" && method === "GET") {
         const tab = url.searchParams.get("tab") || "all";

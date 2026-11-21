@@ -43,7 +43,7 @@ export function openDb(file) {
   `);
   // Thêm cột cho bản cũ: giới tính nhân vật, tên xin đặt (chờ quản trị viên duyệt)
   const cols = new Set(db.prepare("PRAGMA table_info(players)").all().map(c => c.name));
-  for (const [c, t] of [["gender", "TEXT"], ["name_req", "TEXT"], ["name_state", "TEXT"], ["name_note", "TEXT"], ["name_at", "INTEGER"], ["name_tries", "INTEGER NOT NULL DEFAULT 0"], ["name_day", "TEXT"]])
+  for (const [c, t] of [["gender", "TEXT"], ["look", "TEXT"], ["name_req", "TEXT"], ["name_state", "TEXT"], ["name_note", "TEXT"], ["name_at", "INTEGER"], ["name_tries", "INTEGER NOT NULL DEFAULT 0"], ["name_day", "TEXT"]])
     if (!cols.has(c)) db.exec("ALTER TABLE players ADD COLUMN " + c + " " + t);
   db.exec("CREATE INDEX IF NOT EXISTS players_name_state ON players(name_state, name_at)");
   return db;

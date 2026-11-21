@@ -1,6 +1,7 @@
 // Người chơi, đợt treo thưởng, điểm cao nhất và Bảng vàng.
 import { randomInt, randomUUID } from "node:crypto";
 import { nameReason, tidyName } from "../../shared/chatFilter.js";
+import { isLook } from "../../shared/looks.js";
 
 const NICK_A = ["Hoa Sữa", "Sen Hồng", "Bằng Lăng", "Phượng Đỏ", "Mai Vàng", "Lúa Non", "Sao Mai", "Gió Nam", "Trăng Rằm", "Cánh Diều", "Hoa Gạo", "Mây Trắng", "Cỏ May", "Hải Âu", "Sông Xanh", "Nắng Mai"];
 export const GAMES = ["g1", "g2", "g3"];
@@ -11,8 +12,9 @@ export function makeStore(db, defaultEvent) {
   // so tên không phân biệt hoa thường cả chữ có dấu (COLLATE NOCASE của SQLite chỉ hiểu chữ không dấu)
   try { db.function("vlow", { deterministic: true }, s => s == null ? null : String(s).normalize("NFC").toLowerCase()); } catch (e) { /* đã đăng ký */ }
   const st = {
-    getPlayer: q("SELECT id, nick, banned, gender, name_req, name_state, name_note, name_at, name_tries, name_day FROM players WHERE id = ?"),
+    getPlayer: q("SELECT id, nick, banned, gender, look, name_req, name_state, name_note, name_at, name_tries, name_day FROM players WHERE id = ?"),
     setGender: q("UPDATE players SET gender = ? WHERE id = ?"),
+    setLook: q("UPDATE players SET look = ? WHERE id = ?"),
     nameTaken: q("SELECT 1 AS x FROM players WHERE id != ? AND (vlow(nick) = vlow(?) OR (vlow(name_req) = vlow(?) AND name_state = 'pending')) LIMIT 1"),
     putNameReq: q("UPDATE players SET name_req = ?, name_state = 'pending', name_note = NULL, name_at = ?, name_tries = ?, name_day = ? WHERE id = ?"),
     nameDone: q("UPDATE players SET name_state = ?, name_note = ?, name_at = ? WHERE id = ?"),
@@ -53,6 +55,8 @@ export function makeStore(db, defaultEvent) {
   }
   const GENDERS = ["nam", "nu"];
   function setGender(id, g) { if (!GENDERS.includes(g)) return false; ensurePlayer(id); st.setGender.run(g, id); return true; }
+  /** Trang phục (mũ, màu áo) người chơi chọn, mã kiểu "cap-do" (shared/looks.js). */
+  function setLook(id, lk) { if (!isLook(lk)) return false; ensurePlayer(id); st.setLook.run(lk, id); return true; }
   /** Thông tin tên xin đặt gửi cho người chơi. */
   function nameInfo(p) { return p && p.name_req && p.name_state ? { name: p.name_req, state: p.name_state, note: p.name_note || "" } : null; }
   /** Người chơi xin đặt tên: kiểm tra rồi chờ quản trị viên duyệt. Trả về { error } hoặc { ok, name }. */
@@ -150,5 +154,5 @@ export function makeStore(db, defaultEvent) {
     return { tab, rows: ranked.slice(0, limit).map(r => ({ rank: r.rank, nick: r.nick, score: r.score, me: r.id === player })), me: me ? { rank: me.rank, score: me.score } : null, players: ranked.length, ranked };
   }
 
-  return { st, event, setEvent, eventActive, ensurePlayer, rerollNick, setGender, nameInfo, requestName, cancelName, nameList, decideName, createRun, loadRun, saveRun, finishRun, runsSince, recordBest, bests, leaderboard, addG1, caps, setBan: (id, b) => st.setBan.run(b ? 1 : 0, id) };
+  return { st, event, setEvent, eventActive, ensurePlayer, rerollNick, setGender, setLook, nameInfo, requestName, cancelName, nameList, decideName, createRun, loadRun, saveRun, finishRun, runsSince, recordBest, bests, leaderboard, addG1, caps, setBan: (id, b) => st.setBan.run(b ? 1 : 0, id) };
 }
