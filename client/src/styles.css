@@ -681,3 +681,31 @@ body:has(#hkRoot.on) .sndpanel{top:calc(env(safe-area-inset-top,0px) + 56px)}
 .shirts{display:flex;justify-content:space-between;gap:4px}
 .shirts button{width:32px;height:32px;border-radius:50%;background:var(--c);border:3px solid rgba(255,255,255,.35);padding:0;flex:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
 .shirts button.on{border-color:#fff;box-shadow:0 0 0 3px var(--gold);transform:scale(1.08)}
+/* Gian 3: thẻ câu hỏi luật, nhiệm vụ, tên đoạn đường */
+.g3q{position:absolute;left:10px;right:10px;top:10px;z-index:4;background:rgba(255,255,255,.96);border-radius:16px;padding:10px;box-shadow:0 6px 20px rgba(0,0,0,.25);transform:translateY(-130%);transition:transform .3s;pointer-events:none;color:var(--ink)}
+.g3q.on{transform:none}
+.g3q .qh{display:flex;align-items:center;gap:10px}
+.g3q .qh img{width:62px;height:62px;flex:none}
+.g3q .qh b{font-size:16px;line-height:1.25}
+.g3q .qa{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px}
+.g3q .qa div{background:#eef3fb;border:2px solid #c9d8f0;border-radius:11px;padding:5px 4px;text-align:center;font-weight:800;font-size:13px;line-height:1.2}
+.g3q .qa small{display:block;font-size:10px;font-weight:700;color:#5b6b85;margin-bottom:2px}
+.g3q .qa div.right{background:#d8f8e7;border-color:#22a565}
+.g3q .qa div.mine{background:#fde2e2;border-color:#e03131}
+.g3q.ok{box-shadow:0 0 0 3px #22a565,0 6px 20px rgba(0,0,0,.25)}.g3q.no{box-shadow:0 0 0 3px #e03131,0 6px 20px rgba(0,0,0,.25)}
+.g3mis{position:absolute;left:8px;bottom:8px;z-index:3;background:rgba(15,23,42,.62);color:#fff;border-radius:12px;padding:6px 9px;font-size:11px;line-height:1.35;max-width:62%;pointer-events:none;backdrop-filter:blur(4px)}
+.g3mis:empty{display:none}
+.g3mis b{display:block;font-size:10.5px;color:#ffd166;margin-bottom:2px}
+.g3mis div{display:flex;gap:5px;align-items:center}
+.g3mis i{font-style:normal;width:16px;text-align:center}
+.g3mis span{flex:1}
+.g3mis em{font-style:normal;font-weight:800;color:#ffd166}
+.g3mis div.done{opacity:.75}.g3mis div.done span{text-decoration:line-through}
+.g3zone{position:absolute;left:50%;top:38%;z-index:3;transform:translate(-50%,-50%);font-size:24px;font-weight:900;color:#fff;text-shadow:0 3px 10px rgba(0,0,0,.45);opacity:0;pointer-events:none;white-space:nowrap}
+.g3zone.on{animation:g3zone 2.4s ease-out}
+@keyframes g3zone{0%{opacity:0;transform:translate(-50%,-30%) scale(.9)}15%{opacity:1;transform:translate(-50%,-50%) scale(1)}75%{opacity:1}100%{opacity:0;transform:translate(-50%,-70%)}}
+.g3mrev li.ok b{color:#16a34a}
+.g3badge{margin:10px 0;padding:10px;border-radius:12px;background:#fff7d6;text-align:center;font-size:15px}
+#g3msg{top:150px} /* thẻ câu hỏi luật ở trên cùng */
+.bbi.ans{background:#2563eb;color:#fff;border:3px solid #fff;border-radius:12px;padding:6px 8px;font-weight:900;font-size:15px;max-width:110px;text-align:center;line-height:1.15}
+.bbi.ans.a1{background:#7c3aed}.bbi.ans.a2{background:#0f8a5f}

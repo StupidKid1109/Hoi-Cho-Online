@@ -162,6 +162,12 @@ Không vào được: kiểm tra mạng Wi-Fi trên máy tính đang để chế
 - Ba loại vật cản: **rào thấp nhảy qua được** (két bia, rào thi công, biển có ⬆), **biển treo cúi qua được** (cấm ngược chiều, cờ đua, biển có ⬇), **vật cao phải đổi làn** (cột đèn đỏ, điện thoại). Từ giây 14 có hàng chắn kín 3 làn, luôn chừa một vật nhảy hoặc cúi qua được.
 - Luật nằm trong `shared/runnerSim.js` (máy chủ chạy lại đúng file này để chấm điểm). Thao tác gửi lên: `[khung hình, d]` với d = -1/1 đổi làn, 2 nhảy, -2 cúi.
 
+
+**Thêm (21/11/2026):**
+- **Câu hỏi luật giữa đường:** cứ khoảng 350 m có một câu (biển báo hoặc câu hỏi luật), 3 làn là 3 đáp án; xe chạy chậm lại để đọc, chạy vào làn có đáp án đúng khi tới cổng. Đúng +100 (đúng liên tiếp thêm +50 mỗi câu, tối đa +200), sai −50 và hiện giải thích. 23 câu mẫu ở `shared/trafficQuiz.js` (cần CSGT/công an phường duyệt; biển báo do game tự vẽ).
+- **Nhiệm vụ hôm nay:** 3 nhiệm vụ giống nhau cho mọi người trong ngày (ví dụ "Nhặt 40 xu", "Trả lời đúng 3 câu luật", "Chạy 500 m không va chạm"), làm xong trong một lượt được +200 mỗi nhiệm vụ. Máy chủ tự chấm khi chạy lại lượt chơi.
+- **Đổi cảnh theo quãng đường:** phố phường → qua cầu → đường làng → phố đêm, lặp lại mỗi 2.800 m; huy hiệu ở các mốc 500, 1.000, 2.000, 3.000, 5.000, 8.000 m.
+
 ## Sức chịu tải (100 người cùng lúc)
 
 - Mỗi khu chứa tối đa **100 người** (`KHU_CAPACITY`), có 8 khu (`KHU_COUNT`), tổng cộng 800 người.

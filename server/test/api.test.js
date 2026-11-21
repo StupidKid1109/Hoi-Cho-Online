@@ -4,7 +4,7 @@ import { SPAWN, SEATS, WORLD, roomOf, CAFE_SEATS } from "../../shared/world.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createApp } from "../src/app.js";
-import { createSim, step, steer, replay, act, validInputs, ROAD, OBSTACLES, ACT } from "../../shared/runnerSim.js";
+import { createSim, step, steer, replay, act, validInputs, ROAD, OBSTACLES, ACT, QUIZ, QUIZ_FIRST, dailyMissions, missionText } from "../../shared/runnerSim.js";
 import { blockReason, cleanText } from "../../shared/chatFilter.js";
 
 const cfg = { port: 0, host: "127.0.0.1", sessionSecret: "test-secret", sessionDays: 1, devLogin: true, zaloAppSecret: "", adminKey: "admin-test", dbFile: ":memory:", corsOrigin: "*", khuCount: 2, khuCapacity: 5, serveClient: true };
@@ -393,4 +393,45 @@ test("Nhân vật nam/nữ, mũ, màu áo và tên chờ quản trị viên duy�
   // giới hạn 5 lần gửi tên mỗi ngày
   for (let i = 0; i < 5; i++) assert.equal((await call("/api/me/profile", { token: t2, method: "POST", body: { name: "Bạn Mới " + i } })).status, 200);
   assert.match((await call("/api/me/profile", { token: t2, method: "POST", body: { name: "Bạn Mới 9" } })).data.error, /nhiều lần/);
+});
+
+test("Gian 3: câu hỏi luật giữa đường (đúng/sai), nhiệm vụ trong ngày; máy chủ chạy lại khớp", async () => {
+  assert.ok(QUIZ.length >= 20 && QUIZ.every(q => q.a.length === 3 && q.q && q.tip));
+  // nhiệm vụ: cùng ngày giống nhau, 3 nhiệm vụ khác loại
+  const m1 = dailyMissions("2026-11-21");
+  assert.deepEqual(m1, dailyMissions("2026-11-21")); assert.equal(m1.length, 3); assert.equal(new Set(m1.map(m => m.k)).size, 3);
+  assert.ok(m1.every(m => missionText(m)));
+  // chạy tự động: né vật cản bằng đổi làn, gặp câu hỏi thì chọn làn đúng (hoặc cố tình sai)
+  const play = (seed, wantRight, frames = 60 * 40) => {
+    const s = createSim(seed, [{ k: "quiz", n: 2 }, { k: "dist", n: 100 }]), inputs = [];
+    const go = d => { if (act(s, d)) inputs.push([s.frame, d]); };
+    while (s.frame < frames && !s.over) {
+      if (s.quiz) { const target = wantRight ? s.quiz.order.indexOf(0) : s.quiz.order.indexOf(wantRight ? 0 : 1); if (target !== s.lane) go(target > s.lane ? 1 : -1); }
+      else {
+        const danger = l => s.objs.some(o => o.kind === "obs" && o.lane === l && o.y > ROAD.PY - 700 && o.y < ROAD.PY + 60);
+        if (danger(s.lane)) {
+          const c = [s.lane - 1, s.lane + 1].filter(l => l >= 0 && l < 3 && !danger(l));
+          if (c.length) go(c[0] - s.lane);
+          else { const o = s.objs.find(x => x.kind === "obs" && x.lane === s.lane && x.y > ROAD.PY - 140 && x.y < ROAD.PY); if (o && OBSTACLES[o.ob][3] !== "full") go(OBSTACLES[o.ob][3] === "low" ? ACT.JUMP : ACT.DUCK); }
+        }
+      }
+      step(s); s.events.length = 0;
+    }
+    return { s, inputs };
+  };
+  const good = play(13, true);
+  assert.ok(good.s.dist > QUIZ_FIRST + 350, "chạy qua ít nhất 2 câu hỏi");
+  assert.ok(good.s.qN >= 2); assert.equal(good.s.qOk, good.s.qN, "chọn đúng làn thì đúng hết");
+  assert.ok(good.s.mis.every(m => m.done), "xong nhiệm vụ trả lời đúng 2 câu và chạy 100 m");
+  const bad = play(13, false);
+  assert.ok(bad.s.qN >= 2); assert.equal(bad.s.qOk, 0); assert.ok(Object.keys(bad.s.qWrong).length >= 2);
+  // máy chủ chạy lại đúng như vậy, với nhiệm vụ của ngày
+  const r = replay(13, good.inputs, good.s.frame, [{ k: "quiz", n: 2 }, { k: "dist", n: 100 }]);
+  assert.equal(r.qOk, good.s.qOk); assert.ok(r.missions.every(m => m.done)); assert.equal(r.score, Math.floor(good.s.dist) + good.s.pts);
+  // qua API: lượt chơi nhận nhiệm vụ trong ngày, kết quả có số câu đúng và nhiệm vụ
+  const t = await login("runner-quiz");
+  const st = (await call("/api/runs", { token: t, method: "POST", body: { game: "g3" } })).data;
+  assert.equal(st.missions.length, 3);
+  const fin = await call(`/api/runs/${st.runId}/finish`, { token: t, method: "POST", body: { inputs: [], frames: 30 } });
+  assert.equal(fin.status, 200); assert.equal(fin.data.missions.length, 3); assert.equal(fin.data.stats.qN, 0);
 });

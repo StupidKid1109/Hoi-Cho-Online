@@ -1,7 +1,7 @@
 // Gian 3: phần vẽ bằng CSS 3D (dùng khi máy không có WebGL hoặc chạy mã nguồn chưa build).
 // Chỉ vẽ; mô phỏng và ghi thao tác nằm ở runner.js.
 import { $ } from "../ui.js";
-import { ROAD, OBSTACLES, JUMP_FRAMES } from "../../../shared/runnerSim.js";
+import { ROAD, OBSTACLES, QUIZ, JUMP_FRAMES } from "../../../shared/runnerSim.js";
 
 const ICON = { coin: "🪙", star: "⭐", helmet: "⛑️" };
 const bb = (cls, inner, shadow) => (shadow ? '<div class="rsh"></div>' : "") + '<div class="bb"><div class="bbi ' + cls + '">' + inner + "</div></div>";
@@ -25,6 +25,7 @@ function place(el, x, y) { el.style.opacity = Math.min(1, (y - ROAD.SPAWN) / 260
 
 export function spawn(o) {
   const el = document.createElement("div"); el.className = "ro3";
+  if (o.kind === "ans") { el.innerHTML = bb("ans a" + o.lane, '<span class="l">' + QUIZ[o.q].a[o.ans] + "</span>", false); $("rplane").appendChild(el); v.els.set(o.id, el); return; }
   const how = o.kind === "obs" ? OBSTACLES[o.ob][3] : "", hint = how === "low" ? " ⬆" : how === "high" ? " ⬇" : "";
   el.innerHTML = o.kind === "obs" ? bb(how === "high" ? "hi" : "", '<span class="e">' + OBSTACLES[o.ob][0] + '</span><span class="l">' + OBSTACLES[o.ob][1] + hint + "</span>", true) : bb("pk", '<span class="e">' + ICON[o.kind] + "</span>", true);
   $("rplane").appendChild(el); v.els.set(o.id, el);

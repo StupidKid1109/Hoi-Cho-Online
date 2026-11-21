@@ -1,6 +1,6 @@
 // Luật chơi và chấm điểm ở máy chủ. Đáp án không bao giờ gửi xuống điện thoại trước khi người chơi trả lời.
 import { randomInt } from "node:crypto";
-import { replay, validInputs, FPS } from "../../shared/runnerSim.js";
+import { replay, validInputs, FPS, dailyMissions } from "../../shared/runnerSim.js";
 
 export const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = randomInt(i + 1); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 export const strip = s => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").toUpperCase().replace(/[^A-Z]/g, "");
@@ -64,15 +64,21 @@ export const rebus = {
 
 /* ---------- Gian 3: Đường về an toàn ---------- */
 export const runner = {
-  start() { const seed = randomInt(1, 2 ** 31); return { state: { seed }, view: { seed } }; },
+  start(now = Date.now()) {
+    const seed = randomInt(1, 2 ** 31), day = new Date(now + 7 * 36e5).toISOString().slice(0, 10), missions = dailyMissions(day); // nhiệm vụ theo ngày giờ Việt Nam
+    return { state: { seed, missions }, view: { seed, missions } };
+  },
   finish(run, body, now) {
     const inputs = body.inputs, frames = Number(body.frames);
     if (!validInputs(inputs) || !Number.isInteger(frames) || frames < 0) throw new GameError("Dữ liệu lượt chơi không hợp lệ");
-    const r = replay(run.state.seed, inputs, frames);
+    const r = replay(run.state.seed, inputs, frames, run.state.missions || []);
     const wall = (now - run.started) / 1000;
     if (r.frames / FPS > wall + 3) throw new GameError("Thời gian chơi không khớp, kết quả không được ghi nhận", 422);
     run.state.result = r;
     return r;
   },
-  result(run) { const r = run.state.result || { score: 0, dist: 0, coins: 0, stars: 0, tips: [] }; return { score: r.score, stats: { dist: r.dist, coins: r.coins, stars: r.stars }, tips: r.tips }; }
+  result(run) {
+    const r = run.state.result || { score: 0, dist: 0, coins: 0, stars: 0, tips: [] };
+    return { score: r.score, stats: { dist: r.dist, coins: r.coins, stars: r.stars, qOk: r.qOk || 0, qN: r.qN || 0 }, tips: r.tips, qWrong: r.qWrong || [], missions: r.missions || [] };
+  }
 };
